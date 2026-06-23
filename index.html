@@ -326,7 +326,7 @@ const RANTS={
 const CODE=`function ship(){\n  while(rage>0){\n    let pr = agent.code();\n    if(buggy(pr)) yell();\n    merge(pr);\n  }\n  return "🚀";\n}\nconst app = vibe(coding);\napp.deploy(); // pray\nTODO: fix later (never)\n// 别问，问就是能跑\n`.repeat(4);
 
 /* ---------- VISUAL HELPERS ---------- */
-function setMood(m){ $('char').className='char breathe m-'+m; }
+function setMood(m){ $('char').setAttribute('class','char breathe m-'+m); }
 function computeMood(){
   if(S.rageMode) return 'rage';
   if(S.sanity<=22) return 'dead';
