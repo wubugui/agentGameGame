@@ -833,7 +833,8 @@ function scrSettle(){
   closeOverlay();setMood('focus');
   // compute
   const sanDrain=Math.round(S.rage*.045);
-  const BURN=65; // 每日运营/生活开销
+  const BURN=68; // 每日运营/生活开销
+  const rest=Math.round(6+clamp(S.sanity-sanDrain)*0.20); // 睡眠恢复精力(心态越好睡得越香)
   const gross=S.proj.done*1.2+S.proj.users*0.25-S.proj.bugs*6;
   const income=Math.round(gross-BURN);
   const grow=Math.round(S.proj.done*0.32-S.proj.bugs*1.4);
@@ -852,6 +853,7 @@ function scrSettle(){
       <div class="row"><span>💵 收入 (进度+用户-bug)</span><b class="pos">+${Math.round(gross)}</b></div>
       <div class="row"><span>🔥 运营/生活开销</span><b class="neg">-${BURN}</b></div>
       <div class="row"><span>🧠 暴躁侵蚀心态</span><b class="neg">-${sanDrain}</b></div>
+      <div class="row"><span>😴 睡觉恢复精力</span><b class="pos">+${rest}</b></div>
       <div style="text-align:center;color:#9aa;font-size:12px;margin-top:10px">💰 今日恰饭</div>
       <div class="big ${income>=0?'pos':'neg'}" id="incomeBig">¥0</div>
       <div style="text-align:center;color:#7c879b;font-size:12px;min-height:18px" id="nightTxt"></div>
@@ -864,13 +866,13 @@ function scrSettle(){
     const big=$('incomeBig');let cur=0;const step=Math.max(1,Math.round(Math.abs(income)/24));
     const sign=income>=0?1:-1;
     const iv=setInterval(()=>{
-      cur+=step;if(cur>=Math.abs(income)){cur=Math.abs(income);clearInterval(iv);finishSettle(income,nightTxt,nightEff);}
+      cur+=step;if(cur>=Math.abs(income)){cur=Math.abs(income);clearInterval(iv);finishSettle(income,nightTxt,nightEff,rest);}
       big.textContent=(sign<0?'-':'+')+'¥'+cur;
       if(sign>0)SFX.coin();else SFX.tick();
     },40);
   },350);
 }
-function finishSettle(income,nightTxt,nightEff){
+function finishSettle(income,nightTxt,nightEff,rest){
   delta('cash',income,true);renderHUD();
   if(income>=0){burst('💰',6);flashMood('happy');say('"恰饭 +'+income+'！"');}else{flashMood('annoyed');say('"又倒贴…"',true);}
   // night
@@ -880,7 +882,7 @@ function finishSettle(income,nightTxt,nightEff){
     if(nightTxt.includes('事故')){shake();redflash();SFX.bad();}
     else if(nightTxt.includes('灵感')){burst('💡',4);SFX.ding();}
     else if(nightTxt.includes('emo')){flashMood('dead');}
-    delta('energy',-10+(Math.random()<.5?10:0),true);renderHUD();
+    delta('energy',rest,true);renderHUD();
     const b=$('sleepBtn');if(b){b.disabled=false;b.textContent='😴 睡觉，进入 Day '+(S.day+1)+' →';b.onclick=nextDay;}
   },700);
 }
