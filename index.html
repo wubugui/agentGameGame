@@ -594,14 +594,14 @@ function tweenProgress(to,cb){
 
 /* 需求卡池 */
 const TICKETS=[
- {nm:'用户登录 & 鉴权',ic:'🔐',base:14,tag:'安全相关，幻觉一段假鉴权就完蛋'},
- {nm:'支付下单接口',ic:'💳',base:16,tag:'涉及钱，最怕埋雷'},
- {nm:'AI 智能推荐',ic:'🧠',base:15,tag:'玄学需求，最容易被瞎编'},
- {nm:'深色模式 & UI',ic:'🌙',base:10,tag:'轻松活，划水也能过'},
- {nm:'数据看板',ic:'📊',base:12,tag:'图表多，细节多'},
- {nm:'消息推送',ic:'🔔',base:11,tag:'时灵时不灵'},
- {nm:'性能优化',ic:'⚡',base:13,tag:'改一处崩三处'},
- {nm:'购物车结算',ic:'🛒',base:14,tag:'边界条件地狱'},
+ {nm:'用户登录 & 鉴权',ic:'🔐',base:3,tag:'安全相关，幻觉一段假鉴权就完蛋'},
+ {nm:'支付下单接口',ic:'💳',base:3,tag:'涉及钱，最怕埋雷'},
+ {nm:'AI 智能推荐',ic:'🧠',base:3,tag:'玄学需求，最容易被瞎编'},
+ {nm:'深色模式 & UI',ic:'🌙',base:2,tag:'轻松活，划水也能过'},
+ {nm:'数据看板',ic:'📊',base:2,tag:'图表多，细节多'},
+ {nm:'消息推送',ic:'🔔',base:2,tag:'时灵时不灵'},
+ {nm:'性能优化',ic:'⚡',base:2,tag:'改一处崩三处'},
+ {nm:'购物车结算',ic:'🛒',base:3,tag:'边界条件地狱'},
 ];
 /* 代码片段池 */
 const GOOD_CODE=[
@@ -626,9 +626,9 @@ const BAD_CODE=[
  {c:"+ total = price * qty // 没校验负数",why:'没校验，能刷负数订单'},
 ];
 const PROMPTS=[
- {id:'detail',ic:'🧊',nm:'好好写需求',d:'详细 prompt：质量高、幻觉少，但费精力',cost:11,care:0.20,out:1.0,rage:0,temper:-3},
- {id:'normal',ic:'😐',nm:'随便描述两句',d:'中规中矩，看 agent 发挥',cost:8,care:0,out:1.0,rage:2,temper:0},
- {id:'angry',ic:'🤬',nm:'暴躁命令它',d:'"赶紧给我写！"：又快产出又高，但幻觉多、它脾气涨',cost:5,care:-0.18,out:1.35,rage:8,temper:12},
+ {id:'detail',ic:'🧊',nm:'好好写需求',d:'详细 prompt：质量高、幻觉少，但费精力',cost:13,care:0.20,out:1.05,rage:0,temper:-3},
+ {id:'normal',ic:'😐',nm:'随便描述两句',d:'中规中矩，看 agent 发挥',cost:10,care:0,out:1.0,rage:2,temper:0},
+ {id:'angry',ic:'🤬',nm:'暴躁命令它',d:'"赶紧给我写！"：又快产出又高，但幻觉多、它脾气涨',cost:8,care:-0.20,out:1.25,rage:9,temper:14},
 ];
 
 function comboBadge(){return S.combo>1?`<span class="combobadge">🔥 COMBO ×${S.combo}</span>`:'';}
@@ -747,7 +747,7 @@ window.decide=function(i,d){
 function runTests(){
   SFX.tap();
   const goodCount=WCTX.hunks.filter(h=>!h.bad).length;
-  const perGood=(WCTX.ticket.base*WCTX.prompt.out*(S.rageMode?1.5:1))/Math.max(1,goodCount);
+  const perGood=(WCTX.ticket.base*WCTX.prompt.out*(S.rageMode?1.1:1))/Math.max(1,goodCount);
   let gained=0,shippedBugs=0,caught=0,wrongKill=0;
   WCTX.hunks.forEach(h=>{
     if(!h.bad && h.decision==='merge') gained+=perGood;          // 正确合并
@@ -757,7 +757,7 @@ function runTests(){
   });
   // combo
   let comboBonus=0;
-  if(shippedBugs===0 && gained>0){S.combo++;comboBonus=gained*(S.combo>1?(S.combo-1)*0.15:0);}
+  if(shippedBugs===0 && gained>0){S.combo++;comboBonus=gained*(S.combo>1?Math.min(0.5,(S.combo-1)*0.10):0);}
   else if(shippedBugs>0){S.combo=0;}
   gained+=comboBonus;
   S.proj.bugs+=shippedBugs;
@@ -812,7 +812,7 @@ window.selfCode=function(){
   if(S.energy<22){say('"太累了，写不动…"',true);SFX.bad();return;}
   delta('energy',-22);S.cupCount++;actionsToday++;SFX.tap();
   const moody=S.buffs.includes('摆烂')?.5:1;
-  let out=(7+S.rage*.12)*moody*(S.rageMode?2:1),bugs=0;
+  let out=(2+S.rage*.04)*moody*(S.rageMode?2:1),bugs=0;
   if(S.buffs.includes('手抖')&&Math.random()<.5)bugs=1;
   if(S.rageMode&&Math.random()<.4)bugs+=2;
   S.proj.bugs+=bugs;if(bugs>0)S.combo=0;else S.combo++;
@@ -832,14 +832,16 @@ window.selfCode=function(){
 function scrSettle(){
   closeOverlay();setMood('focus');
   // compute
-  const sanDrain=Math.round(S.rage*.04);
-  const income=Math.round(S.proj.done*1.5+S.proj.users*0.3-S.proj.bugs*8);
-  const grow=Math.round(S.proj.done*0.4-S.proj.bugs*1.2);
+  const sanDrain=Math.round(S.rage*.045);
+  const BURN=65; // 每日运营/生活开销
+  const gross=S.proj.done*1.2+S.proj.users*0.25-S.proj.bugs*6;
+  const income=Math.round(gross-BURN);
+  const grow=Math.round(S.proj.done*0.32-S.proj.bugs*1.4);
   // night event
   let nightTxt='今晚平安无事。';let nightEff=()=>{};
   const r=Math.random();
   if(r<.16){nightTxt='🌙 深夜 emo，对着天花板怀疑人生。';nightEff=()=>delta('sanity',-15);}
-  else if(r<.32){nightTxt='💡 半夜灵感爆发，偷偷多写了一点！';nightEff=()=>{delta('rage',6);S.proj.done=clamp(S.proj.done+8);};}
+  else if(r<.32){nightTxt='💡 半夜灵感爆发，偷偷多写了一点！';nightEff=()=>{delta('rage',6);S.proj.done=clamp(S.proj.done+5);};}
   else if(r<.42&&S.proj.debt>0){nightTxt='🚨 技术债爆雷：线上半夜出事故！';nightEff=()=>{S.proj.bugs+=2;};}
   panel(`<div class="ptag">🌙 今日日报</div>
     <div class="sheet report">
@@ -847,6 +849,8 @@ function scrSettle(){
       <div class="row"><span>📊 项目进度</span><b>${Math.round(S.proj.done)}%</b></div>
       <div class="row"><span>🐛 当前 bug</span><b class="${S.proj.bugs>0?'neg':''}">${S.proj.bugs}</b></div>
       <div class="row"><span>👤 用户变化</span><b class="${grow>=0?'pos':'neg'}">${grow>=0?'+':''}${grow}</b></div>
+      <div class="row"><span>💵 收入 (进度+用户-bug)</span><b class="pos">+${Math.round(gross)}</b></div>
+      <div class="row"><span>🔥 运营/生活开销</span><b class="neg">-${BURN}</b></div>
       <div class="row"><span>🧠 暴躁侵蚀心态</span><b class="neg">-${sanDrain}</b></div>
       <div style="text-align:center;color:#9aa;font-size:12px;margin-top:10px">💰 今日恰饭</div>
       <div class="big ${income>=0?'pos':'neg'}" id="incomeBig">¥0</div>
