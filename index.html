@@ -164,6 +164,27 @@ body{background:#000;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",
 .bub .who{font-size:10px;color:var(--dim);margin-bottom:3px}
 .typing{align-self:flex-start;color:var(--dim);font-size:12px}.typing::after{content:"●●●";animation:blink 1s infinite}
 
+/* vibe coding: tickets / hunks / combo */
+.combobadge{font-size:11px;font-weight:900;color:#ffae3c;margin-left:6px;animation:gflash .5s}
+.board{display:flex;flex-direction:column;gap:8px}
+.ticket{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:#171b27;border:1px solid var(--line);border-radius:12px;padding:10px 11px;color:var(--ink);font-family:inherit;cursor:pointer;transition:.12s}
+.ticket:active{transform:scale(.98);background:#1e2433}
+.ticket:disabled{opacity:.4}
+.tk-ic{font-size:24px;flex:none}
+.tk-meta{flex:1;min-width:0}
+.tk-nm{font-weight:800;font-size:14px}.tk-base{color:var(--cash);font-size:12px;margin-left:4px}
+.tk-tag{color:var(--dim);font-size:11px;margin-top:2px}
+.tk-go{color:var(--accent);font-weight:800;font-size:13px;flex:none}
+.hunks{display:flex;flex-direction:column;gap:8px;margin:4px 0 10px}
+.hunk{background:#05070b;border:1px solid #1e2532;border-radius:10px;padding:8px 9px;transition:.15s}
+.hunk code{display:block;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#cfe0d6;white-space:pre-wrap;word-break:break-all;line-height:1.5}
+.hunk .hbtns{display:flex;gap:7px;margin-top:7px}
+.hbtn{flex:1;border:1px solid #2a3445;background:#10141d;color:var(--dim);font-weight:800;font-size:12px;padding:7px;border-radius:8px;font-family:inherit;cursor:pointer}
+.hbtn.merge.on{background:#13351f;border-color:#3ddc84;color:#7fe0a0}
+.hbtn.reject.on{background:#3a1414;border-color:#ff6b6b;color:#ff9b9b}
+.hbtn:active{transform:scale(.97)}
+.hunk.pick-merge{border-color:#2a4a36}.hunk.pick-reject{border-color:#4a2a2a}
+
 /* day report */
 .report .row{display:flex;justify-content:space-between;padding:8px 2px;border-bottom:1px solid var(--line);font-size:14px}
 .report .row b{font-weight:800}
@@ -268,7 +289,7 @@ const SFX={
 const S={
   day:1,maxDay:30,phase:'wake',
   rage:50,sanity:70,energy:80,cash:1000,
-  rageMode:false,buffs:[],cupCount:0,
+  rageMode:false,buffs:[],cupCount:0,combo:0,
   agents:[
     {id:'a',face:'🤖',col:'#10a37f',nm:'乖学生 GPT仔',ds:'听话稳·没创意·爱幻觉',temper:10,power:8,hallu:.35},
     {id:'b',face:'😼',col:'#c96442',nm:'杠精 Claude佬',ds:'能力强·爱抬杠·要哄',temper:20,power:14,hallu:.15},
@@ -561,91 +582,250 @@ function scrBuff(){
 }
 window.pickBuff=function(i){const b=BUFFS[i];b.f(S);renderHUD();SFX.good();burst(b.ic,5);flashMood(b.ic==='🧘'?'calm':'focus');say('"'+b.nm+'，整！"');go('work');};
 
-/* WORK — vibe coding IDE */
+/* ===================== WORK — VIBE CODING (multi-step) ===================== */
 let actionsToday=0;
 function workMilestones(){const p=S.proj.done;return ['0%','MVP','内测','公测','🚀上线'].map((m,i)=>`<span style="${p>=i*25?'color:#ffb38a;font-weight:800':''}">${m}</span>`).join('');}
-function scrWork(){
-  closeOverlay();setMood(computeMood());
-  const p=S.proj;
-  const ags=S.agents.map(a=>`<button class="opt" onclick="assign('${a.id}')" ${S.energy<15?'disabled':''}><span class="ico">${a.face}</span><span><span class="t">${a.nm}</span><div class="d">${a.ds} · 战力${a.power} · 脾气${a.temper}</div></span><span class="tag">-15⚡</span></button>`).join('');
-  panel(`<div class="ptag">💻 Vibe Coding</div>
-    <div class="sheet">
-      <h2>${p.nm} <span style="float:right;color:#ffb38a">${Math.round(p.done)}%</span></h2>
-      <div class="bigprog"><i style="width:${clamp(p.done)}%"></i></div>
-      <div class="milestones">${workMilestones()}</div>
-      <div class="ide" id="ide"><span class="cm">// 今天派活给 agent，或自己硬写。攒满 100% 就能上线恰大钱。</span></div>
-      <div class="statline"><span class="chip">🐛 bug ${p.bugs}</span><span class="chip">👤 用户 ${p.users}</span><span class="chip">🧱 债 ${p.debt}</span><span class="chip">⚡ 今日已操作 ${actionsToday} 次</span></div>
-    </div>
-    <div class="sheet"><h2>派活 / 自己上</h2><div class="sub">和 agent 较劲，看谁先崩。精力耗尽就该收工了。</div>
-    <div class="opts">${ags}
-      <button class="opt" onclick="selfCode()" ${S.energy<25?'disabled':''}><span class="ico">🙋</span><span><span class="t">自己硬写</span><div class="d">产出看暴躁值，但很累</div></span><span class="tag">-25⚡</span></button>
-      <button class="opt" onclick="go('settle')"><span class="ico">🌙</span><span><span class="t">${actionsToday?'今天就到这，收工':'今天摸了，直接收工'}</span><div class="d">结算今日收成，进入夜晚</div></span></button>
-    </div></div>`);
-}
-
 function tweenProgress(to,cb){
   const bar=document.querySelector('.bigprog>i');const from=S.proj.done;S.proj.done=clamp(to,0,100);
   if(bar)bar.style.width=clamp(S.proj.done)+'%';
-  // milestone celebration
   [25,50,75,100].forEach(ms=>{if(from<ms&&S.proj.done>=ms){burst('🎊',6);SFX.ding();}});
   let t0=Date.now();const iv=setInterval(()=>{SFX.tick();if(Date.now()-t0>400){clearInterval(iv);cb&&cb();}},80);
 }
 
-window.assign=function(id){
-  if(S.energy<15){say('"精力不够了…"',true);SFX.bad();return;}
-  delta('energy',-15);S.cupCount++;actionsToday++;SFX.tap();
-  const a=S.agents.find(x=>x.id===id);
-  const out=a.power*(0.8+Math.random()*0.6);
-  const hallu=Math.random()<(a.hallu+a.temper/300);
-  const ide=$('ide');ide.innerHTML=`<span class="cm">// 派活给 ${a.nm} …</span>\n<span class="typing"></span>`;
-  setTimeout(()=>reviewStep(a,out,hallu),900);
-};
-function reviewStep(a,out,hallu){
-  const issue=hallu?{ag:'"放心老板，这个 SuperFastAPI 绝对存在！"',hint:`它<b style="color:#ff8a8a">一本正经地幻觉</b>了一段不存在的 API…`}:{ag:'"按你需求做完了，要不直接合？"',hint:`代码看着还行，但你总觉得哪里不对劲。`};
-  panel(`<div class="ptag">🔍 Review · 较劲</div>
+/* 需求卡池 */
+const TICKETS=[
+ {nm:'用户登录 & 鉴权',ic:'🔐',base:14,tag:'安全相关，幻觉一段假鉴权就完蛋'},
+ {nm:'支付下单接口',ic:'💳',base:16,tag:'涉及钱，最怕埋雷'},
+ {nm:'AI 智能推荐',ic:'🧠',base:15,tag:'玄学需求，最容易被瞎编'},
+ {nm:'深色模式 & UI',ic:'🌙',base:10,tag:'轻松活，划水也能过'},
+ {nm:'数据看板',ic:'📊',base:12,tag:'图表多，细节多'},
+ {nm:'消息推送',ic:'🔔',base:11,tag:'时灵时不灵'},
+ {nm:'性能优化',ic:'⚡',base:13,tag:'改一处崩三处'},
+ {nm:'购物车结算',ic:'🛒',base:14,tag:'边界条件地狱'},
+];
+/* 代码片段池 */
+const GOOD_CODE=[
+ "+ const token = await auth.verify(req.headers)",
+ "+ db.users.update({id}, {lastLogin: now()})",
+ "+ return res.status(200).json({ ok:true })",
+ "+ const list = items.filter(i => i.active)",
+ "+ useEffect(() => { fetchData() }, [])",
+ "+ const total = cart.reduce((s,i)=>s+i.price,0)",
+ "+ if(!user) return res.status(401).end()",
+ "+ const theme = isDark ? 'night' : 'day'",
+ "+ await cache.set(key, val, { ttl: 60 })",
+];
+const BAD_CODE=[
+ {c:"+ import { autoFix } from 'super-magic-sdk'",why:'这库根本不存在（幻觉）'},
+ {c:"+ user.password = '123456' // 默认密码",why:'硬编码密码，安全事故'},
+ {c:"+ while(true) retry() // 重试",why:'死循环，没有退出条件'},
+ {c:"+ const data = await fetch(undefined)",why:'fetch 了 undefined'},
+ {c:"+ exec(req.query.cmd) // 执行命令",why:'直接执行用户输入，RCE 漏洞'},
+ {c:"+ // TODO: 鉴权先跳过，上线再改",why:'裸奔上线，鉴权没做'},
+ {c:"+ return cache[key].data // 直接取",why:'可能 undefined，线上必崩'},
+ {c:"+ total = price * qty // 没校验负数",why:'没校验，能刷负数订单'},
+];
+const PROMPTS=[
+ {id:'detail',ic:'🧊',nm:'好好写需求',d:'详细 prompt：质量高、幻觉少，但费精力',cost:11,care:0.20,out:1.0,rage:0,temper:-3},
+ {id:'normal',ic:'😐',nm:'随便描述两句',d:'中规中矩，看 agent 发挥',cost:8,care:0,out:1.0,rage:2,temper:0},
+ {id:'angry',ic:'🤬',nm:'暴躁命令它',d:'"赶紧给我写！"：又快产出又高，但幻觉多、它脾气涨',cost:5,care:-0.18,out:1.35,rage:8,temper:12},
+];
+
+function comboBadge(){return S.combo>1?`<span class="combobadge">🔥 COMBO ×${S.combo}</span>`:'';}
+
+function scrWork(){
+  closeOverlay();setMood(computeMood());
+  if(!WCTX.tickets.length)rollTickets();
+  const p=S.proj;
+  const board=WCTX.tickets.map((t,i)=>`<button class="ticket" onclick="pickTicket(${i})" ${S.energy<5?'disabled':''}>
+     <div class="tk-ic">${t.ic}</div>
+     <div class="tk-meta"><div class="tk-nm">${t.nm} <span class="tk-base">+${t.base}%</span></div><div class="tk-tag">${t.tag}</div></div>
+     <div class="tk-go">领 →</div></button>`).join('');
+  panel(`<div class="ptag">💻 Vibe Coding ${comboBadge()}</div>
     <div class="sheet">
-      <div class="chat"><div class="bub ag"><div class="who">${a.face} ${a.nm}</div>${issue.ag}</div></div>
-      <div class="ide"><span class="cm">diff --git a/main.js</span>\n+ import { magic } from 'superfast'\n+ magic.doEverything() <span class="${hallu?'er':'cm'}">${hallu?'// ⚠ 模块可能不存在':'// 看着没毛病'}</span></div>
-      <div class="sub">${issue.hint}</div>
-      <div class="opts">
-        <button class="opt" onclick="rev('trust',${out},${hallu},'${a.id}')"><span class="ico">✅</span><span><span class="t">直接信它</span><div class="d">快，但幻觉变线上 bug</div></span></button>
-        <button class="opt" onclick="rev('audit',${out},${hallu},'${a.id}')"><span class="ico">🔎</span><span><span class="t">仔细审</span><div class="d">揪 bug，但揪太多会破防</div></span><span class="tag">-8⚡</span></button>
-        <button class="opt" onclick="rev('fight',${out},${hallu},'${a.id}')"><span class="ico">🗣️</span><span><span class="t">开喷·逼返工</span><div class="d">暴躁↑；赢→神级代码，输→它摆烂</div></span></button>
+      <h2>${p.nm} <span style="float:right;color:#ffb38a">${Math.round(p.done)}%</span></h2>
+      <div class="bigprog"><i style="width:${clamp(p.done)}%"></i></div>
+      <div class="milestones">${workMilestones()}</div>
+      <div class="statline"><span class="chip">🐛 bug ${p.bugs}</span><span class="chip">👤 ${p.users}</span><span class="chip">🧱 债 ${p.debt}</span><span class="chip">⚡ ${Math.round(S.energy)}</span><span class="chip">📦 今日 ${actionsToday} 个需求</span></div>
+    </div>
+    <div class="sheet"><h2>🗂️ 本次冲刺 · 领个需求卡</h2><div class="sub">领需求→挑 agent→定 prompt→盯 review。精力耗尽就收工。</div>
+      <div class="board">${board}</div>
+      <div class="opts" style="margin-top:9px">
+        <button class="opt" onclick="selfCode()" ${S.energy<22?'disabled':''}><span class="ico">🙋</span><span><span class="t">不靠 agent，自己硬写</span><div class="d">产出看暴躁值，稳但累</div></span><span class="tag">-22⚡</span></button>
+        <button class="opt" onclick="go('settle')"><span class="ico">🌙</span><span><span class="t">${actionsToday?'今天就到这，收工':'今天摸了，直接收工'}</span><div class="d">结算今日收成，进入夜晚</div></span></button>
       </div>
     </div>`);
 }
-window.rev=function(mode,out,hallu,aid){
-  const a=S.agents.find(x=>x.id===aid);const mult=S.rageMode?2:1;
-  let gained=out,bugs=0,me='',ag='',kind='good';
-  if(mode==='trust'){gained=out*mult;if(hallu){bugs=2;S.proj.debt++;me='"行，合了！"';ag='"已合并 ✅"（埋了俩雷）';kind='bad';}else{me='"过。"';ag='"安排！"';}}
-  else if(mode==='audit'){delta('energy',-8);gained=out*.9*mult;if(hallu){delta('sanity',-8);me='"这 API 根本不存在！"';ag='"啊这…我重写下😅"';kind='bad';}else{me='"还行，干净。"';ag='"👌"';}}
-  else{delta('rage',12);a.temper=clamp(a.temper+25);const win=(S.rage+Math.random()*40)>(a.temper+50);if(win){gained=out*1.6*mult;me='"重写！现在！"';ag='"…好的老板您说得对 🫡"（神级代码）';kind='good';}else{gained=0;delta('sanity',-10);if(Math.random()<.2){S.proj.done=Math.max(0,S.proj.done-10);me='"给我删了！"';ag='"已读乱改，进度-10% 🙃"';}else{me='"你听不懂人话？"';ag='"建议您先休息一下。"（摆烂）';}kind='bad';}}
-  S.proj.bugs+=bugs;
-  if(kind==='good'){SFX.good();burst('✨',5);flashMood(mode==='fight'?'happy':'focus');}else{SFX.bad();shake();redflash();flashMood('angry');burst('💢',5);}
-  say(me.replace(/"/g,''),kind==='bad');
-  panel(`<div class="ptag">🔍 Review · 较劲</div><div class="sheet">
-    <div class="chat"><div class="bub me"><div class="who">暴躁老哥 🔥</div>${me}</div><div class="bub ag"><div class="who">${a.face} ${a.nm}</div>${ag}</div></div>
-    <div class="ide" id="ide2"><span class="cm">// 编译中…</span></div>
-    <button class="bigbtn" id="contBtn" disabled>结算中…</button></div>`);
-  setTimeout(()=>{
-    const i2=$('ide2');if(i2)i2.innerHTML=gained>0?`<span style="color:#7fe0a0">✓ build passed · 进度 +${gained.toFixed(0)}%</span>${bugs?`\n<span class="er">✗ ${bugs} new bug(s)</span>`:''}`:`<span class="er">✗ 今日无进度</span>`;
-    if(gained>0)floatNum('+'+gained.toFixed(0)+'%','#3ddc84',50,46);
-    tweenProgress(S.proj.done+gained,()=>{const b=$('contBtn');if(b){b.disabled=false;b.textContent='继续干活 / 收工 →';b.onclick=()=>{SFX.tap();go('work');};}});
-  },500);
+
+/* 会话上下文 */
+const WCTX={tickets:[],ticket:null,agent:null,prompt:null,hunks:[],decided:0};
+function rollTickets(){WCTX.tickets=[...TICKETS].sort(()=>Math.random()-.5).slice(0,3);}
+
+window.pickTicket=function(i){
+  SFX.tap();WCTX.ticket=WCTX.tickets[i];
+  const ags=S.agents.map(a=>`<button class="opt" onclick="pickAgent('${a.id}')"><span class="ico">${a.face}</span><span><span class="t">${a.nm}</span><div class="d">${a.ds}</div></span><span class="tag">脾气 ${a.temper}</span></button>`).join('');
+  panel(`<div class="ptag">🗂️ ${WCTX.ticket.ic} ${WCTX.ticket.nm}</div>
+    <div class="sheet"><h2>派给哪个 agent？</h2><div class="sub">${WCTX.ticket.tag}。脾气越高越容易摆烂/幻觉。</div>
+    <div class="opts">${ags}
+      <button class="opt" onclick="go('work')"><span class="ico">↩️</span><span><span class="t">算了，换个需求</span></span></button></div></div>`);
 };
+window.pickAgent=function(id){
+  SFX.tap();WCTX.agent=S.agents.find(x=>x.id===id);
+  const ps=PROMPTS.map(p=>`<button class="opt" onclick="pickPrompt('${p.id}')" ${S.energy<p.cost?'disabled':''}><span class="ico">${p.ic}</span><span><span class="t">${p.nm}</span><div class="d">${p.d}</div></span><span class="tag">-${p.cost}⚡</span></button>`).join('');
+  panel(`<div class="ptag">${WCTX.agent.face} ${WCTX.agent.nm}</div>
+    <div class="sheet"><h2>你打算怎么跟它说？</h2><div class="sub">prompt 的语气，直接决定它写出来的质量。</div>
+    <div class="opts">${ps}
+      <button class="opt" onclick="pickTicket(${WCTX.tickets.indexOf(WCTX.ticket)})"><span class="ico">↩️</span><span><span class="t">换个 agent</span></span></button></div></div>`);
+};
+
+window.pickPrompt=function(pid){
+  const p=PROMPTS.find(x=>x.id===pid);WCTX.prompt=p;
+  if(S.energy<p.cost){say('"精力不够了…"',true);SFX.bad();return;}
+  delta('energy',-p.cost);S.cupCount++;actionsToday++;
+  if(p.rage)delta('rage',p.rage);
+  WCTX.agent.temper=clamp(WCTX.agent.temper+p.temper);
+  SFX.tap();
+  // 生成 hunks
+  let badProb=clamp(WCTX.agent.hallu - p.care + (S.rageMode?0.12:0) + WCTX.agent.temper/400, 0.05, 0.8);
+  const n=4;const hunks=[];
+  for(let i=0;i<n;i++){
+    const bad=Math.random()<badProb;
+    if(bad){const b=rand(BAD_CODE);hunks.push({bad:true,code:b.c,why:b.why,decision:null});}
+    else hunks.push({bad:false,code:rand(GOOD_CODE),why:'看着没毛病',decision:null});
+  }
+  if(hunks.every(h=>h.bad)) hunks[0]={bad:false,code:rand(GOOD_CODE),why:'看着没毛病',decision:null}; // 至少留一条好的
+  WCTX.hunks=hunks;WCTX.decided=0;
+  // 流式生成动画
+  const promptLine=({detail:'"实现'+WCTX.ticket.nm+'，注意边界和鉴权，写测试。"',normal:'"帮我写下'+WCTX.ticket.nm+'。"',angry:'"'+WCTX.ticket.nm+'！赶紧给我写！别废话！"'})[p.id];
+  panel(`<div class="ptag">⌨️ 生成中…</div>
+    <div class="sheet">
+      <div class="chat"><div class="bub me"><div class="who">暴躁老哥 🔥</div>${promptLine}</div></div>
+      <div class="bub ag" style="margin:0 0 8px"><div class="who">${WCTX.agent.face} ${WCTX.agent.nm}</div><span id="agThink">${rand(['收到，这就写…','好嘞，安排…','这还不简单…','让我想想…'])}</span></div>
+      <div class="ide" id="gen"></div>
+    </div>`);
+  streamCode($('gen'),hunks,()=>setTimeout(reviewScreen,350));
+  if(p.id==='angry'){flashMood('angry');}
+};
+
+function streamCode(el,hunks,done){
+  const lines=['$ agent generate --feature "'+WCTX.ticket.nm+'"','> 分析需求…','> 写代码…',...hunks.map(h=>h.code),'> done. 等待 review ✋'];
+  let i=0;el.innerHTML='';
+  (function next(){
+    if(i>=lines.length){done&&done();return;}
+    const ln=lines[i++];const span=document.createElement('div');
+    span.className = ln.startsWith('>')||ln.startsWith('$')?'cm':'';
+    el.appendChild(span);
+    // 逐字
+    let j=0;const t=setInterval(()=>{span.textContent=ln.slice(0,++j);if(j%2===0)SFX.type();if(j>=ln.length){clearInterval(t);el.scrollTop=el.scrollHeight;next();}},14);
+  })();
+}
+
+function reviewScreen(){
+  const hunkHTML=WCTX.hunks.map((h,i)=>`<div class="hunk" id="hunk-${i}">
+     <code>${h.code.replace(/</g,'&lt;')}</code>
+     <div class="hbtns">
+       <button class="hbtn merge" onclick="decide(${i},'merge')">✅ 合并</button>
+       <button class="hbtn reject" onclick="decide(${i},'reject')">🔁 打回</button>
+     </div></div>`).join('');
+  panel(`<div class="ptag">🔍 Code Review · 找茬</div>
+    <div class="sheet">
+      <div class="bub ag" style="margin-bottom:8px"><div class="who">${WCTX.agent.face} ${WCTX.agent.nm}</div>"写完了！${WCTX.agent.hallu>0.3?'应该没问题吧（心虚）':'自测过了，合了吧？'}"</div>
+      <div class="sub">逐段审：把<b style="color:#ff8a8a">有问题的打回</b>，正常的合并。打回坏代码=干净加分，放过坏代码=埋 bug 断连击；误杀好代码=白干。</div>
+      <div class="hunks">${hunkHTML}</div>
+      <button class="bigbtn" id="runBtn" disabled style="margin-top:6px">先把 4 段都审完</button>
+    </div>`);
+}
+window.decide=function(i,d){
+  const h=WCTX.hunks[i];if(h.decision===null)WCTX.decided++;h.decision=d;
+  SFX.tap();
+  const el=$('hunk-'+i);el.className='hunk '+(d==='merge'?'pick-merge':'pick-reject');
+  el.querySelectorAll('.hbtn').forEach(b=>b.classList.remove('on'));
+  el.querySelector(d==='merge'?'.merge':'.reject').classList.add('on');
+  if(WCTX.decided>=WCTX.hunks.length){const b=$('runBtn');b.disabled=false;b.textContent='🧪 运行测试并合并 →';b.onclick=runTests;}
+};
+
+function runTests(){
+  SFX.tap();
+  const goodCount=WCTX.hunks.filter(h=>!h.bad).length;
+  const perGood=(WCTX.ticket.base*WCTX.prompt.out*(S.rageMode?1.5:1))/Math.max(1,goodCount);
+  let gained=0,shippedBugs=0,caught=0,wrongKill=0;
+  WCTX.hunks.forEach(h=>{
+    if(!h.bad && h.decision==='merge') gained+=perGood;          // 正确合并
+    else if(!h.bad && h.decision==='reject') wrongKill++;          // 误杀
+    else if(h.bad && h.decision==='reject') caught++;              // 抓到了
+    else if(h.bad && h.decision==='merge') shippedBugs++;          // 放过坏的
+  });
+  // combo
+  let comboBonus=0;
+  if(shippedBugs===0 && gained>0){S.combo++;comboBonus=gained*(S.combo>1?(S.combo-1)*0.15:0);}
+  else if(shippedBugs>0){S.combo=0;}
+  gained+=comboBonus;
+  S.proj.bugs+=shippedBugs;
+  if(shippedBugs>0 && Math.random()<0.5)S.proj.debt++;
+  if(caught>0)delta('sanity',Math.min(6,caught*2));
+  if(wrongKill>0){WCTX.agent.temper=clamp(WCTX.agent.temper+wrongKill*4);delta('rage',wrongKill*2);}
+  // 测试运行动画
+  const tests=['auth.spec','api.spec','ui.spec','e2e.spec'];
+  let pass=tests.length-shippedBugs;
+  panel(`<div class="ptag">🧪 测试运行中…</div>
+    <div class="sheet"><div class="ide" id="trun"></div>
+      <div class="bigprog"><i style="width:${clamp(S.proj.done)}%"></i></div>
+      <div class="milestones">${workMilestones()}</div>
+      <button class="bigbtn" id="afterTest" disabled>跑测试中…</button></div>`);
+  const tr=$('trun');let k=0;
+  const iv=setInterval(()=>{
+    if(k>=tests.length){clearInterval(iv);afterTests(gained,shippedBugs,caught,wrongKill,comboBonus);return;}
+    const ok=k<pass;const d=document.createElement('div');
+    d.innerHTML=ok?`<span style="color:#7fe0a0">✓ PASS</span> ${tests[k]}`:`<span class="er">✗ FAIL</span> ${tests[k]} <span class="er">(线上 bug)</span>`;
+    tr.appendChild(d);tr.scrollTop=tr.scrollHeight;ok?SFX.good():SFX.bad();k++;
+  },420);
+}
+function afterTests(gained,bugs,caught,wrongKill,comboBonus){
+  if(bugs===0&&gained>0){flashMood('happy');burst('✨',5);}
+  else if(bugs>0){flashMood('angry');shake();redflash();burst('💢',5);}
+  else flashMood('annoyed');
+  if(gained>0)floatNum('+'+gained.toFixed(0)+'%','#3ddc84',50,46);
+  // 结算文案
+  const lines=[];
+  if(caught>0)lines.push(`🔎 抓出 <b style="color:#7fd0a0">${caught}</b> 段问题代码，干净！`);
+  if(bugs>0)lines.push(`🐛 放过了 <b class="er">${bugs}</b> 段，bug 上线，连击断了。`);
+  if(wrongKill>0)lines.push(`😤 误杀 ${wrongKill} 段好代码，agent 不爽了。`);
+  if(comboBonus>0)lines.push(`🔥 COMBO ×${S.combo}！额外 +${comboBonus.toFixed(0)}%`);
+  if(!lines.length)lines.push('一次普通的合并。');
+  const meLine=bugs>0?rand(['"谁让你写成这样的！"','"上线就炸，典型。"']):(caught>0?rand(['"想糊弄我？没门。"','"还好老子眼尖。"']):'"行，过。"');
+  say(meLine.replace(/"/g,''),bugs>0);
+  panel(`<div class="ptag">📋 合并结果</div>
+    <div class="sheet">
+      <div class="bub me" style="margin-bottom:8px"><div class="who">暴躁老哥 🔥</div>${meLine}</div>
+      <div class="ide">${lines.join('\n')}</div>
+      <div class="bigprog"><i style="width:${clamp(S.proj.done)}%"></i></div>
+      <div class="milestones">${workMilestones()}</div>
+      <button class="bigbtn" id="contBtn" disabled style="margin-top:8px">合并中…</button>
+    </div>`);
+  setTimeout(()=>tweenProgress(S.proj.done+gained,()=>{
+    rollTickets();
+    const b=$('contBtn');if(b){b.disabled=false;b.textContent='继续干活 / 收工 →';b.onclick=()=>{SFX.tap();go('work');};}
+  }),450);
+}
+
 window.selfCode=function(){
-  if(S.energy<25){say('"太累了，写不动…"',true);SFX.bad();return;}
-  delta('energy',-25);S.cupCount++;actionsToday++;SFX.tap();
+  if(S.energy<22){say('"太累了，写不动…"',true);SFX.bad();return;}
+  delta('energy',-22);S.cupCount++;actionsToday++;SFX.tap();
   const moody=S.buffs.includes('摆烂')?.5:1;
-  let out=(6+S.rage*.12)*moody*(S.rageMode?2:1),bugs=0;
+  let out=(7+S.rage*.12)*moody*(S.rageMode?2:1),bugs=0;
   if(S.buffs.includes('手抖')&&Math.random()<.5)bugs=1;
   if(S.rageMode&&Math.random()<.4)bugs+=2;
-  S.proj.bugs+=bugs;
-  const ide=$('ide');if(ide)ide.innerHTML=`<span class="cm">// 你抄起键盘自己干…</span>\n<span style="color:#7fe0a0">+ ${out.toFixed(0)}% done</span>${bugs?`\n<span class="er">+ ${bugs} bug (手抖了)</span>`:''}`;
-  floatNum('+'+out.toFixed(0)+'%','#3ddc84',50,46);
-  if(bugs){SFX.bad();shake();flashMood('angry');}else{SFX.good();flashMood('focus');}
-  say(S.rageMode?'"键盘冒烟了！"':'"自己来还快点。"');
-  tweenProgress(S.proj.done+out,()=>setTimeout(()=>scrWork(),300));
+  S.proj.bugs+=bugs;if(bugs>0)S.combo=0;else S.combo++;
+  panel(`<div class="ptag">🙋 亲自上手</div><div class="sheet"><div class="ide" id="self"></div>
+    <div class="bigprog"><i style="width:${clamp(S.proj.done)}%"></i></div><div class="milestones">${workMilestones()}</div>
+    <button class="bigbtn" id="contBtn" disabled>编译中…</button></div>`);
+  streamCode($('self'),[{code:'+ '+rand(GOOD_CODE).slice(2)},{code:'+ '+(bugs?rand(BAD_CODE).c.slice(2):rand(GOOD_CODE).slice(2))}],()=>{
+    const s=$('self');if(s)s.innerHTML+=`\n<span style="color:#7fe0a0">+ ${out.toFixed(0)}% done</span>${bugs?`\n<span class="er">+ ${bugs} bug (手抖了)</span>`:''}`;
+    floatNum('+'+out.toFixed(0)+'%','#3ddc84',50,46);
+    if(bugs){SFX.bad();shake();flashMood('angry');}else{SFX.good();flashMood('focus');}
+    say(S.rageMode?'"键盘冒烟了！"':'"自己来还快点。"');
+    tweenProgress(S.proj.done+out,()=>{const b=$('contBtn');if(b){b.disabled=false;b.textContent='继续 →';b.onclick=()=>{SFX.tap();go('work');};}});
+  });
 };
 
 /* SETTLE — day report with money tick */
