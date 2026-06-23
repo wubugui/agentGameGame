@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>暴躁老哥 Vibe Coding 模拟器 (原型)</title>
+<style>
+  :root{
+    --bg:#0e1014; --panel:#171a21; --panel2:#1f242e; --line:#2a313d;
+    --txt:#e6e9ef; --dim:#8b94a3; --accent:#ff7847;
+    --rage:#ff5a4d; --sanity:#5ab0ff; --energy:#ffd24d; --cash:#4ade80;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%}
+  body{
+    background:var(--bg); color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    display:flex; justify-content:center;
+  }
+  #app{width:100%; max-width:480px; min-height:100%; background:var(--bg);
+    display:flex; flex-direction:column; position:relative; padding-bottom:12px;}
+  header{padding:12px 14px 8px; border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--bg); z-index:5}
+  .topbar{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px}
+  .day{font-weight:800; font-size:18px}
+  .day small{color:var(--dim); font-weight:500; font-size:12px}
+  .phase-tag{font-size:11px; color:var(--bg); background:var(--accent); padding:3px 8px; border-radius:99px; font-weight:700}
+  .stats{display:grid; grid-template-columns:1fr 1fr; gap:8px}
+  .stat{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:7px 9px}
+  .stat .lbl{display:flex; justify-content:space-between; font-size:11px; color:var(--dim); margin-bottom:4px}
+  .stat .lbl b{color:var(--txt); font-weight:700}
+  .bar{height:7px; background:#0a0c10; border-radius:99px; overflow:hidden}
+  .bar > i{display:block; height:100%; border-radius:99px; transition:width .35s}
+  .b-rage{background:var(--rage)} .b-sanity{background:var(--sanity)}
+  .b-energy{background:var(--energy)} .b-cash{background:var(--cash)}
+
+  main{flex:1; padding:14px; display:flex; flex-direction:column; gap:12px}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:14px; animation:pop .25s ease}
+  @keyframes pop{from{opacity:0; transform:translateY(8px)}to{opacity:1; transform:none}}
+  .card h2{margin:0 0 4px; font-size:15px}
+  .card .sub{color:var(--dim); font-size:12px; margin-bottom:10px}
+  .news-cat{display:inline-block; font-size:11px; font-weight:700; padding:2px 8px; border-radius:99px; margin-bottom:8px}
+  .news-body{font-size:14px; line-height:1.5}
+  .news-eff{margin-top:10px; font-size:12px; color:var(--dim); display:flex; flex-wrap:wrap; gap:6px}
+  .chip{background:var(--panel2); border:1px solid var(--line); padding:3px 8px; border-radius:8px}
+  .chip.up{color:var(--cash)} .chip.down{color:var(--rage)}
+
+  .opts{display:flex; flex-direction:column; gap:9px}
+  .opt{width:100%; text-align:left; background:var(--panel2); border:1px solid var(--line); color:var(--txt);
+    padding:11px 12px; border-radius:11px; font-size:14px; cursor:pointer; transition:.12s; font-family:inherit}
+  .opt:hover{border-color:var(--accent); transform:translateY(-1px)}
+  .opt:active{transform:scale(.99)}
+  .opt .t{font-weight:700; display:flex; justify-content:space-between; align-items:center}
+  .opt .d{color:var(--dim); font-size:12px; margin-top:3px}
+  .opt .cost{font-size:11px; color:var(--energy); font-weight:700}
+
+  .btn{display:block; width:100%; background:var(--accent); color:#1a0e07; border:none; padding:13px;
+    border-radius:12px; font-size:15px; font-weight:800; cursor:pointer; font-family:inherit; margin-top:4px}
+  .btn:active{transform:scale(.99)}
+  .btn.ghost{background:transparent; color:var(--dim); border:1px solid var(--line); font-weight:600}
+
+  .log{background:#0a0c10; border:1px solid var(--line); border-radius:10px; padding:10px; font-size:12px;
+    color:var(--dim); max-height:140px; overflow-y:auto; line-height:1.6}
+  .log .hl{color:var(--accent)} .log .g{color:var(--cash)} .log .r{color:var(--rage)}
+
+  .agent-row{display:flex; align-items:center; gap:10px; background:var(--panel2); border:1px solid var(--line);
+    border-radius:11px; padding:10px; margin-bottom:8px}
+  .agent-row .face{font-size:26px}
+  .agent-row .meta{flex:1}
+  .agent-row .nm{font-weight:700; font-size:14px}
+  .agent-row .ds{color:var(--dim); font-size:11px}
+  .temper{height:5px; background:#0a0c10; border-radius:99px; margin-top:5px; overflow:hidden}
+  .temper > i{display:block; height:100%; background:var(--rage)}
+
+  .proj{background:var(--panel2); border:1px solid var(--line); border-radius:11px; padding:11px; margin-bottom:6px}
+  .proj .pn{font-weight:700; font-size:14px; display:flex; justify-content:space-between}
+  .proj .meta{color:var(--dim); font-size:11px; margin:6px 0}
+  .prog{height:8px; background:#0a0c10; border-radius:99px; overflow:hidden}
+  .prog > i{display:block; height:100%; background:linear-gradient(90deg,var(--accent),var(--cash)); transition:width .4s}
+
+  .rage-mode{animation:shake .3s infinite}
+  @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-2px)}75%{transform:translateX(2px)}}
+  .banner{background:linear-gradient(90deg,#3a1108,#5c1a0a); border:1px solid var(--rage); color:#ffd0c4;
+    padding:8px 12px; border-radius:10px; font-size:13px; font-weight:700; text-align:center}
+
+  .end{text-align:center; padding:30px 16px}
+  .end .em{font-size:60px} .end h1{margin:10px 0 4px} .end p{color:var(--dim)}
+  .footer{text-align:center; color:var(--dim); font-size:11px; padding:6px}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="topbar">
+      <div class="day">Day <span id="day">1</span> <small id="goal">/ 撑到第 30 天且不破产</small></div>
+      <div class="phase-tag" id="phaseTag">早报</div>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="lbl">🔥 暴躁 <b id="vRage">50</b></div><div class="bar"><i class="b-rage" id="bRage"></i></div></div>
+      <div class="stat"><div class="lbl">🧠 心态 <b id="vSanity">70</b></div><div class="bar"><i class="b-sanity" id="bSanity"></i></div></div>
+      <div class="stat"><div class="lbl">⚡ 精力 <b id="vEnergy">80</b></div><div class="bar"><i class="b-energy" id="bEnergy"></i></div></div>
+      <div class="stat"><div class="lbl">💰 恰饭 <b id="vCash">1000</b></div><div class="bar"><i class="b-cash" id="bCash"></i></div></div>
+    </div>
+  </header>
+  <main id="main"></main>
+  <div class="footer">原型 v0.1 · 暴躁老哥 Vibe Coding 模拟器</div>
+</div>
+
+<script>
+"use strict";
+
+/* ---------- 状态 ---------- */
+const S = {
+  day:1, maxDay:30, phase:0, // 0新闻 1鸡血 2干活 3结算
+  rage:50, sanity:70, energy:80, cash:1000,
+  rageMode:false,
+  buffs:[],
+  agents:[
+    {id:'a', face:'🤖', nm:'乖学生 GPT仔', ds:'听话稳定·没创意·爱幻觉', temper:10, power:8, hallu:0.35},
+    {id:'b', face:'😼', nm:'杠精 Claude佬', ds:'能力强·爱抬杠·要哄', temper:20, power:14, hallu:0.15},
+    {id:'c', face:'🐢', nm:'划水 Copilot', ds:'便宜·偷懒·爱简化', temper:5, power:6, hallu:0.25},
+  ],
+  proj:{ nm:'某不知名 SaaS', done:0, bugs:0, users:0, debt:0 },
+  log:[],
+  todayNews:null,
+};
+
+/* ---------- 新闻库 ---------- */
+const NEWS = [
+  {cat:'融资', col:'#ff5a4d', body:'"19岁辍学生 demo 截图融资 3 亿。"评论区都在喊颠覆。', eff:{rage:+18,sanity:-10}, note:'破防打鸡血：今日产出↑'},
+  {cat:'融资', col:'#ff5a4d', body:'你三年前看不上的项目，今天被大厂收购了。', eff:{rage:+12,sanity:-12,cash:0}, note:'"我上我也行"'},
+  {cat:'模型', col:'#5ab0ff', body:'新模型发布，便宜 10 倍还更聪明。', eff:{sanity:+6,energy:-8}, note:'agent 能力暂时↑'},
+  {cat:'模型', col:'#5ab0ff', body:'你在用的框架宣布弃坑，文档已 404。', eff:{rage:+10,sanity:-6}, note:'技术债 +1'},
+  {cat:'风口', col:'#4ade80', body:'XX 概念一夜爆火，热钱疯狂涌入赛道。', eff:{rage:+6}, note:'限时风口：赶工收益↑'},
+  {cat:'风口', col:'#4ade80', body:'风口似乎是泡沫……但万一是真的呢？', eff:{}, note:'赌一把？'},
+  {cat:'黑天鹅', col:'#a78bfa', body:'各家 API 集体涨价，成本起飞。', eff:{cash:-200,rage:+8}, note:'运营成本↑'},
+  {cat:'黑天鹅', col:'#a78bfa', body:'全网大宕机，你的 app 也躺了，用户在骂。', eff:{rage:+14,sanity:-8}, note:'紧急救火'},
+  {cat:'舆论', col:'#fb923c', body:'有人在论坛阴阳你的开源项目是"AI 缝合怪"。', eff:{rage:+16,sanity:-6}, note:'嘴硬反击'},
+  {cat:'舆论', col:'#fb923c', body:'你的 app 莫名上了热搜，流量暴涨！', eff:{sanity:+8}, note:'用户 +大量'},
+  {cat:'生活', col:'#94a3b8', body:'房贷涨了，对象问你"这班到底还上不上"。', eff:{rage:+8,sanity:-10}, note:'现实暴击'},
+  {cat:'生活', col:'#94a3b8', body:'体检报告出了，医生建议你"别熬夜"。你笑了。', eff:{energy:-6,sanity:+4}, note:''},
+  {cat:'玄学', col:'#f0abfc', body:'今日黄历：宜删库，忌发版。', eff:{}, note:'今日事故概率波动'},
+];
+
+/* ---------- 鸡血库 ---------- */
+const BUFFS = [
+  {nm:'☕ 第八杯咖啡', d:'精力↑↑ 但手抖(bug+)、夜里失眠', cost:0, apply:s=>{s.energy+=25; s.buffs.push('手抖')}},
+  {nm:'🎵 赛博朋克歌单', d:'暴躁↑ 沉浸 但听不见 agent 警告', cost:0, apply:s=>{s.rage+=15; s.buffs.push('沉浸')}},
+  {nm:'📈 看竞品融资', d:'暴躁↑↑(破防式) 心态↓', cost:0, apply:s=>{s.rage+=22; s.sanity-=10}},
+  {nm:'🧘 冥想回血', d:'心态↑ 但今日产出腰斩', cost:0, apply:s=>{s.sanity+=22; s.buffs.push('摆烂')}},
+  {nm:'🍜 泡面+老番', d:'全属性微回·稳健过渡', cost:0, apply:s=>{s.energy+=8; s.sanity+=8; s.rage-=4}},
+];
+
+/* ---------- 工具 ---------- */
+const $=id=>document.getElementById(id);
+const clamp=(v,a=0,b=100)=>Math.max(a,Math.min(b,v));
+const rand=arr=>arr[Math.floor(Math.random()*arr.length)];
+function log(msg,cls=''){ S.log.unshift(`<span class="${cls}">${msg}</span>`); S.log=S.log.slice(0,30); }
+
+function applyEff(e){
+  if(!e) return;
+  if(e.rage)   S.rage   = clamp(S.rage+e.rage);
+  if(e.sanity) S.sanity = clamp(S.sanity+e.sanity);
+  if(e.energy) S.energy = clamp(S.energy+e.energy);
+  if(e.cash)   S.cash   = Math.max(0,S.cash+e.cash);
+}
+
+function renderStats(){
+  $('day').textContent=S.day;
+  $('vRage').textContent=Math.round(S.rage);
+  $('vSanity').textContent=Math.round(S.sanity);
+  $('vEnergy').textContent=Math.round(S.energy);
+  $('vCash').textContent=Math.round(S.cash);
+  $('bRage').style.width=clamp(S.rage)+'%';
+  $('bSanity').style.width=clamp(S.sanity)+'%';
+  $('bEnergy').style.width=clamp(S.energy)+'%';
+  $('bCash').style.width=clamp(S.cash/30)+'%';
+  $('app').classList.toggle('rage-mode', S.rageMode);
+}
+
+function logHTML(){
+  return `<div class="log">${S.log.join('<br>')||'……新的一天开始了。'}</div>`;
+}
+
+/* ---------- 阶段渲染 ---------- */
+function render(){
+  renderStats();
+  const m=$('main');
+  const tags=['📰 早报','💪 打鸡血','⌨️ 干活','🌙 结算'];
+  $('phaseTag').textContent=tags[S.phase];
+
+  // 检查暴躁狂暴
+  S.rageMode = S.rage>=90;
+
+  if(S.phase===0) m.innerHTML=viewNews();
+  else if(S.phase===1) m.innerHTML=viewBuff();
+  else if(S.phase===2) m.innerHTML=viewWork();
+  else if(S.phase===3) m.innerHTML=viewSettle();
+}
+
+/* 阶段0：新闻 */
+function viewNews(){
+  if(!S.todayNews) S.todayNews=rand(NEWS);
+  const n=S.todayNews;
+  const effChips=Object.entries(n.eff||{}).map(([k,v])=>{
+    const map={rage:'暴躁',sanity:'心态',energy:'精力',cash:'恰饭'};
+    return `<span class="chip ${v>0?'up':'down'}">${map[k]} ${v>0?'+':''}${v}</span>`;
+  }).join('');
+  const banner = S.rageMode?`<div class="banner">⚠️ 暴躁狂暴模式：产出翻倍，但 bug 与事故概率飙升！</div>`:'';
+  return `
+    ${banner}
+    <div class="card">
+      <span class="news-cat" style="background:${n.col}22;color:${n.col};border:1px solid ${n.col}">${n.cat}</span>
+      <h2>📰 今日头条</h2>
+      <div class="news-body">${n.body}</div>
+      <div class="news-eff">${effChips}${n.note?`<span class="chip">🎯 ${n.note}</span>`:''}</div>
+    </div>
+    <button class="btn" onclick="ackNews()">${pickReaction()}</button>
+    ${logHTML()}
+  `;
+}
+function pickReaction(){
+  return rand(['"就这？我上我也行" →','"卧槽……" 破防了 →','深吸一口气 →','"键政时间结束，干活" →']);
+}
+function ackNews(){
+  applyEff(S.todayNews.eff);
+  log(`📰 [${S.todayNews.cat}] ${S.todayNews.body}`,'hl');
+  S.phase=1; render();
+}
+
+/* 阶段1：鸡血 */
+function viewBuff(){
+  const opts=BUFFS.map((b,i)=>`
+    <button class="opt" onclick="pickBuff(${i})">
+      <div class="t">${b.nm}</div>
+      <div class="d">${b.d}</div>
+    </button>`).join('');
+  return `
+    <div class="card">
+      <h2>💪 今天靠什么续命？</h2>
+      <div class="sub">选一个鸡血来源，副作用自负。</div>
+      <div class="opts">${opts}</div>
+    </div>
+    ${logHTML()}
+  `;
+}
+function pickBuff(i){
+  const b=BUFFS[i];
+  b.apply(S);
+  S.rage=clamp(S.rage); S.sanity=clamp(S.sanity); S.energy=clamp(S.energy);
+  log(`💪 打鸡血：${b.nm}`);
+  S.phase=2; render();
+}
+
+/* 阶段2：干活 + 和 agent 较劲 */
+function viewWork(){
+  const agents=S.agents.map(a=>`
+    <div class="agent-row">
+      <div class="face">${a.face}</div>
+      <div class="meta">
+        <div class="nm">${a.nm}</div>
+        <div class="ds">${a.ds} · 战力${a.power}</div>
+        <div class="temper"><i style="width:${a.temper}%"></i></div>
+      </div>
+    </div>`).join('');
+  const proj=S.proj;
+  const actions = S.agents.map(a=>`
+    <button class="opt" onclick="assign('${a.id}')">
+      <div class="t">派活给 ${a.face} ${a.nm} <span class="cost">-15 精力</span></div>
+      <div class="d">交活后你来 review；脾气越高越容易摆烂/幻觉</div>
+    </button>`).join('');
+  return `
+    <div class="card">
+      <h2>👥 你的 Agent 团队</h2>
+      <div class="sub">和它们较劲，看谁先崩。</div>
+      ${agents}
+    </div>
+    <div class="card">
+      <div class="proj">
+        <div class="pn">${proj.nm} <span>${Math.round(proj.done)}%</span></div>
+        <div class="prog"><i style="width:${clamp(proj.done)}%"></i></div>
+        <div class="meta">🐛 bug ${proj.bugs} · 👤 用户 ${proj.users} · 🧱 技术债 ${proj.debt}</div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>⌨️ 今天怎么干？</h2>
+      <div class="opts">
+        ${actions}
+        <button class="opt" onclick="selfCode()">
+          <div class="t">🙋 自己硬写 <span class="cost">-25 精力</span></div>
+          <div class="d">不靠 agent，产出看暴躁值，但很累</div>
+        </button>
+        <button class="opt" onclick="endDay()">
+          <div class="t">😮‍💨 今天摸了，直接收工</div>
+          <div class="d">保存精力，但啥也没干</div>
+        </button>
+      </div>
+    </div>
+    ${logHTML()}
+  `;
+}
+
+function assign(id){
+  if(S.energy<15){ log('⚡ 精力不够派活了…','r'); render(); return; }
+  S.energy=clamp(S.energy-15);
+  const a=S.agents.find(x=>x.id===id);
+  // agent 产出 = 战力 受脾气与暴躁影响
+  let out=a.power*(0.8+Math.random()*0.6);
+  const halluHit=Math.random() < (a.hallu + a.temper/300);
+  // 进入 review 对线
+  showReview(a, out, halluHit);
+}
+
+function showReview(a,out,halluHit){
+  const m=$('main');
+  const issue = halluHit ? `它似乎<strong style="color:var(--rage)">一本正经地幻觉</strong>了一段不存在的 API…`
+                         : `代码看起来还行，但你总觉得哪里不对劲。`;
+  m.innerHTML=`
+    <div class="card">
+      <h2>🔍 Review ${a.face} ${a.nm} 的产出</h2>
+      <div class="sub">${issue}</div>
+      <div class="opts">
+        <button class="opt" onclick="reviewChoice('trust',${out},${halluHit},'${a.id}')">
+          <div class="t">✅ 直接信它</div><div class="d">快，但幻觉会变成线上 bug</div>
+        </button>
+        <button class="opt" onclick="reviewChoice('audit',${out},${halluHit},'${a.id}')">
+          <div class="t">🔎 仔细审 <span class="cost">-8 精力</span></div><div class="d">揪出 bug，但揪太多会破防(心态-)</div>
+        </button>
+        <button class="opt" onclick="reviewChoice('fight',${out},${halluHit},'${a.id}')">
+          <div class="t">🗣️ 开喷·逼它返工</div><div class="d">暴躁↑；赢→神级代码，输→它摆烂</div>
+        </button>
+      </div>
+    </div>
+    ${logHTML()}
+  `;
+}
+
+function reviewChoice(mode,out,halluHit,aid){
+  const a=S.agents.find(x=>x.id===aid);
+  let gained=out, bugs=0, msg='';
+  const mult = S.rageMode?2:1;
+
+  if(mode==='trust'){
+    gained=out*mult;
+    if(halluHit){ bugs=2; S.proj.debt++; msg=`✅ 直接合并… 幻觉代码已上线，<span class="r">埋了 2 个雷</span>。`; }
+    else msg=`✅ 直接信，推进 +${gained.toFixed(0)}%。`;
+  }
+  else if(mode==='audit'){
+    S.energy=clamp(S.energy-8);
+    gained=out*0.9*mult;
+    if(halluHit){ bugs=0; S.sanity=clamp(S.sanity-8); msg=`🔎 揪出了幻觉 bug，破防 -8 心态，但没埋雷。`; }
+    else msg=`🔎 仔细审过，干净推进 +${gained.toFixed(0)}%。`;
+  }
+  else { // fight 对线
+    S.rage=clamp(S.rage+12);
+    a.temper=clamp(a.temper+25);
+    const win = (S.rage + Math.random()*40) > (a.temper + 50);
+    if(win){ gained=out*1.6*mult; msg=`🗣️ 你赢了对线！它服软交出<span class="g">神级代码</span> +${gained.toFixed(0)}%。`; }
+    else { gained=0; S.sanity=clamp(S.sanity-10);
+      if(Math.random()<0.2){ S.proj.done=Math.max(0,S.proj.done-10); msg=`🗣️ 它"已读乱改"，<span class="r">把进度删了 10%</span>！`; }
+      else msg=`🗣️ 对线失败，它开始摆烂，今天白干，心态-10。`;
+    }
+  }
+  S.proj.done=clamp(S.proj.done+gained,0,100);
+  S.proj.bugs+=bugs;
+  log(msg, mode==='fight'?'hl':'');
+  S.phase=3; render();
+}
+
+function selfCode(){
+  if(S.energy<25){ log('⚡ 太累了，自己写不动…','r'); render(); return; }
+  S.energy=clamp(S.energy-25);
+  const moody = S.buffs.includes('摆烂')?0.5:1;
+  let out=(6 + S.rage*0.12)*moody*(S.rageMode?2:1);
+  let bugs=0;
+  if(S.buffs.includes('手抖') && Math.random()<0.5){ bugs=1; }
+  if(S.rageMode && Math.random()<0.4){ bugs+=2; }
+  S.proj.done=clamp(S.proj.done+out,0,100);
+  S.proj.bugs+=bugs;
+  log(`🙋 自己硬写 +${out.toFixed(0)}%${bugs?` 但手抖出 ${bugs} 个 bug`:''}。`, bugs?'r':'g');
+  S.phase=3; render();
+}
+
+/* 阶段3：结算 + 夜间随机事件 */
+function viewSettle(){
+  return `
+    <div class="card">
+      <h2>🌙 一天结束</h2>
+      <div class="sub">深夜了，结算今天的收成。</div>
+      <button class="btn" onclick="endDay()">睡了（进入下一天）</button>
+    </div>
+    ${logHTML()}
+  `;
+}
+
+function endDay(){
+  if(S.phase<3){ // 直接摸鱼收工
+    log('😮‍💨 今天摸了，啥也没干。');
+  }
+  // 暴躁持续侵蚀心态
+  S.sanity=clamp(S.sanity - S.rage*0.04);
+  // bug 转化为用户流失 / 收入
+  const income = Math.round(S.proj.done*1.5 + S.proj.users*0.3 - S.proj.bugs*8);
+  S.cash=Math.max(0,S.cash+income);
+  log(`💰 今日恰饭结算：${income>=0?'+':''}${income}`, income>=0?'g':'r');
+  // 用户增长（口碑受 bug 影响）
+  const grow=Math.round(S.proj.done*0.4 - S.proj.bugs*1.2);
+  S.proj.users=Math.max(0,S.proj.users+grow);
+
+  // 夜间随机事件
+  const nightRoll=Math.random();
+  if(nightRoll<0.15){ S.sanity=clamp(S.sanity-15); log('🌙 深夜 emo：怀疑人生，心态-15。','r'); }
+  else if(nightRoll<0.30){ S.rage=clamp(S.rage+10); S.proj.done=clamp(S.proj.done+8); log('🌙 灵感爆发！偷偷推进 +8%，但越想越气。','hl'); }
+  else if(nightRoll<0.40 && S.proj.debt>0){ S.proj.bugs+=2; log('🌙 技术债爆雷：线上事故，bug+2！','r'); }
+
+  // 精力自然消耗 + 小恢复
+  S.energy=clamp(S.energy-10+ (Math.random()<0.5?10:0));
+
+  // 推进天数
+  S.day++;
+  S.phase=0;
+  S.todayNews=null;
+  S.buffs=[];
+
+  // 结束判定
+  const over=checkEnd();
+  if(over) return;
+  render();
+}
+
+function checkEnd(){
+  if(S.cash<=0){ showEnd('💸','破产收场','钱烧光了，老哥含泪进厂打工。',false); return true; }
+  if(S.sanity<=0){ showEnd('🫠','彻底 Burnout','心态崩了，删库归隐，转行开麻辣烫。',false); return true; }
+  if(S.proj.done>=100){ showEnd('🚀','项目爆火被收购！','你做出来了！大厂捧着钱来收购，财务自由！',true); return true; }
+  if(S.day>S.maxDay){
+    if(S.cash>=2000) showEnd('🎉','稳健恰饭','撑过了 30 天还没饿死，独立开发算是站稳了。',true);
+    else showEnd('😮‍💨','勉强活着','30 天到了，没爆富也没饿死，明天继续。',true);
+    return true;
+  }
+  return false;
+}
+
+function showEnd(em,title,desc,good){
+  $('main').innerHTML=`
+    <div class="end">
+      <div class="em">${em}</div>
+      <h1>${title}</h1>
+      <p>${desc}</p>
+      <p style="margin-top:14px;color:var(--dim);font-size:13px">
+        撑了 ${S.day-1} 天 · 项目 ${Math.round(S.proj.done)}% · 用户 ${S.proj.users} · 余额 ${Math.round(S.cash)}
+      </p>
+      <button class="btn" style="margin-top:20px" onclick="location.reload()">🔁 再来一局</button>
+    </div>`;
+  $('phaseTag').textContent='结束';
+}
+
+/* ---------- 启动 ---------- */
+render();
+</script>
+</body>
+</html>
