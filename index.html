@@ -12,158 +12,168 @@
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
 html,body{margin:0;height:100%;overflow:hidden}
 body{background:#000;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;color:var(--ink);display:flex;justify-content:center}
-#app{width:100%;max-width:460px;height:100dvh;position:relative;background:var(--bg);overflow:hidden;display:flex;flex-direction:column}
+#app{width:100%;max-width:460px;height:100dvh;position:relative;background:var(--bg);overflow:hidden}
 
 /* ---------- HUD ---------- */
-#hud{position:absolute;top:0;left:0;right:0;z-index:30;padding:8px 10px;display:flex;gap:6px;align-items:center;
-  background:linear-gradient(#0a0c12ee,#0a0c1200)}
-.daybadge{font-weight:900;font-size:13px;background:#0a0c12cc;border:1px solid var(--line);border-radius:9px;padding:5px 9px;white-space:nowrap}
-.daybadge small{color:var(--dim);font-weight:600;font-size:10px}
-.gauges{flex:1;display:flex;gap:5px}
-.g{flex:1;background:#0a0c12cc;border:1px solid var(--line);border-radius:9px;padding:4px 6px;position:relative;overflow:hidden}
-.g .ic{font-size:12px;line-height:1}
-.g .num{font-size:12px;font-weight:800;line-height:1.1}
-.g .track{height:4px;background:#000;border-radius:9px;margin-top:3px;overflow:hidden}
-.g .track > i{display:block;height:100%;border-radius:9px;transition:width .4s cubic-bezier(.2,.8,.2,1)}
-.g.flash{animation:gflash .5s}
-@keyframes gflash{0%,100%{transform:none}30%{transform:scale(1.12)}}
-.rg .track>i{background:var(--rage)} .sn .track>i{background:var(--sanity)}
-.en .track>i{background:var(--energy)} .cs .track>i{background:var(--cash)}
+#hud{position:absolute;top:0;left:0;right:0;z-index:40;padding:7px 9px;display:flex;gap:5px;align-items:center;
+  background:linear-gradient(#0a0c12f0,#0a0c1200);pointer-events:none}
+.daybadge{font-weight:900;font-size:12px;background:#0a0c12dd;border:1px solid var(--line);border-radius:8px;padding:4px 8px;white-space:nowrap;line-height:1.15}
+.daybadge small{color:var(--dim);font-weight:600;font-size:9px}
+.gauges{flex:1;display:flex;gap:4px}
+.g{flex:1;background:#0a0c12dd;border:1px solid var(--line);border-radius:8px;padding:3px 5px;overflow:hidden}
+.g .ic{font-size:11px;line-height:1}.g .num{font-size:11px;font-weight:800}
+.g .track{height:3px;background:#000;border-radius:9px;margin-top:2px;overflow:hidden}
+.g .track>i{display:block;height:100%;border-radius:9px;transition:width .4s cubic-bezier(.2,.8,.2,1)}
+.g.flash{animation:gflash .5s}@keyframes gflash{30%{transform:scale(1.13)}}
+.rg .track>i{background:var(--rage)}.sn .track>i{background:var(--sanity)}.en .track>i{background:var(--energy)}.cs .track>i{background:var(--cash)}
 
-/* ---------- SCENE ---------- */
-#scene{position:absolute;inset:0;z-index:1;overflow:hidden}
+/* ---------- SCENE (backdrop) ---------- */
+#scene{position:absolute;inset:0;z-index:1;overflow:hidden;transition:filter .4s}
+#scene.dim{filter:brightness(.45) blur(2px)}
 #sky{position:absolute;inset:0;transition:background 1.2s}
-.win{position:absolute;top:9%;right:7%;width:34%;height:30%;border:5px solid #11151f;border-radius:8px;
-  background:linear-gradient(180deg,#0e1830,#1b2747);box-shadow:inset 0 0 30px #0006;overflow:hidden}
-.win::before{content:"";position:absolute;inset:0;background:
-  radial-gradient(1px 1px at 20% 30%,#fff,transparent),
-  radial-gradient(1px 1px at 60% 50%,#fff9,transparent),
-  radial-gradient(1px 1px at 80% 20%,#fff7,transparent),
-  radial-gradient(1px 1px at 40% 70%,#fffa,transparent);opacity:.7}
-.moon{position:absolute;top:12%;left:18%;width:26px;height:26px;border-radius:50%;background:#f2efd6;box-shadow:0 0 18px #f2efd680;transition:.8s}
+.win{position:absolute;top:8%;right:7%;width:33%;height:28%;border:5px solid #11151f;border-radius:8px;background:linear-gradient(180deg,#0e1830,#1b2747);overflow:hidden}
+.win::before{content:"";position:absolute;inset:0;background:radial-gradient(1px 1px at 20% 30%,#fff,transparent),radial-gradient(1px 1px at 60% 50%,#fff9,transparent),radial-gradient(1px 1px at 80% 20%,#fff7,transparent),radial-gradient(1px 1px at 40% 70%,#fffa,transparent);opacity:.7}
+.moon{position:absolute;top:14%;left:18%;width:24px;height:24px;border-radius:50%;background:#f2efd6;box-shadow:0 0 16px #f2efd680;transition:.8s}
 .deskline{position:absolute;left:0;right:0;bottom:23%;height:2px;background:#000a;box-shadow:0 -16px 30px #0008}
 .desk{position:absolute;left:0;right:0;bottom:0;height:23%;background:linear-gradient(#1a2030,#10131c)}
-/* monitor */
-.mon{position:absolute;left:7%;bottom:24%;width:40%;height:30%;border:4px solid #0c0f17;border-radius:7px;background:#050a14;overflow:hidden}
-.mon .code{position:absolute;inset:0;padding:6px 7px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:7px;line-height:1.5;color:#37e07a;opacity:.85;white-space:pre;animation:scroll 8s linear infinite}
-@keyframes scroll{from{transform:translateY(0)}to{transform:translateY(-50%)}}
-.mon .glow{position:absolute;inset:0;box-shadow:inset 0 0 22px #37e07a44;pointer-events:none}
-.monstand{position:absolute;left:23%;bottom:21%;width:5%;height:4%;background:#0c0f17}
+.mon{position:absolute;left:7%;bottom:24%;width:38%;height:28%;border:4px solid #0c0f17;border-radius:7px;background:#050a14;overflow:hidden}
+.mon .code{position:absolute;inset:0;padding:5px 6px;font-family:ui-monospace,Menlo,monospace;font-size:6.5px;line-height:1.5;color:#37e07a;opacity:.85;white-space:pre;animation:scroll 9s linear infinite}
+@keyframes scroll{to{transform:translateY(-50%)}}
+.mon .glow{position:absolute;inset:0;box-shadow:inset 0 0 22px #37e07a44}
+.monstand{position:absolute;left:22%;bottom:21%;width:5%;height:4%;background:#0c0f17}
+.cups{position:absolute;right:9%;bottom:24%;display:flex;gap:2px;align-items:flex-end}
+.cup{font-size:14px;filter:drop-shadow(0 2px 2px #0008)}
 
-/* coffee cups grow with energy spent */
-.cups{position:absolute;right:9%;bottom:24%;display:flex;gap:3px;align-items:flex-end}
-.cup{font-size:15px;filter:drop-shadow(0 2px 2px #0008)}
-
-/* ---------- CHARACTER ---------- */
-#charWrap{position:absolute;left:50%;bottom:21%;transform:translateX(-50%);width:54%;max-width:230px;z-index:6;transition:filter .4s}
+/* CHARACTER (same proven SVG approach) */
+#charWrap{position:absolute;left:50%;bottom:20%;transform:translateX(-50%);width:50%;max-width:215px;z-index:6}
 #char{width:100%;display:block;overflow:visible}
-.breathe{animation:breathe 3.4s ease-in-out infinite}
-@keyframes breathe{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.5%)}}
-#charWrap.shake{animation:cshake .28s infinite}
-@keyframes cshake{0%,100%{transform:translateX(-50%)}25%{transform:translate(-53%,1px)}75%{transform:translate(-47%,-1px)}}
-
-/* expression parts: hide all variants by default, mood class reveals */
+.breathe{animation:breathe 3.4s ease-in-out infinite}@keyframes breathe{50%{transform:translateY(-1.5%)}}
+#charWrap.shake{animation:cshake .28s infinite}@keyframes cshake{25%{transform:translate(-53%,1px)}75%{transform:translate(-47%,-1px)}}
 #char .eyes>g,#char .mouth>path{display:none}
 #char .brow{transition:transform .25s}
 #char .fire,#char .steam,#char .sweat,#char .vein,#char .blush{opacity:0;transition:opacity .3s}
 #char .face{transition:fill .4s}
+.m-calm .e-norm,.m-calm .mo-smile{display:block}.m-calm .browL{transform:translateY(2px)}.m-calm .browR{transform:translateY(2px)}
+.m-focus .e-norm,.m-focus .mo-flat{display:block}
+.m-annoyed .e-norm,.m-annoyed .mo-frown{display:block}.m-annoyed .browL{transform:rotate(12deg) translateY(1px)}.m-annoyed .browR{transform:rotate(-12deg) translateY(1px)}.m-annoyed .vein{opacity:.9}
+.m-angry .e-rage,.m-angry .mo-grit{display:block}.m-angry .browL{transform:rotate(20deg)}.m-angry .browR{transform:rotate(-20deg)}.m-angry .face{fill:#ffb3a0}.m-angry .vein{opacity:1}.m-angry .steam{opacity:.8}
+.m-rage .e-rage,.m-rage .mo-yell{display:block}.m-rage .browL{transform:rotate(26deg) translateY(-1px)}.m-rage .browR{transform:rotate(-26deg) translateY(-1px)}.m-rage .face{fill:#ff8e76}.m-rage .fire{opacity:1}.m-rage .steam{opacity:1}.m-rage .vein{opacity:1}
+.m-dead .e-x,.m-dead .mo-flat{display:block}.m-dead .face{fill:#cfd6df}.m-dead .sweat{opacity:.9}.m-dead .browL{transform:translateY(4px) rotate(-8deg)}.m-dead .browR{transform:translateY(4px) rotate(8deg)}
+.m-happy .e-happy,.m-happy .mo-open{display:block}.m-happy .browL{transform:translateY(-1px)}.m-happy .browR{transform:translateY(-1px)}.m-happy .blush{opacity:.8}
+.firewrap{animation:flick .12s infinite alternate}@keyframes flick{to{transform:scaleY(1.12)}}
 
-/* CALM */
-.m-calm .e-norm{display:block}.m-calm .mo-smile{display:block}
-.m-calm .browL{transform:translateY(2px)}.m-calm .browR{transform:translateY(2px)}
-/* FOCUS */
-.m-focus .e-norm{display:block}.m-focus .mo-flat{display:block}
-/* ANNOYED */
-.m-annoyed .e-norm{display:block}.m-annoyed .mo-frown{display:block}
-.m-annoyed .browL{transform:rotate(12deg) translateY(1px)}.m-annoyed .browR{transform:rotate(-12deg) translateY(1px)}
-.m-annoyed .vein{opacity:.9}
-/* ANGRY */
-.m-angry .e-rage{display:block}.m-angry .mo-grit{display:block}
-.m-angry .browL{transform:rotate(20deg)}.m-angry .browR{transform:rotate(-20deg)}
-.m-angry .face{fill:#ffb3a0}.m-angry .vein{opacity:1}.m-angry .steam{opacity:.8}
-/* RAGE */
-.m-rage .e-rage{display:block}.m-rage .mo-yell{display:block}
-.m-rage .browL{transform:rotate(26deg) translateY(-1px)}.m-rage .browR{transform:rotate(-26deg) translateY(-1px)}
-.m-rage .face{fill:#ff8e76}.m-rage .fire{opacity:1}.m-rage .steam{opacity:1}.m-rage .vein{opacity:1}
-/* DEAD/tired */
-.m-dead .e-x{display:block}.m-dead .mo-flat{display:block}
-.m-dead .face{fill:#cfd6df}.m-dead .sweat{opacity:.9}
-.m-dead .browL{transform:translateY(4px) rotate(-8deg)}.m-dead .browR{transform:translateY(4px) rotate(8deg)}
-/* HAPPY */
-.m-happy .e-happy{display:block}.m-happy .mo-open{display:block}
-.m-happy .browL{transform:translateY(-1px)}.m-happy .browR{transform:translateY(-1px)}
-.m-happy .blush{opacity:.8}
-
-.firewrap{animation:flick .12s infinite alternate}
-@keyframes flick{from{transform:scaleY(1)}to{transform:scaleY(1.12)}}
-
-/* speech bubble */
-#speech{position:absolute;left:50%;bottom:calc(21% + 30vw);max-bottom:0;transform:translateX(-50%);
-  z-index:8;background:#fff;color:#15171d;font-size:13px;font-weight:700;line-height:1.35;
-  padding:9px 12px;border-radius:13px;max-width:78%;text-align:center;box-shadow:0 6px 20px #000a;opacity:0;
-  transition:opacity .25s;pointer-events:none}
+#speech{position:absolute;left:50%;bottom:58%;transform:translateX(-50%);z-index:8;background:#fff;color:#15171d;font-size:13px;font-weight:700;line-height:1.35;padding:9px 12px;border-radius:13px;max-width:74%;text-align:center;box-shadow:0 6px 20px #000a;opacity:0;transition:opacity .25s;pointer-events:none}
 #speech.show{opacity:1}
-#speech::after{content:"";position:absolute;left:50%;bottom:-8px;transform:translateX(-50%);
-  border:8px solid transparent;border-top-color:#fff;border-bottom:0}
-#speech.angry{background:#ffe3da;color:#8a1a00}
-#speech.angry::after{border-top-color:#ffe3da}
+#speech::after{content:"";position:absolute;left:50%;bottom:-8px;transform:translateX(-50%);border:8px solid transparent;border-top-color:#fff;border-bottom:0}
+#speech.angry{background:#ffe3da;color:#8a1a00}#speech.angry::after{border-top-color:#ffe3da}
 
-/* fx layer: floating numbers / emojis */
-#fx{position:absolute;inset:0;z-index:20;pointer-events:none;overflow:hidden}
-.float{position:absolute;font-weight:900;font-size:16px;animation:floatUp 1.1s ease-out forwards;text-shadow:0 2px 4px #000}
-@keyframes floatUp{0%{opacity:0;transform:translateY(0) scale(.6)}15%{opacity:1;transform:translateY(-8px) scale(1.1)}100%{opacity:0;transform:translateY(-70px) scale(1)}}
+/* FX */
+#fx{position:absolute;inset:0;z-index:60;pointer-events:none;overflow:hidden}
+.float{position:absolute;font-weight:900;font-size:17px;animation:floatUp 1.1s ease-out forwards;text-shadow:0 2px 4px #000}
+@keyframes floatUp{0%{opacity:0;transform:translateY(0) scale(.6)}15%{opacity:1;transform:translateY(-8px) scale(1.1)}100%{opacity:0;transform:translateY(-72px) scale(1)}}
 .burst{position:absolute;font-size:22px;animation:burst .9s ease-out forwards}
 @keyframes burst{0%{opacity:1;transform:translate(0,0) scale(.4)}100%{opacity:0;transform:translate(var(--dx),var(--dy)) scale(1.3)}}
-#flashfx{position:absolute;inset:0;z-index:25;pointer-events:none;opacity:0;background:radial-gradient(circle,#ff4d4d55,transparent 70%)}
-#flashfx.on{animation:redflash .4s}
-@keyframes redflash{0%{opacity:0}30%{opacity:1}100%{opacity:0}}
+#flashfx{position:absolute;inset:0;z-index:55;pointer-events:none;opacity:0;background:radial-gradient(circle,#ff4d4d55,transparent 70%)}
+#flashfx.on{animation:redflash .4s}@keyframes redflash{30%{opacity:1}}
 
-/* ---------- PANEL ---------- */
-#panel{position:absolute;left:0;right:0;bottom:0;z-index:15;
-  background:linear-gradient(#0a0c1200,#0a0c12 16%);padding:14px 12px calc(12px + env(safe-area-inset-bottom));
-  max-height:62%;overflow-y:auto}
-.phasetag{display:inline-block;font-size:11px;font-weight:800;color:#0a0c12;background:var(--accent);padding:3px 10px;border-radius:99px;margin-bottom:8px}
-.sheet{background:#12151fcc;backdrop-filter:blur(6px);border:1px solid var(--line);border-radius:16px;padding:13px;animation:rise .3s ease}
-@keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
-.sheet h2{margin:0 0 3px;font-size:15px}
-.sheet .sub{color:var(--dim);font-size:12px;margin-bottom:11px}
+/* ---------- OVERLAY / SCREENS ---------- */
+#overlay{position:absolute;inset:0;z-index:30;display:none}
+#overlay.on{display:block}
+.screen{position:absolute;inset:0;animation:slideUp .35s cubic-bezier(.2,.9,.2,1)}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:none}}
 
-.news{border-left:3px solid var(--accent);padding-left:10px}
-.cat{display:inline-block;font-size:10px;font-weight:800;padding:2px 8px;border-radius:99px;margin-bottom:6px}
-.headline{font-size:14px;line-height:1.5}
-.effrow{margin-top:9px;display:flex;flex-wrap:wrap;gap:5px}
+/* tap-to-continue full prompts (wake) */
+.tap{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;
+  padding-bottom:18%;z-index:35;background:linear-gradient(#0a0c1200,#0a0c12cc)}
+.tap .big{font-size:16px;font-weight:800;margin-bottom:6px;text-align:center;padding:0 24px}
+.tap .hint{color:var(--dim);font-size:12px;animation:blink 1.4s infinite}@keyframes blink{50%{opacity:.3}}
+
+/* ===== PHONE (news app) ===== */
+.phone{position:absolute;top:3%;left:50%;transform:translateX(-50%);width:92%;max-width:410px;height:94%;
+  background:#0d1017;border:8px solid #05070b;border-radius:34px;overflow:hidden;
+  box-shadow:0 18px 50px #000c, inset 0 0 0 2px #1a2030}
+.notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:38%;height:20px;background:#05070b;border-radius:0 0 14px 14px;z-index:5}
+.pstat{height:30px;display:flex;align-items:center;justify-content:space-between;padding:0 18px;font-size:11px;font-weight:700;color:#cfe;background:#0d1017}
+.pstat .r{display:flex;gap:5px;align-items:center}
+.appbar{height:46px;display:flex;align-items:center;gap:8px;padding:0 14px;background:linear-gradient(90deg,#ff3b3b,#ff7a3c);color:#fff;font-weight:900;font-size:16px}
+.appbar .live{margin-left:auto;font-size:10px;background:#fff3;padding:2px 7px;border-radius:99px;font-weight:700}
+.feed{position:absolute;top:122px;left:0;right:0;bottom:0;overflow-y:auto;background:#0d1017;padding:8px 8px 90px;-webkit-overflow-scrolling:touch}
+.post{background:#141822;border:1px solid #1e2532;border-radius:14px;margin-bottom:9px;overflow:hidden;animation:rise .3s ease}
+@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.phead{display:flex;align-items:center;gap:8px;padding:10px 11px 7px}
+.pav{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex:none}
+.pname{font-weight:800;font-size:13px;display:flex;align-items:center;gap:4px}
+.pverif{color:#ff3b3b;font-size:11px}
+.ptime{color:var(--dim);font-size:10px}
+.pcat{margin-left:auto;font-size:9px;font-weight:800;padding:2px 7px;border-radius:6px}
+.pbody{padding:0 12px 9px;font-size:13.5px;line-height:1.55}
+.pbody b{color:#ffd24d}
+.pimg{height:118px;margin:2px 0 0;display:flex;align-items:center;justify-content:center;gap:10px;font-size:40px;position:relative;overflow:hidden}
+.pimg .tagline{position:absolute;bottom:6px;left:8px;font-size:10px;font-weight:800;color:#fff;background:#0007;padding:2px 7px;border-radius:6px}
+.pstats{display:flex;gap:16px;padding:8px 14px;color:var(--dim);font-size:11px;border-top:1px solid #1e2532}
+.pstats span{display:flex;gap:3px;align-items:center}
+.hot{margin:0 11px 10px;background:#0d1017;border-radius:9px;padding:7px 9px;font-size:11.5px;line-height:1.4}
+.hot .hu{color:#7fb0ff;font-weight:700}
+.hot .hl{color:var(--dim);float:right}
+.tucao{margin:2px 11px 11px}
+.tucaoBtn{width:100%;background:#1e2532;border:1px solid #2a3445;color:#ff9b6b;font-weight:800;font-size:13px;padding:9px;border-radius:10px;font-family:inherit;cursor:pointer}
+.tucaoBtn:active{transform:scale(.98)}
+.reacts{display:flex;flex-direction:column;gap:7px;margin-top:8px;animation:rise .2s}
+.react{display:flex;gap:9px;align-items:center;background:#10141d;border:1px solid #2a3445;border-radius:10px;padding:9px 10px;cursor:pointer;font-family:inherit;color:var(--ink);text-align:left}
+.react:active{transform:scale(.98);background:#161c28}
+.react .rico{font-size:18px}.react .rt{font-weight:700;font-size:13px}
+.react .rd{font-size:10.5px;color:var(--dim);margin-top:1px}
+.reacted{padding:9px 10px;background:#0f1722;border:1px dashed #2a3445;border-radius:10px;font-size:12px;color:#7fd0a0;margin-top:8px}
+.reacted b{color:#ffb38a}
+.ambient{background:#10141d;border:1px dashed #1e2532;border-radius:12px;margin-bottom:9px;padding:9px 12px;font-size:12px;color:var(--dim)}
+.ambient .a-img{font-size:22px;margin-right:6px}
+.closephone{position:absolute;left:0;right:0;bottom:0;padding:11px 14px calc(14px + env(safe-area-inset-bottom));
+  background:linear-gradient(#0d101700,#0d1017 40%)}
+.bigbtn{display:block;width:100%;background:linear-gradient(135deg,#ff7a3c,#ff4d4d);color:#1a0c05;border:none;padding:14px;border-radius:13px;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;box-shadow:0 6px 18px #ff4d4d44}
+.bigbtn:active{transform:scale(.98)}
+.bigbtn:disabled{background:#2a3140;color:#5a6477;box-shadow:none}
+
+/* ===== bottom panel for buff/work/settle ===== */
+.panel{position:absolute;left:0;right:0;bottom:0;z-index:32;padding:14px 12px calc(14px + env(safe-area-inset-bottom));
+  background:linear-gradient(#0a0c1200,#0a0c12 14%);max-height:70%;overflow-y:auto}
+.ptag{display:inline-block;font-size:11px;font-weight:800;color:#0a0c12;background:var(--accent);padding:3px 10px;border-radius:99px;margin-bottom:8px}
+.sheet{background:#12151fee;backdrop-filter:blur(6px);border:1px solid var(--line);border-radius:16px;padding:13px;animation:rise .3s ease;margin-bottom:9px}
+.sheet h2{margin:0 0 3px;font-size:15px}.sheet .sub{color:var(--dim);font-size:12px;margin-bottom:11px}
+.opts{display:flex;flex-direction:column;gap:8px}
+.opt{width:100%;text-align:left;background:#171b27;border:1px solid var(--line);color:var(--ink);padding:11px 12px;border-radius:12px;font-family:inherit;font-size:14px;cursor:pointer;transition:.12s;display:flex;gap:10px;align-items:center}
+.opt:active{transform:scale(.98);background:#1e2433}
+.opt .ico{font-size:22px;flex:none}.opt .t{font-weight:700}.opt .d{color:var(--dim);font-size:12px;margin-top:2px}
+.opt .tag{margin-left:auto;font-size:10px;font-weight:800;color:var(--energy);white-space:nowrap}
+.opt:disabled{opacity:.4}
+
+/* IDE work screen */
+.bigprog{height:14px;background:#05070b;border-radius:9px;overflow:hidden;margin:8px 0 6px;border:1px solid #1e2532}
+.bigprog>i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--cash));width:0;transition:width .5s cubic-bezier(.2,.9,.2,1)}
+.milestones{display:flex;justify-content:space-between;font-size:9px;color:#4a5468;margin-bottom:8px}
+.statline{display:flex;gap:6px;flex-wrap:wrap}
 .chip{font-size:11px;background:#1c2130;border:1px solid var(--line);padding:3px 8px;border-radius:8px;color:var(--dim)}
 .chip.up{color:var(--cash);border-color:#3ddc8455}.chip.down{color:var(--rage);border-color:#ff4d4d55}
+.ide{background:#05070b;border:1px solid #1e2532;border-radius:10px;font-family:ui-monospace,Menlo,monospace;font-size:11px;padding:9px;color:#7fe0a0;min-height:54px;line-height:1.6;white-space:pre-wrap;margin-bottom:9px}
+.ide .cm{color:#5a6477}.ide .er{color:#ff7a7a}
 
-.opts{display:flex;flex-direction:column;gap:8px;margin-top:4px}
-.opt{width:100%;text-align:left;background:#171b27;border:1px solid var(--line);color:var(--ink);
-  padding:11px 12px;border-radius:12px;font-family:inherit;font-size:14px;cursor:pointer;transition:.12s;display:flex;gap:10px;align-items:center}
-.opt:active{transform:scale(.98);background:#1e2433}
-.opt .ico{font-size:22px;flex:none}
-.opt .t{font-weight:700}
-.opt .d{color:var(--dim);font-size:12px;margin-top:2px}
-.opt .tag{margin-left:auto;font-size:10px;font-weight:800;color:var(--energy);white-space:nowrap}
-
-.btn{display:block;width:100%;background:linear-gradient(135deg,#ff7a3c,#ff4d4d);color:#1a0c05;border:none;
-  padding:14px;border-radius:13px;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;
-  box-shadow:0 6px 18px #ff4d4d33}
-.btn:active{transform:scale(.98)}
-
-/* agent chat (对线) */
-.chat{display:flex;flex-direction:column;gap:8px;margin:6px 0 12px}
-.bub{max-width:82%;padding:8px 11px;border-radius:13px;font-size:13px;line-height:1.4;animation:rise .25s}
+/* agent chat */
+.chat{display:flex;flex-direction:column;gap:7px;margin:4px 0 10px}
+.bub{max-width:84%;padding:8px 11px;border-radius:13px;font-size:13px;line-height:1.4;animation:rise .25s}
 .bub.ag{align-self:flex-start;background:#1b2433;border:1px solid var(--line);border-bottom-left-radius:4px}
 .bub.me{align-self:flex-end;background:#3a1e12;border:1px solid #5a2a16;border-bottom-right-radius:4px}
 .bub .who{font-size:10px;color:var(--dim);margin-bottom:3px}
-.agavatar{font-size:16px;margin-right:4px}
+.typing{align-self:flex-start;color:var(--dim);font-size:12px}.typing::after{content:"●●●";animation:blink 1s infinite}
 
-/* end screen */
-.end{text-align:center;padding:24px 16px}
-.end .em{font-size:62px;animation:pop .5s}
-@keyframes pop{0%{transform:scale(.3);opacity:0}70%{transform:scale(1.15)}100%{transform:scale(1);opacity:1}}
+/* day report */
+.report .row{display:flex;justify-content:space-between;padding:8px 2px;border-bottom:1px solid var(--line);font-size:14px}
+.report .row b{font-weight:800}
+.report .big{font-size:30px;font-weight:900;text-align:center;margin:6px 0}
+.report .pos{color:var(--cash)}.report .neg{color:var(--rage)}
+
+/* end */
+.end{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;z-index:45;background:#0a0c12e8}
+.end .em{font-size:66px;animation:pop .5s}@keyframes pop{0%{transform:scale(.3);opacity:0}70%{transform:scale(1.15)}100%{transform:scale(1)}}
 .end h1{margin:8px 0 4px}.end p{color:var(--dim);margin:4px 0}
-
-.hint{text-align:center;color:#4a5468;font-size:10px;margin-top:8px}
 </style>
 </head>
 <body>
@@ -173,10 +183,10 @@ body{background:#000;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",
   <div id="hud">
     <div class="daybadge">DAY <span id="day">1</span><br><small id="goalTxt">/30 别破产</small></div>
     <div class="gauges">
-      <div class="g rg" id="gRage"><div class="ic">🔥</div><div class="num" id="vRage">50</div><div class="track"><i id="bRage"></i></div></div>
-      <div class="g sn" id="gSanity"><div class="ic">🧠</div><div class="num" id="vSanity">70</div><div class="track"><i id="bSanity"></i></div></div>
-      <div class="g en" id="gEnergy"><div class="ic">⚡</div><div class="num" id="vEnergy">80</div><div class="track"><i id="bEnergy"></i></div></div>
-      <div class="g cs" id="gCash"><div class="ic">💰</div><div class="num" id="vCash">1k</div><div class="track"><i id="bCash"></i></div></div>
+      <div class="g rg" id="gRage"><span class="ic">🔥</span><span class="num" id="vRage">50</span><div class="track"><i id="bRage"></i></div></div>
+      <div class="g sn" id="gSanity"><span class="ic">🧠</span><span class="num" id="vSanity">70</span><div class="track"><i id="bSanity"></i></div></div>
+      <div class="g en" id="gEnergy"><span class="ic">⚡</span><span class="num" id="vEnergy">80</span><div class="track"><i id="bEnergy"></i></div></div>
+      <div class="g cs" id="gCash"><span class="ic">💰</span><span class="num" id="vCash">1k</span><div class="track"><i id="bCash"></i></div></div>
     </div>
   </div>
 
@@ -187,45 +197,27 @@ body{background:#000;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",
     <div class="monstand"></div>
     <div class="mon"><div class="code" id="code"></div><div class="glow"></div></div>
     <div class="cups" id="cups"></div>
-    <div class="deskline"></div>
-    <div class="desk"></div>
-
+    <div class="deskline"></div><div class="desk"></div>
     <div id="charWrap">
-      <svg id="char" class="char breathe m-focus" viewBox="0 0 200 200">
-        <!-- fire aura -->
-        <g class="fire firewrap">
-          <path d="M100 40 C70 70 60 110 100 140 C140 110 130 70 100 40Z" fill="#ff5a1a" opacity=".5"/>
-          <path d="M100 60 C82 82 78 110 100 130 C122 110 118 82 100 60Z" fill="#ffb13c" opacity=".7"/>
-        </g>
-        <!-- hoodie body -->
+      <svg id="char" class="breathe m-focus" viewBox="0 0 200 200">
+        <g class="fire firewrap"><path d="M100 40 C70 70 60 110 100 140 C140 110 130 70 100 40Z" fill="#ff5a1a" opacity=".5"/><path d="M100 60 C82 82 78 110 100 130 C122 110 118 82 100 60Z" fill="#ffb13c" opacity=".7"/></g>
         <path d="M40 200 C40 150 60 132 100 132 C140 132 160 150 160 200Z" fill="#2a3142"/>
         <path d="M70 134 C80 150 120 150 130 134 L130 132 L70 132Z" fill="#222838"/>
-        <!-- head -->
         <ellipse class="face" cx="100" cy="92" rx="46" ry="48" fill="#f3c9a8"/>
-        <!-- ears -->
-        <ellipse class="face" cx="55" cy="95" rx="7" ry="11" fill="#f3c9a8"/>
-        <ellipse class="face" cx="145" cy="95" rx="7" ry="11" fill="#f3c9a8"/>
-        <!-- hair / stubble cap -->
+        <ellipse class="face" cx="55" cy="95" rx="7" ry="11" fill="#f3c9a8"/><ellipse class="face" cx="145" cy="95" rx="7" ry="11" fill="#f3c9a8"/>
         <path d="M55 78 C58 44 142 44 145 78 C140 64 60 64 55 78Z" fill="#2b2620"/>
-        <!-- headphones -->
         <path d="M50 92 C46 50 154 50 150 92" stroke="#15181f" stroke-width="7" fill="none" stroke-linecap="round"/>
-        <rect x="40" y="84" width="16" height="26" rx="6" fill="#15181f"/>
-        <rect x="144" y="84" width="16" height="26" rx="6" fill="#15181f"/>
-        <!-- blush -->
+        <rect x="40" y="84" width="16" height="26" rx="6" fill="#15181f"/><rect x="144" y="84" width="16" height="26" rx="6" fill="#15181f"/>
         <g class="blush"><circle cx="70" cy="108" r="7" fill="#ff7a7a" opacity=".5"/><circle cx="130" cy="108" r="7" fill="#ff7a7a" opacity=".5"/></g>
-        <!-- vein/anger mark -->
         <g class="vein" transform="translate(120,58)"><path d="M0 6 L6 0 M6 0 L12 6 M6 0 L6 10" stroke="#ff2d2d" stroke-width="2.4" fill="none" stroke-linecap="round"/></g>
-        <!-- brows -->
         <g class="brow browL" style="transform-origin:78px 78px"><rect x="62" y="74" width="30" height="6" rx="3" fill="#2b2620"/></g>
         <g class="brow browR" style="transform-origin:122px 78px"><rect x="108" y="74" width="30" height="6" rx="3" fill="#2b2620"/></g>
-        <!-- eyes -->
         <g class="eyes">
           <g class="e-norm"><circle cx="78" cy="92" r="6.5" fill="#1a1a1a"/><circle cx="122" cy="92" r="6.5" fill="#1a1a1a"/><circle cx="80" cy="90" r="2" fill="#fff"/><circle cx="124" cy="90" r="2" fill="#fff"/></g>
           <g class="e-rage"><path d="M70 88 L88 94 M70 96 L88 94" stroke="#1a1a1a" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M130 88 L112 94 M130 96 L112 94" stroke="#1a1a1a" stroke-width="3" fill="none" stroke-linecap="round"/><circle cx="82" cy="93" r="3.5" fill="#c00"/><circle cx="118" cy="93" r="3.5" fill="#c00"/></g>
           <g class="e-x"><path d="M72 86 L86 98 M86 86 L72 98" stroke="#555" stroke-width="3" stroke-linecap="round"/><path d="M114 86 L128 98 M128 86 L114 98" stroke="#555" stroke-width="3" stroke-linecap="round"/></g>
           <g class="e-happy"><path d="M70 94 C76 86 84 86 90 94" stroke="#1a1a1a" stroke-width="3.4" fill="none" stroke-linecap="round"/><path d="M110 94 C116 86 124 86 130 94" stroke="#1a1a1a" stroke-width="3.4" fill="none" stroke-linecap="round"/></g>
         </g>
-        <!-- mouths -->
         <g class="mouth">
           <path class="mo-flat" d="M86 118 L114 118" stroke="#7a4a2a" stroke-width="3.5" stroke-linecap="round"/>
           <path class="mo-smile" d="M84 114 C94 124 106 124 116 114" stroke="#7a4a2a" stroke-width="3.5" fill="none" stroke-linecap="round"/>
@@ -234,23 +226,19 @@ body{background:#000;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",
           <path class="mo-yell" d="M86 112 C86 132 114 132 114 112 C108 118 92 118 86 112Z" fill="#5a1810" stroke="#3a0e08" stroke-width="2"/>
           <path class="mo-open" d="M88 114 C88 128 112 128 112 114 Z" fill="#7a2a1a"/>
         </g>
-        <!-- sweat -->
         <g class="sweat"><path d="M140 78 C146 88 150 92 144 96 C138 92 136 86 140 78Z" fill="#7ec8ff"/></g>
-        <!-- steam -->
         <g class="steam" stroke="#cfd8e6" stroke-width="3" fill="none" stroke-linecap="round" opacity="0">
           <path d="M64 52 q-6 -8 0 -16"><animate attributeName="opacity" values="0;1;0" dur="1.1s" repeatCount="indefinite"/></path>
           <path d="M136 52 q6 -8 0 -16"><animate attributeName="opacity" values="0;1;0" dur="1.1s" begin=".5s" repeatCount="indefinite"/></path>
         </g>
       </svg>
     </div>
-
     <div id="speech"></div>
-    <div id="fx"></div>
-    <div id="flashfx"></div>
   </div>
 
-  <!-- PANEL -->
-  <div id="panel"></div>
+  <div id="overlay"></div>
+  <div id="fx"></div>
+  <div id="flashfx"></div>
 </div>
 
 <script>
@@ -258,358 +246,489 @@ body{background:#000;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",
 const $=id=>document.getElementById(id);
 const clamp=(v,a=0,b=100)=>Math.max(a,Math.min(b,v));
 const rand=a=>a[Math.floor(Math.random()*a.length)];
+const fmtK=n=>n>=1000?(n/1000).toFixed(n>=10000?0:1)+'k':n+'';
 
-/* ---------- AUDIO (WebAudio, no assets) ---------- */
+/* ---------- AUDIO ---------- */
 let AC=null;
-function ac(){ if(!AC){ try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){} } return AC; }
-function beep(freq,dur=0.08,type="square",vol=0.05,slide=0){
-  const c=ac(); if(!c) return;
-  const o=c.createOscillator(),g=c.createGain();
-  o.type=type;o.frequency.value=freq;
-  if(slide)o.frequency.exponentialRampToValueAtTime(Math.max(40,freq+slide),c.currentTime+dur);
-  g.gain.value=vol;g.gain.exponentialRampToValueAtTime(0.0001,c.currentTime+dur);
-  o.connect(g);g.connect(c.destination);o.start();o.stop(c.currentTime+dur);
-}
+function ac(){if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){}}return AC;}
+function beep(f,d=.08,t="square",v=.05,s=0){const c=ac();if(!c)return;const o=c.createOscillator(),g=c.createGain();o.type=t;o.frequency.value=f;if(s)o.frequency.exponentialRampToValueAtTime(Math.max(40,f+s),c.currentTime+d);g.gain.value=v;g.gain.exponentialRampToValueAtTime(.0001,c.currentTime+d);o.connect(g);g.connect(c.destination);o.start();o.stop(c.currentTime+d);}
 const SFX={
-  tap:()=>beep(420,0.05,"square",0.04),
-  good:()=>{beep(660,0.07,"square",0.05);setTimeout(()=>beep(880,0.09,"square",0.05),70);},
-  bad:()=>beep(180,0.18,"sawtooth",0.06,-90),
-  coin:()=>{beep(988,0.06,"square",0.05);setTimeout(()=>beep(1319,0.1,"square",0.05),60);},
-  rage:()=>{beep(120,0.25,"sawtooth",0.07,-50);},
-  news:()=>beep(520,0.06,"triangle",0.05),
+  tap:()=>beep(420,.05,"square",.04),
+  swipe:()=>beep(300,.06,"sine",.04,200),
+  good:()=>{beep(660,.07,"square",.05);setTimeout(()=>beep(880,.09,"square",.05),70);},
+  bad:()=>beep(180,.18,"sawtooth",.06,-90),
+  coin:()=>{beep(988,.05,"square",.05);setTimeout(()=>beep(1319,.09,"square",.05),55);},
+  tick:()=>beep(1200,.02,"square",.03),
+  rage:()=>beep(120,.25,"sawtooth",.07,-50),
+  type:()=>beep(1500,.015,"square",.015),
+  ding:()=>beep(740,.12,"triangle",.05),
 };
 
 /* ---------- STATE ---------- */
 const S={
-  day:1,maxDay:30,phase:0,
+  day:1,maxDay:30,phase:'wake',
   rage:50,sanity:70,energy:80,cash:1000,
   rageMode:false,buffs:[],cupCount:0,
   agents:[
-    {id:'a',face:'🤖',nm:'乖学生 GPT仔',ds:'听话稳·没创意·爱幻觉',temper:10,power:8,hallu:.35},
-    {id:'b',face:'😼',nm:'杠精 Claude佬',ds:'能力强·爱抬杠·要哄',temper:20,power:14,hallu:.15},
-    {id:'c',face:'🐢',nm:'划水 Copilot',ds:'便宜·偷懒·爱简化',temper:5,power:6,hallu:.25},
+    {id:'a',face:'🤖',col:'#10a37f',nm:'乖学生 GPT仔',ds:'听话稳·没创意·爱幻觉',temper:10,power:8,hallu:.35},
+    {id:'b',face:'😼',col:'#c96442',nm:'杠精 Claude佬',ds:'能力强·爱抬杠·要哄',temper:20,power:14,hallu:.15},
+    {id:'c',face:'🐢',col:'#6e7681',nm:'划水 Copilot',ds:'便宜·偷懒·爱简化',temper:5,power:6,hallu:.25},
   ],
   proj:{nm:'某不知名 SaaS',done:0,bugs:0,users:0,debt:0},
 };
 
+/* ---------- NEWS (rich) ---------- */
 const NEWS=[
- {cat:'融资',col:'#ff4d4d',body:'"19岁辍学生 demo 截图融资 3 亿。"评论区都在喊颠覆。',eff:{rage:18,sanity:-10},note:'破防打鸡血'},
- {cat:'融资',col:'#ff4d4d',body:'你三年前看不上的项目，今天被大厂收购了。',eff:{rage:12,sanity:-12},note:'"我上我也行"'},
- {cat:'模型',col:'#54a9ff',body:'新模型发布，便宜 10 倍还更聪明。',eff:{sanity:6,energy:-8},note:'agent 暂时变强'},
- {cat:'模型',col:'#54a9ff',body:'你在用的框架宣布弃坑，文档已 404。',eff:{rage:10,sanity:-6},note:'技术债+1'},
- {cat:'风口',col:'#3ddc84',body:'XX 概念一夜爆火，热钱疯狂涌入赛道。',eff:{rage:6},note:'限时风口'},
- {cat:'黑天鹅',col:'#a78bfa',body:'各家 API 集体涨价，成本起飞。',eff:{cash:-200,rage:8},note:'运营成本↑'},
- {cat:'黑天鹅',col:'#a78bfa',body:'全网大宕机，你的 app 也躺了，用户在骂。',eff:{rage:14,sanity:-8},note:'紧急救火'},
- {cat:'舆论',col:'#fb923c',body:'有人在论坛阴阳你的开源项目是"AI 缝合怪"。',eff:{rage:16,sanity:-6},note:'嘴硬反击'},
- {cat:'舆论',col:'#fb923c',body:'你的 app 莫名上了热搜，流量暴涨！',eff:{sanity:8},note:'用户+'},
- {cat:'生活',col:'#94a3b8',body:'房贷涨了，对象问你"这班到底还上不上"。',eff:{rage:8,sanity:-10},note:'现实暴击'},
- {cat:'生活',col:'#94a3b8',body:'体检报告出了，医生建议你"别熬夜"。你笑了。',eff:{energy:-6,sanity:4},note:''},
- {cat:'玄学',col:'#f0abfc',body:'今日黄历：宜删库，忌发版。',eff:{},note:'事故概率波动'},
-];
-const BUFFS=[
- {ic:'☕',nm:'第八杯咖啡',d:'精力↑↑ 但手抖(bug+)、失眠',f:s=>{s.energy+=25;s.buffs.push('手抖');}},
- {ic:'🎵',nm:'赛博朋克歌单',d:'暴躁↑ 沉浸 但听不见 agent 警告',f:s=>{s.rage+=15;s.buffs.push('沉浸');}},
- {ic:'📈',nm:'看竞品融资',d:'暴躁↑↑(破防式) 心态↓',f:s=>{s.rage+=22;s.sanity-=10;}},
- {ic:'🧘',nm:'冥想回血',d:'心态↑ 但今日产出腰斩',f:s=>{s.sanity+=22;s.buffs.push('摆烂');}},
- {ic:'🍜',nm:'泡面+老番',d:'全属性微回·稳健过渡',f:s=>{s.energy+=8;s.sanity+=8;s.rage-=4;}},
+ {id:'fund1',cat:'融资',col:'#ff4d4d',src:{av:'🦄',bg:'#3a1a1a',name:'硅谷投机日报',verif:1},time:'3分钟前',
+  img:['💸','📈','🚀'],imgBg:'linear-gradient(135deg,#2a1010,#5a1a1a)',tagline:'估值一年翻40倍',
+  head:'00后辍学搞 AI，3 个月估值 <b>10 亿美金</b>',
+  body:'据传该团队仅 4 人、产品还在 waitlist，靠一段 90 秒 demo 视频拿下顶级风投领投。创始人朋友圈："我们要重新定义软件。"',
+  stats:{f:'12.3万',c:'8.9万',z:'45.6万'},
+  hot:{u:'打工人老张',t:'我司年会抽奖一等奖是这哥们用过的键盘。',l:'2.1万'},
+  reacts:[
+    {ico:'😤',t:'"就这？我上我也行！"',d:'破防式打鸡血 · 暴躁↑↑ 心态↓',eff:{rage:18,sanity:-8},kind:'rage'},
+    {ico:'🥲',t:'"酸了，但别人是真有本事…"',d:'清醒的痛 · 心态↓ 但学到点东西',eff:{sanity:-5,energy:6},kind:'cry'},
+    {ico:'😏',t:'"泡沫罢了，等着暴雷。"',d:'嘴硬续命 · 暴躁↑ 心态小回',eff:{rage:8,sanity:4},kind:'cope'},
+  ]},
+ {id:'model1',cat:'模型',col:'#54a9ff',src:{av:'🧠',bg:'#10243a',name:'AI 前沿快讯',verif:1},time:'12分钟前',
+  img:['🧠','⚡','🔻'],imgBg:'linear-gradient(135deg,#0e2238,#1a3a5a)',tagline:'API 价格 -90%',
+  head:'新模型发布：编程能力屠榜，<b>API 直降 90%</b>',
+  body:'benchmark 全面超越上一代，号称"实习生变资深工程师"。各路独立开发者连夜重写技术栈，社区一片"这次真的要失业了"。',
+  stats:{f:'8.7万',c:'6.2万',z:'33.1万'},
+  hot:{u:'连夜跑路的CTO',t:'昨天刚定的技术选型，今天作废，下次一定。',l:'1.8万'},
+  reacts:[
+    {ico:'🤑',t:'"真香！立刻给 agent 换血。"',d:'拥抱变化 · 花点学习精力，agent 变强',eff:{energy:-8,sanity:6},kind:'win'},
+    {ico:'😨',t:'"我是不是要被取代了…"',d:'FOMO 焦虑 · 心态↓',eff:{sanity:-10},kind:'cry'},
+    {ico:'🙄',t:'"benchmark 而已，能跑再说。"',d:'老登不信邪 · 暴躁↑',eff:{rage:6},kind:'cope'},
+  ]},
+ {id:'swan1',cat:'黑天鹅',col:'#a78bfa',src:{av:'☁️',bg:'#241a3a',name:'故障播报姬',verif:0},time:'刚刚',
+  img:['☁️','💥','📉'],imgBg:'linear-gradient(135deg,#1a1430,#3a2a5a)',tagline:'全球宕机 12 小时',
+  head:'某云全球宕机，<b>无数创业公司一夜回到解放前</b>',
+  body:'核心区域 region 集体失联，你的 app 也躺平了，用户群已经炸锅，差评像雪花一样飘来。',
+  stats:{f:'20.5万',c:'15.8万',z:'9.2万'},
+  hot:{u:'被夺命连环call的运维',t:'我现在只想静静，别问我静静是谁。',l:'5.5万'},
+  reacts:[
+    {ico:'🧯',t:'"上！熬夜也要救火！"',d:'硬刚事故 · 精力↓ 但保住用户',eff:{energy:-15,rage:10},kind:'rage',extra:'save'},
+    {ico:'🤷',t:'"云的锅，关我啥事，睡。"',d:'摆烂 · 心态回 但用户流失',eff:{sanity:8},kind:'cope',extra:'lose'},
+  ]},
+ {id:'roast1',cat:'舆论',col:'#fb923c',src:{av:'🐸',bg:'#2a2410',name:'技术圈茶水间',verif:0},time:'28分钟前',
+  img:['🐸','🔥','💬'],imgBg:'linear-gradient(135deg,#241f0e,#4a3f1a)',tagline:'热搜第一',
+  head:'你的开源项目被挂热搜：<b>"AI 缝合怪典中典"</b>',
+  body:'有大V逐行点评你的 repo，截图配文"这也敢叫框架？"。评论区两派对线，你的 star 数却诡异地涨了。',
+  stats:{f:'6.6万',c:'9.9万',z:'7.7万'},
+  hot:{u:'路过的键盘侠',t:'骂归骂，我已经 fork 了，真好用（小声）。',l:'3.3万'},
+  reacts:[
+    {ico:'🗣️',t:'"评论区，给我下场对线！"',d:'嘴硬反击 · 暴躁↑↑ 但人气暴涨',eff:{rage:16,sanity:-4},kind:'rage',extra:'fame'},
+    {ico:'😔',t:'"算了，把 repo 设私有…"',d:'破防退网 · 心态↓↓',eff:{sanity:-14},kind:'cry'},
+    {ico:'🍵',t:'"阴阳一句，优雅退场。"',d:'四两拨千斤 · 暴躁小↑ 心态回',eff:{rage:6,sanity:6},kind:'cope',extra:'fame'},
+  ]},
+ {id:'hype1',cat:'风口',col:'#3ddc84',src:{av:'🌪️',bg:'#0e2a1c',name:'风口预言家',verif:1},time:'1小时前',
+  img:['🌪️','💰','🎰'],imgBg:'linear-gradient(135deg,#0e2a1c,#1a4a32)',tagline:'热钱疯抢',
+  head:'<b>XX 赛道一夜爆火</b>，资本连夜排队送钱',
+  body:'昨天还没人提，今天满屏都是。有人三天做了个套壳就融到钱。窗口期可能只有一周——上不上车，就看你了。',
+  stats:{f:'9.1万',c:'7.0万',z:'18.8万'},
+  hot:{u:'连续创业者',t:'我已经改了 3 次赛道方向了，今天第 4 次。',l:'2.6万'},
+  reacts:[
+    {ico:'🎲',t:'"梭哈！老子赌一把！"',d:'豪赌风口 · 赢则恰饭暴涨，输则血亏',eff:{rage:6},kind:'rage',extra:'gamble'},
+    {ico:'🧐',t:'"再看看，别当接盘侠。"',d:'稳健观望 · 心态回 啥也没发生',eff:{sanity:6},kind:'cope'},
+  ]},
+ {id:'life1',cat:'生活',col:'#94a3b8',src:{av:'👩',bg:'#1c2330',name:'家庭群·对象',verif:0},time:'5分钟前',
+  img:['🏠','💸','❓'],imgBg:'linear-gradient(135deg,#161c28,#2a3340)',tagline:'已读',
+  head:'对象发来消息：<b>"你那个班，到底还上不上？"</b>',
+  body:'附带一张房贷扣款短信截图。三个点跳动了很久，最后只发来一句"我不是催你，就问问"。你盯着屏幕，手指悬在键盘上。',
+  stats:{f:'—',c:'—',z:'—'},
+  hot:{u:'系统提示',t:'本条消息已撤回是不可能撤回的。',l:''},
+  reacts:[
+    {ico:'💪',t:'"再给我一个月，必成！"',d:'立军令状 · 暴躁↑ 精力↑ 心态↓',eff:{rage:12,energy:10,sanity:-8},kind:'rage'},
+    {ico:'😮‍💨',t:'"……我尽量。"',d:'现实的重量 · 心态↓',eff:{sanity:-10},kind:'cry'},
+  ]},
+ {id:'good1',cat:'舆论',col:'#fb923c',src:{av:'📰',bg:'#2a2410',name:'科技头条',verif:1},time:'40分钟前',
+  img:['🎉','📈','👥'],imgBg:'linear-gradient(135deg,#1f2a14,#3a4a1a)',tagline:'喜报',
+  head:'你的小 App <b>意外上了热搜</b>，新增用户爆表！',
+  body:'某网红随手安利了一句，流量哗哗往里灌。服务器有点扛不住，但看着用户曲线，你嘴角控制不住地上扬。',
+  stats:{f:'4.4万',c:'3.1万',z:'12.0万'},
+  hot:{u:'你自己的小号',t:'（默默截图发到家庭群）',l:'999'},
+  reacts:[
+    {ico:'🤩',t:'"爷青回！这波必须庆祝！"',d:'狂喜 · 心态↑ 用户↑',eff:{sanity:14},kind:'win',extra:'fame'},
+    {ico:'😎',t:'"意料之中（强装镇定）。"',d:'凡尔赛 · 心态回 暴躁回',eff:{sanity:8,rage:-4},kind:'win',extra:'fame'},
+  ]},
+ {id:'model2',cat:'模型',col:'#54a9ff',src:{av:'📦',bg:'#10243a',name:'开源讣告',verif:0},time:'2小时前',
+  img:['📦','⚰️','🔧'],imgBg:'linear-gradient(135deg,#0e2238,#243a52)',tagline:'仓库已 archive',
+  head:'你正在用的框架<b>突然宣布弃坑</b>，文档已 404',
+  body:'维护者一句"我累了"挂在 README 顶部，issue 区哀鸿遍野。你的项目里它是核心依赖……',
+  stats:{f:'5.0万',c:'8.2万',z:'2.1万'},
+  hot:{u:'同样踩坑的网友',t:'又是一个"传家宝"级别的技术债，收好了。',l:'1.4万'},
+  reacts:[
+    {ico:'🤬',t:'"开源个鬼！老子自己 fork！"',d:'暴怒接盘 · 暴躁↑↑ 技术债+',eff:{rage:16},kind:'rage',extra:'debt'},
+    {ico:'😩',t:'"又要重构了…命苦。"',d:'认命 · 心态↓ 精力↓',eff:{sanity:-6,energy:-6},kind:'cry'},
+  ]},
+ {id:'fund2',cat:'融资',col:'#ff4d4d',src:{av:'💼',bg:'#3a1a1a',name:'并购情报站',verif:1},time:'1小时前',
+  img:['💼','🤝','💰'],imgBg:'linear-gradient(135deg,#2a1010,#52201a)',tagline:'被收购',
+  head:'你三年前看不上的项目，<b>今天被大厂收购了</b>',
+  body:'当年你还在群里说"这玩意儿一周能做俩"。现在创始人发了套现的海岛照片，配文"感谢质疑我的人"。',
+  stats:{f:'7.8万',c:'6.6万',z:'15.5万'},
+  hot:{u:'当年一起嘲讽的群友',t:'@你 还记得当年你说啥不（坏笑）',l:'4.0万'},
+  reacts:[
+    {ico:'😡',t:'"运气好罢了！我做得比他强！"',d:'不服 · 暴躁↑↑ 精力↑',eff:{rage:18,energy:8,sanity:-6},kind:'rage'},
+    {ico:'🫠',t:'"……当年我是不是眼瞎。"',d:'破大防 · 心态↓↓',eff:{sanity:-12},kind:'cry'},
+  ]},
+ {id:'xuan1',cat:'玄学',col:'#f0abfc',src:{av:'🔮',bg:'#2a1a2e',name:'程序员黄历',verif:0},time:'今日',
+  img:['🔮','📅','🐉'],imgBg:'linear-gradient(135deg,#241428,#3a244a)',tagline:'今日运势',
+  head:'今日黄历：<b>宜删库，忌发版</b>',
+  body:'财位在显示器左下角第三个咖啡杯。冲属猫的 agent，今日不宜与杠精对线。幸运 commit message："final_final_v2"。',
+  stats:{f:'3.3万',c:'5.5万',z:'8.0万'},
+  hot:{u:'昨天发版翻车的人',t:'信则有，昨天不信，今天 P0 还在烧。',l:'2.2万'},
+  reacts:[
+    {ico:'🙏',t:'"宁可信其有，今天稳一手。"',d:'图个心安 · 心态↑',eff:{sanity:8},kind:'cope'},
+    {ico:'😆',t:'"封建迷信！老子偏要发版！"',d:'铁头娃 · 暴躁↑ 玄学反噬?',eff:{rage:8},kind:'rage'},
+  ]},
 ];
 
-/* 老哥嘴臭语录 */
-const RANTS={
-  rage:['"就这？我上我也行！"','"这破需求是人想出来的？"','"删了删了，重写！"','"@#¥%……跟我斗？"'],
-  angry:['"你确定这代码能跑？"','"又幻觉……气死我了"','"别给我整这些没用的"'],
-  annoyed:['"啧。"','"行吧行吧。"','"早晚把它换了。"'],
-  calm:['"今天状态不错。"','"稳住，能赢。"','"喝口咖啡先。"'],
-  dead:['"我是谁…我在哪…"','"不想干了想开麻辣烫…"','"脑子是空的。"'],
-  happy:['"哈哈哈成了！"','"这波啊，这波是阳谋。"','"爷青回！"'],
-};
-const CODE=`function ship(){\n  while(rage>0){\n    let pr = agent.code();\n    if(buggy(pr)) yell();\n    merge(pr);\n  }\n  return "🚀";\n}\nconst app = vibe(coding);\napp.deploy(); // pray\nTODO: fix later (never)\n// 别问，问就是能跑\n`.repeat(4);
+const AMBIENT=[
+ {av:'📢',t:'【标题党】震惊！90% 的程序员都不知道这 1 个摸鱼技巧'},
+ {av:'🌤️',t:'今日天气：晴，宜划水，空气质量优，适合假装在加班'},
+ {av:'🚗',t:'隔壁老李喜提新车，配文"奋斗的意义"[图][图][图]'},
+ {av:'🍜',t:'楼下那家螺蛳粉又涨价了，程序员的快乐又少了一种'},
+ {av:'📉',t:'某大厂又裁员了，赔偿 N+1，评论区在排队抄简历模板'},
+ {av:'🐱',t:'用户反馈：你的 App 图标太丑了，我家猫看了都嫌弃'},
+ {av:'☕',t:'热知识：连续喝咖啡的第 8 杯起，咖啡因对你已经免疫了'},
+];
+
+const BUFFS=[
+ {ic:'☕',nm:'第八杯咖啡',d:'精力↑↑ 但手抖(bug+)、失眠',f:s=>{s.energy=clamp(s.energy+25);s.buffs.push('手抖');s.cupCount++;}},
+ {ic:'🎵',nm:'赛博朋克歌单',d:'暴躁↑ 沉浸 但听不见 agent 警告',f:s=>{s.rage=clamp(s.rage+15);s.buffs.push('沉浸');}},
+ {ic:'📈',nm:'再刷会儿竞品融资',d:'暴躁↑↑(破防式) 心态↓',f:s=>{s.rage=clamp(s.rage+22);s.sanity=clamp(s.sanity-10);}},
+ {ic:'🧘',nm:'冥想 5 分钟',d:'心态↑ 但今日产出腰斩',f:s=>{s.sanity=clamp(s.sanity+22);s.buffs.push('摆烂');}},
+ {ic:'🍜',nm:'泡面配老番',d:'全属性微回·稳健过渡',f:s=>{s.energy=clamp(s.energy+8);s.sanity=clamp(s.sanity+8);s.rage=clamp(s.rage-4);}},
+];
+
+const RANTS={rage:['"就这？我上我也行！"','"删了删了，重写！"','"跟我斗？"'],angry:['"气死我了。"','"又幻觉……"'],annoyed:['"啧。"','"行吧。"'],calm:['"状态不错。"','"稳住能赢。"'],dead:['"想开麻辣烫…"','"脑子空了。"'],happy:['"哈哈成了！"','"爷青回！"']};
+const CODE=`function ship(){\n  while(rage>0){\n    let pr=agent.code();\n    if(buggy(pr)) yell();\n    merge(pr);\n  }\n  return "🚀";\n}\napp.deploy(); // pray\n// 别问，问就是能跑\n`.repeat(5);
 
 /* ---------- VISUAL HELPERS ---------- */
-function setMood(m){ $('char').setAttribute('class','char breathe m-'+m); }
-function computeMood(){
-  if(S.rageMode) return 'rage';
-  if(S.sanity<=22) return 'dead';
-  if(S.rage>=75) return 'angry';
-  if(S.rage>=55) return 'annoyed';
-  if(S.sanity>=72 && S.rage<42) return 'calm';
-  return 'focus';
-}
+function setMood(m){$('char').setAttribute('class','breathe m-'+m);}
+function computeMood(){if(S.rageMode)return'rage';if(S.sanity<=22)return'dead';if(S.rage>=75)return'angry';if(S.rage>=55)return'annoyed';if(S.sanity>=72&&S.rage<42)return'calm';return'focus';}
 let moodHold=0;
-function flashMood(m,ms=1100){ setMood(m); moodHold=Date.now()+ms; }
-function refreshMood(){ if(Date.now()>moodHold) setMood(computeMood()); }
+function flashMood(m,ms=1400){setMood(m);moodHold=Date.now()+ms;}
+function refreshMood(){if(Date.now()>moodHold)setMood(computeMood());}
+function say(t,angry){const sp=$('speech');sp.textContent=t;sp.className='show'+(angry?' angry':'');clearTimeout(say._t);say._t=setTimeout(()=>sp.className=sp.className.replace('show',''),2800);}
+function floatNum(t,c,x,y){const f=document.createElement('div');f.className='float';f.textContent=t;f.style.color=c;f.style.left=(x||50)+'%';f.style.top=(y||45)+'%';$('fx').appendChild(f);setTimeout(()=>f.remove(),1100);}
+function burst(e,n=6){for(let i=0;i<n;i++){const b=document.createElement('div');b.className='burst';b.textContent=e;b.style.left='50%';b.style.top='42%';b.style.setProperty('--dx',(Math.random()*180-90)+'px');b.style.setProperty('--dy',(-Math.random()*130-30)+'px');$('fx').appendChild(b);setTimeout(()=>b.remove(),900);}}
+function shake(){const w=$('charWrap');w.classList.add('shake');setTimeout(()=>w.classList.remove('shake'),420);}
+function redflash(){const f=$('flashfx');f.classList.remove('on');void f.offsetWidth;f.classList.add('on');}
 
-function say(txt,angry){
-  const sp=$('speech'); sp.textContent=txt; sp.className='show'+(angry?' angry':'');
-  clearTimeout(say._t); say._t=setTimeout(()=>sp.className=sp.className.replace('show',''),2600);
+function delta(key,v,silent){
+  if(!v)return;
+  if(key==='cash')S.cash=Math.max(0,S.cash+v);else S[key]=clamp(S[key]+v);
+  const map={rage:'gRage',sanity:'gSanity',energy:'gEnergy',cash:'gCash'};
+  const g=$(map[key]);g.classList.remove('flash');void g.offsetWidth;g.classList.add('flash');
+  renderHUD();
+  if(!silent)floatNum((v>0?'+':'')+v,v>0?'#3ddc84':'#ff6b6b',32+Math.random()*38,40);
 }
-function rant(kind){ const arr=RANTS[kind]||RANTS.annoyed; say(rand(arr), kind==='rage'||kind==='angry'); }
+function applyEff(e){if(!e)return;for(const k in e)delta(k,e[k]);}
 
-function floatNum(text,color,x,y){
-  const f=document.createElement('div');f.className='float';f.textContent=text;f.style.color=color;
-  f.style.left=(x||50)+'%';f.style.top=(y||45)+'%';$('fx').appendChild(f);
-  setTimeout(()=>f.remove(),1100);
-}
-function burstEmoji(emoji,n=6){
-  for(let i=0;i<n;i++){
-    const b=document.createElement('div');b.className='burst';b.textContent=emoji;
-    b.style.left='50%';b.style.top='40%';
-    b.style.setProperty('--dx',(Math.random()*160-80)+'px');
-    b.style.setProperty('--dy',(-Math.random()*120-30)+'px');
-    $('fx').appendChild(b);setTimeout(()=>b.remove(),900);
-  }
-}
-function shake(){ const w=$('charWrap');w.classList.add('shake');setTimeout(()=>w.classList.remove('shake'),420);}
-function redflash(){ const f=$('flashfx');f.classList.remove('on');void f.offsetWidth;f.classList.add('on');}
-
-/* stat change with juice */
-function delta(key,v){
-  if(!v) return;
-  const before={rage:S.rage,sanity:S.sanity,energy:S.energy,cash:S.cash}[key];
-  if(key==='cash') S.cash=Math.max(0,S.cash+v); else S[key]=clamp(S[key]+v);
-  const map={rage:['🔥','var(--rage)','gRage'],sanity:['🧠','var(--sanity)','gSanity'],energy:['⚡','var(--energy)','gEnergy'],cash:['💰','var(--cash)','gCash']};
-  const [ic,col,gid]=map[key];
-  const g=$(gid); g.classList.remove('flash');void g.offsetWidth;g.classList.add('flash');
-  floatNum((v>0?'+':'')+v+'',v>0?'#3ddc84':'#ff6b6b',30+Math.random()*40,38);
-}
-function applyEff(e){ if(!e)return; for(const k in e) delta(k,e[k]); }
-
-/* sky by day progress + night */
-function paintSky(){
-  const t=S.day/S.maxDay;
-  const night=`linear-gradient(180deg,#070b18,#0c1226 55%,#0a0c12)`;
-  const dusk=`linear-gradient(180deg,#2a2140,#3a2330 50%,#120e16)`;
-  const day=`linear-gradient(180deg,#26405e,#33506e 50%,#101620)`;
-  $('sky').style.background = t>0.75?night : t>0.45?dusk : day;
-  $('moon').style.opacity = t>0.45?1:0.15;
-}
-
+function paintSky(){const t=(S.day-1)/S.maxDay;$('sky').style.background=t>.75?'linear-gradient(180deg,#070b18,#0c1226 55%,#0a0c12)':t>.45?'linear-gradient(180deg,#2a2140,#3a2330 50%,#120e16)':'linear-gradient(180deg,#26405e,#33506e 50%,#101620)';$('moon').style.opacity=t>.45?1:.15;}
 function renderHUD(){
   $('day').textContent=S.day;
-  $('vRage').textContent=Math.round(S.rage);
-  $('vSanity').textContent=Math.round(S.sanity);
-  $('vEnergy').textContent=Math.round(S.energy);
-  $('vCash').textContent=S.cash>=1000?(S.cash/1000).toFixed(1)+'k':Math.round(S.cash);
-  $('bRage').style.width=clamp(S.rage)+'%';
-  $('bSanity').style.width=clamp(S.sanity)+'%';
-  $('bEnergy').style.width=clamp(S.energy)+'%';
-  $('bCash').style.width=clamp(S.cash/30)+'%';
-  // cups
-  const c=$('cups'); c.innerHTML='';
-  for(let i=0;i<Math.min(5,S.cupCount);i++){const s=document.createElement('span');s.className='cup';s.textContent=i%2?'🥤':'☕';c.appendChild(s);}
+  $('vRage').textContent=Math.round(S.rage);$('vSanity').textContent=Math.round(S.sanity);
+  $('vEnergy').textContent=Math.round(S.energy);$('vCash').textContent=fmtK(Math.round(S.cash));
+  $('bRage').style.width=clamp(S.rage)+'%';$('bSanity').style.width=clamp(S.sanity)+'%';
+  $('bEnergy').style.width=clamp(S.energy)+'%';$('bCash').style.width=clamp(S.cash/30)+'%';
+  const c=$('cups');c.innerHTML='';for(let i=0;i<Math.min(5,S.cupCount);i++){const s=document.createElement('span');s.className='cup';s.textContent=i%2?'🥤':'☕';c.appendChild(s);}
   paintSky();
 }
 
-/* ---------- PHASES ---------- */
+/* overlay management */
+function openOverlay(html,dimScene){$('overlay').innerHTML=html;$('overlay').classList.add('on');$('scene').classList.toggle('dim',!!dimScene);}
+function closeOverlay(){$('overlay').classList.remove('on');$('overlay').innerHTML='';$('scene').classList.remove('dim');}
+function panel(html){openOverlay('<div class="panel">'+html+'</div>',false);}
+
+/* ---------- FLOW ---------- */
+function go(phase){S.phase=phase;render();}
 function render(){
-  S.rageMode = S.rage>=90;
-  renderHUD(); refreshMood();
-  if(S.phase===0) viewNews();
-  else if(S.phase===1) viewBuff();
-  else if(S.phase===2) viewWork();
-  else if(S.phase===3) viewSettle();
+  S.rageMode=S.rage>=90;renderHUD();refreshMood();
+  ({wake:scrWake,news:scrNews,buff:scrBuff,work:scrWork,settle:scrSettle})[S.phase]();
 }
 
-let todayNews=null;
-function viewNews(){
-  if(!todayNews){ todayNews=rand(NEWS); SFX.news(); }
-  const n=todayNews;
-  const eff=Object.entries(n.eff).map(([k,v])=>{const nm={rage:'暴躁',sanity:'心态',energy:'精力',cash:'恰饭'}[k];return `<span class="chip ${v>0?'up':'down'}">${nm} ${v>0?'+':''}${v}</span>`;}).join('');
-  const banner=S.rageMode?`<div class="chip down" style="display:block;text-align:center;margin-bottom:8px">⚠️ 狂暴模式：产出翻倍，bug 与事故飙升</div>`:'';
-  $('panel').innerHTML=`
-    <div class="phasetag">📰 早报</div>${banner}
-    <div class="sheet">
-      <div class="news">
-        <span class="cat" style="background:${n.col}22;color:${n.col};border:1px solid ${n.col}">${n.cat}</span>
-        <div class="headline">${n.body}</div>
-        <div class="effrow">${eff}${n.note?`<span class="chip">🎯 ${n.note}</span>`:''}</div>
-      </div>
-      <button class="btn" style="margin-top:12px" onclick="ackNews()">${rand(['"就这？我上我也行" 💢','"卧槽……" 破防了','深吸一口气','键政结束，干活！'])}</button>
-    </div>`;
+/* WAKE */
+function scrWake(){
+  closeOverlay();
+  const greet=S.day===1?'又是一个被新闻气到的早晨…':'新的一天，钱包又薄了一点。';
+  setMood(S.sanity<30?'dead':'focus');
+  openOverlay(`<div class="tap" onclick="grabPhone()">
+     <div class="big">📅 Day ${S.day} · 早上 7:30<br><span style="font-weight:600;color:#9aa">${greet}</span></div>
+     <div class="hint">👆 点一下，抓起手机刷两眼</div></div>`,false);
 }
-window.ackNews=function(){
-  SFX.tap(); applyEff(todayNews.eff);
-  const ragey = (todayNews.eff.rage||0)>0;
-  if(ragey){ shake(); flashMood('angry'); rant(S.rage>80?'rage':'angry'); burstEmoji('💢',4); }
-  else { flashMood('focus'); }
-  S.phase=1; render();
-};
+window.grabPhone=function(){SFX.swipe();go('news');};
 
-function viewBuff(){
-  const opts=BUFFS.map((b,i)=>`<button class="opt" onclick="pickBuff(${i})">
-     <span class="ico">${b.ic}</span><span><span class="t">${b.nm}</span><div class="d">${b.d}</div></span></button>`).join('');
-  $('panel').innerHTML=`<div class="phasetag">💪 打鸡血</div>
-    <div class="sheet"><h2>今天靠什么续命？</h2><div class="sub">选一个，副作用自负。</div>
-    <div class="opts">${opts}</div></div>`;
+/* NEWS — the showcase phone */
+let dayNews=[],reactedSet=null;
+function pickDayNews(){
+  const pool=[...NEWS].sort(()=>Math.random()-.5);
+  // 2 条主新闻；保证有点正负混合
+  dayNews=pool.slice(0,2);
+  reactedSet=new Set();
 }
-window.pickBuff=function(i){
-  const b=BUFFS[i]; b.f(S);
-  S.rage=clamp(S.rage);S.sanity=clamp(S.sanity);S.energy=clamp(S.energy);
-  if(b.ic==='☕'){S.cupCount++;}
-  SFX.good(); burstEmoji(b.ic,5); flashMood(b.ic==='🧘'?'calm':'focus');
-  say('"'+b.nm+'，整！"');
-  S.phase=2; render();
-};
-
-function viewWork(){
-  const p=S.proj;
-  const ags=S.agents.map(a=>`<button class="opt" onclick="assign('${a.id}')">
-    <span class="ico">${a.face}</span><span><span class="t">${a.nm}</span><div class="d">${a.ds} · 战力${a.power} · 脾气${a.temper}</div></span>
-    <span class="tag">-15⚡</span></button>`).join('');
-  $('panel').innerHTML=`<div class="phasetag">⌨️ 干活</div>
-    <div class="sheet" style="margin-bottom:10px">
-      <h2>${p.nm} · ${Math.round(p.done)}%</h2>
-      <div class="track" style="height:9px;background:#000;border-radius:9px;overflow:hidden;margin:6px 0 8px"><i style="display:block;height:100%;width:${clamp(p.done)}%;background:linear-gradient(90deg,var(--accent),var(--cash));transition:width .4s"></i></div>
-      <div class="effrow"><span class="chip">🐛 bug ${p.bugs}</span><span class="chip">👤 用户 ${p.users}</span><span class="chip">🧱 债 ${p.debt}</span></div>
+function newsImg(n){
+  const e=n.img.map(x=>`<span>${x}</span>`).join('');
+  return `<div class="pimg" style="background:${n.imgBg}">${e}<span class="tagline">${n.tagline}</span></div>`;
+}
+function postHTML(n){
+  const reacted=reactedSet.has(n.id);
+  let bottom;
+  if(reacted){
+    const r=reactedSet.get?reactedSet.get(n.id):null;
+    bottom=`<div class="reacted">你已吐槽：<b>${n._chosen||'…'}</b></div>`;
+  }else{
+    bottom=`<button class="tucaoBtn" onclick="openReacts('${n.id}',this)">💬 吐槽两句</button>
+      <div class="reacts" id="re-${n.id}" style="display:none">
+        ${n.reacts.map((r,i)=>`<button class="react" onclick="doReact('${n.id}',${i})"><span class="rico">${r.ico}</span><span><div class="rt">${r.t}</div><div class="rd">${r.d}</div></span></button>`).join('')}
+      </div>`;
+  }
+  return `<div class="post" id="post-${n.id}">
+    <div class="phead">
+      <div class="pav" style="background:${n.src.bg}">${n.src.av}</div>
+      <div><div class="pname">${n.src.name}${n.src.verif?'<span class="pverif">✔</span>':''}</div><div class="ptime">${n.time}</div></div>
+      <div class="pcat" style="background:${n.col}22;color:${n.col}">${n.cat}</div>
     </div>
-    <div class="sheet"><h2>派活 / 自己上</h2><div class="sub">和 agent 较劲，看谁先崩。</div>
+    <div class="pbody">${n.head}</div>
+    ${newsImg(n)}
+    <div class="pbody" style="padding-top:9px;color:#c3ccda;font-size:12.5px">${n.body}</div>
+    <div class="pstats"><span>🔁 ${n.stats.f}</span><span>💬 ${n.stats.c}</span><span>👍 ${n.stats.z}</span></div>
+    <div class="hot"><span class="hl">${n.hot.l?('👍'+n.hot.l):''}</span><span class="hu">${n.hot.u}：</span>${n.hot.t}</div>
+    <div class="tucao">${bottom}</div>
+  </div>`;
+}
+function scrNews(){
+  if(!dayNews.length||S.phase==='news'&&!reactedSet)pickDayNews();
+  if(!reactedSet)pickDayNews();
+  buildFeed();
+}
+function buildFeed(){
+  // interleave ambient between real posts
+  const amb=[...AMBIENT].sort(()=>Math.random()-.5);
+  let feed='';
+  feed+=postHTML(dayNews[0]);
+  feed+=`<div class="ambient"><span class="a-img">${amb[0].av}</span>${amb[0].t}</div>`;
+  feed+=`<div class="ambient"><span class="a-img">${amb[1].av}</span>${amb[1].t}</div>`;
+  feed+=postHTML(dayNews[1]);
+  feed+=`<div class="ambient"><span class="a-img">${amb[2].av}</span>${amb[2].t}</div>`;
+  const allReacted=dayNews.every(n=>reactedSet.has(n.id));
+  const clock=`${7+Math.floor(Math.random()*1)}:${String(30+Math.floor(Math.random()*9)).padStart(2,'0')}`;
+  openOverlay(`<div class="screen"><div class="phone">
+    <div class="notch"></div>
+    <div class="pstat"><span>${clock}</span><span class="r">📶 5G 🔋${Math.max(10,100-S.day*2)}%</span></div>
+    <div class="appbar">🔥 刷一刷 · 热搜榜 <span class="live">● LIVE</span></div>
+    <div class="feed" id="feed">${feed}
+      <div style="text-align:center;color:#3a4356;font-size:11px;padding:14px 0">—— 你已经刷到底了，再刷就要迟到了 ——</div>
+    </div>
+    <div class="closephone">
+      <button class="bigbtn" id="closeBtn" ${allReacted?'':'disabled'} onclick="leavePhone()">
+        ${allReacted?'📴 收起手机，起床干活 →':'👆 先把上面的新闻吐槽完'}
+      </button>
+    </div>
+  </div></div>`,true);
+}
+window.openReacts=function(id,btn){SFX.tap();btn.style.display='none';$('re-'+id).style.display='flex';};
+window.doReact=function(id,i){
+  const n=dayNews.find(x=>x.id===id);const r=n.reacts[i];
+  n._chosen=r.t;reactedSet.add(id);
+  applyEff(r.eff);
+  // special extras
+  if(r.extra==='fame'){S.proj.users+=Math.round(15+Math.random()*30);}
+  if(r.extra==='save'){S.proj.users+=5;}
+  if(r.extra==='lose'){S.proj.users=Math.max(0,S.proj.users-Math.round(10+Math.random()*20));}
+  if(r.extra==='debt'){S.proj.debt++;}
+  if(r.extra==='gamble'){const win=Math.random()<.5;if(win){delta('cash',400);S.proj.users+=20;burst('💰',6);}else{delta('cash',-300);}n._chosen+=win?'（梭哈成功！）':'（梭哈血亏…）';}
+  // feedback
+  if(r.kind==='rage'){SFX.bad();shake();flashMood('angry');burst('💢',4);}
+  else if(r.kind==='cry'){SFX.bad();flashMood('dead');burst('💧',3);}
+  else if(r.kind==='win'){SFX.good();flashMood('happy');burst('✨',5);}
+  else {SFX.tap();flashMood('annoyed');}
+  say(r.t.replace(/"/g,''), r.kind==='rage');
+  // re-render this post + maybe enable close
+  $('post-'+id).outerHTML=postHTML(n);
+  const allReacted=dayNews.every(x=>reactedSet.has(x.id));
+  const cb=$('closeBtn');if(allReacted&&cb){cb.disabled=false;cb.textContent='📴 收起手机，起床干活 →';}
+};
+window.leavePhone=function(){SFX.swipe();dayNews=[];reactedSet=null;go('buff');};
+
+/* BUFF */
+function scrBuff(){
+  closeOverlay();setMood('focus');
+  const opts=BUFFS.map((b,i)=>`<button class="opt" onclick="pickBuff(${i})"><span class="ico">${b.ic}</span><span><span class="t">${b.nm}</span><div class="d">${b.d}</div></span></button>`).join('');
+  panel(`<div class="ptag">💪 打鸡血</div><div class="sheet"><h2>今天靠什么续命？</h2><div class="sub">选一个，副作用自负。</div><div class="opts">${opts}</div></div>`);
+}
+window.pickBuff=function(i){const b=BUFFS[i];b.f(S);renderHUD();SFX.good();burst(b.ic,5);flashMood(b.ic==='🧘'?'calm':'focus');say('"'+b.nm+'，整！"');go('work');};
+
+/* WORK — vibe coding IDE */
+let actionsToday=0;
+function workMilestones(){const p=S.proj.done;return ['0%','MVP','内测','公测','🚀上线'].map((m,i)=>`<span style="${p>=i*25?'color:#ffb38a;font-weight:800':''}">${m}</span>`).join('');}
+function scrWork(){
+  closeOverlay();setMood(computeMood());
+  const p=S.proj;
+  const ags=S.agents.map(a=>`<button class="opt" onclick="assign('${a.id}')" ${S.energy<15?'disabled':''}><span class="ico">${a.face}</span><span><span class="t">${a.nm}</span><div class="d">${a.ds} · 战力${a.power} · 脾气${a.temper}</div></span><span class="tag">-15⚡</span></button>`).join('');
+  panel(`<div class="ptag">💻 Vibe Coding</div>
+    <div class="sheet">
+      <h2>${p.nm} <span style="float:right;color:#ffb38a">${Math.round(p.done)}%</span></h2>
+      <div class="bigprog"><i style="width:${clamp(p.done)}%"></i></div>
+      <div class="milestones">${workMilestones()}</div>
+      <div class="ide" id="ide"><span class="cm">// 今天派活给 agent，或自己硬写。攒满 100% 就能上线恰大钱。</span></div>
+      <div class="statline"><span class="chip">🐛 bug ${p.bugs}</span><span class="chip">👤 用户 ${p.users}</span><span class="chip">🧱 债 ${p.debt}</span><span class="chip">⚡ 今日已操作 ${actionsToday} 次</span></div>
+    </div>
+    <div class="sheet"><h2>派活 / 自己上</h2><div class="sub">和 agent 较劲，看谁先崩。精力耗尽就该收工了。</div>
     <div class="opts">${ags}
-      <button class="opt" onclick="selfCode()"><span class="ico">🙋</span><span><span class="t">自己硬写</span><div class="d">产出看暴躁值，但很累</div></span><span class="tag">-25⚡</span></button>
-      <button class="opt" onclick="endDay()"><span class="ico">😮‍💨</span><span><span class="t">今天摸了，收工</span><div class="d">省精力，但啥也没干</div></span></button>
-    </div></div>`;
+      <button class="opt" onclick="selfCode()" ${S.energy<25?'disabled':''}><span class="ico">🙋</span><span><span class="t">自己硬写</span><div class="d">产出看暴躁值，但很累</div></span><span class="tag">-25⚡</span></button>
+      <button class="opt" onclick="go('settle')"><span class="ico">🌙</span><span><span class="t">${actionsToday?'今天就到这，收工':'今天摸了，直接收工'}</span><div class="d">结算今日收成，进入夜晚</div></span></button>
+    </div></div>`);
+}
+
+function tweenProgress(to,cb){
+  const bar=document.querySelector('.bigprog>i');const from=S.proj.done;S.proj.done=clamp(to,0,100);
+  if(bar)bar.style.width=clamp(S.proj.done)+'%';
+  // milestone celebration
+  [25,50,75,100].forEach(ms=>{if(from<ms&&S.proj.done>=ms){burst('🎊',6);SFX.ding();}});
+  let t0=Date.now();const iv=setInterval(()=>{SFX.tick();if(Date.now()-t0>400){clearInterval(iv);cb&&cb();}},80);
 }
 
 window.assign=function(id){
-  if(S.energy<15){ say('"精力不够了…"',true); SFX.bad(); return; }
-  delta('energy',-15); S.cupCount++; SFX.tap();
+  if(S.energy<15){say('"精力不够了…"',true);SFX.bad();return;}
+  delta('energy',-15);S.cupCount++;actionsToday++;SFX.tap();
   const a=S.agents.find(x=>x.id===id);
   const out=a.power*(0.8+Math.random()*0.6);
   const hallu=Math.random()<(a.hallu+a.temper/300);
-  showReview(a,out,hallu);
+  const ide=$('ide');ide.innerHTML=`<span class="cm">// 派活给 ${a.nm} …</span>\n<span class="typing"></span>`;
+  setTimeout(()=>reviewStep(a,out,hallu),900);
 };
-
-function showReview(a,out,hallu){
-  const issue = hallu
-    ? {who:`它<b style="color:#ff8a8a">一本正经地幻觉</b>了一段不存在的 API…`, ag:'"放心老板，这个 SuperFastAPI 绝对存在！"'}
-    : {who:`代码看着还行，但你总觉得哪里不对劲。`, ag:'"按你需求做完了，要不直接合？"'};
-  $('panel').innerHTML=`<div class="phasetag">🔍 Review · 较劲</div>
+function reviewStep(a,out,hallu){
+  const issue=hallu?{ag:'"放心老板，这个 SuperFastAPI 绝对存在！"',hint:`它<b style="color:#ff8a8a">一本正经地幻觉</b>了一段不存在的 API…`}:{ag:'"按你需求做完了，要不直接合？"',hint:`代码看着还行，但你总觉得哪里不对劲。`};
+  panel(`<div class="ptag">🔍 Review · 较劲</div>
     <div class="sheet">
-      <div class="chat">
-        <div class="bub ag"><div class="who"><span class="agavatar">${a.face}</span>${a.nm}</div>${issue.ag}</div>
-      </div>
-      <div class="sub">${issue.who}</div>
+      <div class="chat"><div class="bub ag"><div class="who">${a.face} ${a.nm}</div>${issue.ag}</div></div>
+      <div class="ide"><span class="cm">diff --git a/main.js</span>\n+ import { magic } from 'superfast'\n+ magic.doEverything() <span class="${hallu?'er':'cm'}">${hallu?'// ⚠ 模块可能不存在':'// 看着没毛病'}</span></div>
+      <div class="sub">${issue.hint}</div>
       <div class="opts">
         <button class="opt" onclick="rev('trust',${out},${hallu},'${a.id}')"><span class="ico">✅</span><span><span class="t">直接信它</span><div class="d">快，但幻觉变线上 bug</div></span></button>
         <button class="opt" onclick="rev('audit',${out},${hallu},'${a.id}')"><span class="ico">🔎</span><span><span class="t">仔细审</span><div class="d">揪 bug，但揪太多会破防</div></span><span class="tag">-8⚡</span></button>
         <button class="opt" onclick="rev('fight',${out},${hallu},'${a.id}')"><span class="ico">🗣️</span><span><span class="t">开喷·逼返工</span><div class="d">暴躁↑；赢→神级代码，输→它摆烂</div></span></button>
       </div>
-    </div>`;
+    </div>`);
 }
-
 window.rev=function(mode,out,hallu,aid){
-  const a=S.agents.find(x=>x.id===aid);
-  const mult=S.rageMode?2:1; let gained=out,bugs=0,agLine='',meLine='',kind='good';
-
-  if(mode==='trust'){
-    gained=out*mult;
-    if(hallu){bugs=2;S.proj.debt++;meLine='"行，合了！"';agLine='"已合并 ✅"（埋了俩雷）';kind='bad';}
-    else {meLine='"过。"';agLine='"安排！"';}
-  } else if(mode==='audit'){
-    delta('energy',-8); gained=out*0.9*mult;
-    if(hallu){delta('sanity',-8);meLine='"这 API 根本不存在！"';agLine='"啊这…我重写下😅"';kind='bad';}
-    else {meLine='"还行，干净。"';agLine='"👌"';}
-  } else { // fight
-    delta('rage',12); a.temper=clamp(a.temper+25);
-    const win=(S.rage+Math.random()*40)>(a.temper+50);
-    if(win){gained=out*1.6*mult;meLine='"重写！现在！"';agLine='"…好的老板您说得对 🫡"（交出神级代码）';kind='good';}
-    else{
-      gained=0; delta('sanity',-10);
-      if(Math.random()<0.2){S.proj.done=Math.max(0,S.proj.done-10);meLine='"你给我把这删了！"';agLine='"已读乱改，进度-10% 🙃"';}
-      else{meLine='"你听不懂人话是吧？"';agLine='"建议您先休息一下。"（开始摆烂）';}
-      kind='bad';
-    }
-  }
-  S.proj.done=clamp(S.proj.done+gained,0,100); S.proj.bugs+=bugs;
-
-  // juice
-  if(kind==='good'){SFX.good();burstEmoji('✨',5);flashMood(mode==='fight'?'happy':'focus');}
-  else{SFX.bad();shake();redflash();flashMood('angry');burstEmoji('💢',5);}
-  if(gained>0) floatNum('+'+gained.toFixed(0)+'%','#3ddc84',50,46);
-
-  // show chat result briefly then settle
-  $('panel').innerHTML=`<div class="phasetag">🔍 Review · 较劲</div>
-    <div class="sheet"><div class="chat">
-      <div class="bub me"><div class="who">暴躁老哥 🔥</div>${meLine}</div>
-      <div class="bub ag"><div class="who"><span class="agavatar">${a.face}</span>${a.nm}</div>${agLine}</div>
-    </div>
-    <button class="btn" onclick="afterReview()">${rand(['继续','下一步','哼'])}</button></div>`;
-  say(meLine.replace(/"/g,''), kind==='bad');
+  const a=S.agents.find(x=>x.id===aid);const mult=S.rageMode?2:1;
+  let gained=out,bugs=0,me='',ag='',kind='good';
+  if(mode==='trust'){gained=out*mult;if(hallu){bugs=2;S.proj.debt++;me='"行，合了！"';ag='"已合并 ✅"（埋了俩雷）';kind='bad';}else{me='"过。"';ag='"安排！"';}}
+  else if(mode==='audit'){delta('energy',-8);gained=out*.9*mult;if(hallu){delta('sanity',-8);me='"这 API 根本不存在！"';ag='"啊这…我重写下😅"';kind='bad';}else{me='"还行，干净。"';ag='"👌"';}}
+  else{delta('rage',12);a.temper=clamp(a.temper+25);const win=(S.rage+Math.random()*40)>(a.temper+50);if(win){gained=out*1.6*mult;me='"重写！现在！"';ag='"…好的老板您说得对 🫡"（神级代码）';kind='good';}else{gained=0;delta('sanity',-10);if(Math.random()<.2){S.proj.done=Math.max(0,S.proj.done-10);me='"给我删了！"';ag='"已读乱改，进度-10% 🙃"';}else{me='"你听不懂人话？"';ag='"建议您先休息一下。"（摆烂）';}kind='bad';}}
+  S.proj.bugs+=bugs;
+  if(kind==='good'){SFX.good();burst('✨',5);flashMood(mode==='fight'?'happy':'focus');}else{SFX.bad();shake();redflash();flashMood('angry');burst('💢',5);}
+  say(me.replace(/"/g,''),kind==='bad');
+  panel(`<div class="ptag">🔍 Review · 较劲</div><div class="sheet">
+    <div class="chat"><div class="bub me"><div class="who">暴躁老哥 🔥</div>${me}</div><div class="bub ag"><div class="who">${a.face} ${a.nm}</div>${ag}</div></div>
+    <div class="ide" id="ide2"><span class="cm">// 编译中…</span></div>
+    <button class="bigbtn" id="contBtn" disabled>结算中…</button></div>`);
+  setTimeout(()=>{
+    const i2=$('ide2');if(i2)i2.innerHTML=gained>0?`<span style="color:#7fe0a0">✓ build passed · 进度 +${gained.toFixed(0)}%</span>${bugs?`\n<span class="er">✗ ${bugs} new bug(s)</span>`:''}`:`<span class="er">✗ 今日无进度</span>`;
+    if(gained>0)floatNum('+'+gained.toFixed(0)+'%','#3ddc84',50,46);
+    tweenProgress(S.proj.done+gained,()=>{const b=$('contBtn');if(b){b.disabled=false;b.textContent='继续干活 / 收工 →';b.onclick=()=>{SFX.tap();go('work');};}});
+  },500);
 };
-window.afterReview=function(){SFX.tap();S.phase=3;render();};
-
 window.selfCode=function(){
   if(S.energy<25){say('"太累了，写不动…"',true);SFX.bad();return;}
-  delta('energy',-25);S.cupCount++;SFX.tap();
-  const moody=S.buffs.includes('摆烂')?0.5:1;
-  let out=(6+S.rage*0.12)*moody*(S.rageMode?2:1),bugs=0;
-  if(S.buffs.includes('手抖')&&Math.random()<0.5)bugs=1;
-  if(S.rageMode&&Math.random()<0.4)bugs+=2;
-  S.proj.done=clamp(S.proj.done+out,0,100);S.proj.bugs+=bugs;
+  delta('energy',-25);S.cupCount++;actionsToday++;SFX.tap();
+  const moody=S.buffs.includes('摆烂')?.5:1;
+  let out=(6+S.rage*.12)*moody*(S.rageMode?2:1),bugs=0;
+  if(S.buffs.includes('手抖')&&Math.random()<.5)bugs=1;
+  if(S.rageMode&&Math.random()<.4)bugs+=2;
+  S.proj.bugs+=bugs;
+  const ide=$('ide');if(ide)ide.innerHTML=`<span class="cm">// 你抄起键盘自己干…</span>\n<span style="color:#7fe0a0">+ ${out.toFixed(0)}% done</span>${bugs?`\n<span class="er">+ ${bugs} bug (手抖了)</span>`:''}`;
   floatNum('+'+out.toFixed(0)+'%','#3ddc84',50,46);
-  if(bugs){SFX.bad();shake();floatNum('🐛x'+bugs,'#ff6b6b',62,52);flashMood('angry');}
-  else{SFX.good();flashMood('focus');}
+  if(bugs){SFX.bad();shake();flashMood('angry');}else{SFX.good();flashMood('focus');}
   say(S.rageMode?'"键盘冒烟了！"':'"自己来还快点。"');
-  S.phase=3;render();
+  tweenProgress(S.proj.done+out,()=>setTimeout(()=>scrWork(),300));
 };
 
-function viewSettle(){
-  $('panel').innerHTML=`<div class="phasetag">🌙 结算</div>
-    <div class="sheet"><h2>一天结束</h2><div class="sub">深夜了，结算今天的收成。</div>
-    <button class="btn" onclick="endDay()">😴 睡了（下一天）</button></div>`;
+/* SETTLE — day report with money tick */
+function scrSettle(){
+  closeOverlay();setMood('focus');
+  // compute
+  const sanDrain=Math.round(S.rage*.04);
+  const income=Math.round(S.proj.done*1.5+S.proj.users*0.3-S.proj.bugs*8);
+  const grow=Math.round(S.proj.done*0.4-S.proj.bugs*1.2);
+  // night event
+  let nightTxt='今晚平安无事。';let nightEff=()=>{};
+  const r=Math.random();
+  if(r<.16){nightTxt='🌙 深夜 emo，对着天花板怀疑人生。';nightEff=()=>delta('sanity',-15);}
+  else if(r<.32){nightTxt='💡 半夜灵感爆发，偷偷多写了一点！';nightEff=()=>{delta('rage',6);S.proj.done=clamp(S.proj.done+8);};}
+  else if(r<.42&&S.proj.debt>0){nightTxt='🚨 技术债爆雷：线上半夜出事故！';nightEff=()=>{S.proj.bugs+=2;};}
+  panel(`<div class="ptag">🌙 今日日报</div>
+    <div class="sheet report">
+      <h2>Day ${S.day} 结算</h2>
+      <div class="row"><span>📊 项目进度</span><b>${Math.round(S.proj.done)}%</b></div>
+      <div class="row"><span>🐛 当前 bug</span><b class="${S.proj.bugs>0?'neg':''}">${S.proj.bugs}</b></div>
+      <div class="row"><span>👤 用户变化</span><b class="${grow>=0?'pos':'neg'}">${grow>=0?'+':''}${grow}</b></div>
+      <div class="row"><span>🧠 暴躁侵蚀心态</span><b class="neg">-${sanDrain}</b></div>
+      <div style="text-align:center;color:#9aa;font-size:12px;margin-top:10px">💰 今日恰饭</div>
+      <div class="big ${income>=0?'pos':'neg'}" id="incomeBig">¥0</div>
+      <div style="text-align:center;color:#7c879b;font-size:12px;min-height:18px" id="nightTxt"></div>
+      <button class="bigbtn" id="sleepBtn" style="margin-top:12px" disabled>结算中…</button>
+    </div>`);
+  // animate
+  delta('sanity',-sanDrain,true);renderHUD();
+  S.proj.users=Math.max(0,S.proj.users+grow);
+  setTimeout(()=>{
+    const big=$('incomeBig');let cur=0;const step=Math.max(1,Math.round(Math.abs(income)/24));
+    const sign=income>=0?1:-1;
+    const iv=setInterval(()=>{
+      cur+=step;if(cur>=Math.abs(income)){cur=Math.abs(income);clearInterval(iv);finishSettle(income,nightTxt,nightEff);}
+      big.textContent=(sign<0?'-':'+')+'¥'+cur;
+      if(sign>0)SFX.coin();else SFX.tick();
+    },40);
+  },350);
+}
+function finishSettle(income,nightTxt,nightEff){
+  delta('cash',income,true);renderHUD();
+  if(income>=0){burst('💰',6);flashMood('happy');say('"恰饭 +'+income+'！"');}else{flashMood('annoyed');say('"又倒贴…"',true);}
+  // night
+  setTimeout(()=>{
+    const nt=$('nightTxt');if(nt)nt.textContent=nightTxt;
+    nightEff();renderHUD();
+    if(nightTxt.includes('事故')){shake();redflash();SFX.bad();}
+    else if(nightTxt.includes('灵感')){burst('💡',4);SFX.ding();}
+    else if(nightTxt.includes('emo')){flashMood('dead');}
+    delta('energy',-10+(Math.random()<.5?10:0),true);renderHUD();
+    const b=$('sleepBtn');if(b){b.disabled=false;b.textContent='😴 睡觉，进入 Day '+(S.day+1)+' →';b.onclick=nextDay;}
+  },700);
+}
+function nextDay(){
+  SFX.swipe();
+  if(checkEnd())return;
+  S.day++;actionsToday=0;S.buffs=[];S.cupCount=Math.max(0,S.cupCount-3);
+  go('wake');
 }
 
-window.endDay=function(){
-  SFX.tap();
-  if(S.phase<3) say('"今天摸了，明天再说。"');
-  // 暴躁侵蚀心态
-  delta('sanity', -Math.round(S.rage*0.04));
-  // 恰饭结算
-  const income=Math.round(S.proj.done*1.5+S.proj.users*0.3-S.proj.bugs*8);
-  delta('cash',income);
-  if(income>=0){SFX.coin();burstEmoji('💰',5);flashMood('happy');say('"恰饭 +'+income+'！"');}
-  else{SFX.bad();flashMood('annoyed');say('"又倒贴 '+income+'…"',true);}
-  // 用户增长
-  S.proj.users=Math.max(0,S.proj.users+Math.round(S.proj.done*0.4-S.proj.bugs*1.2));
-  // 夜间事件
-  const r=Math.random();
-  if(r<0.15){delta('sanity',-15);say('"深夜 emo，怀疑人生…"',true);flashMood('dead');}
-  else if(r<0.30){delta('rage',10);S.proj.done=clamp(S.proj.done+8);say('"灵感爆发！"');burstEmoji('💡',4);}
-  else if(r<0.40&&S.proj.debt>0){S.proj.bugs+=2;say('"技术债爆雷！线上事故！"',true);shake();redflash();}
-  delta('energy',-10+(Math.random()<0.5?10:0));
-
-  S.day++;S.phase=0;todayNews=null;S.buffs=[];S.cupCount=Math.max(0,S.cupCount-3);
-  if(checkEnd())return;
-  setTimeout(render,650);
-};
-
+/* END */
 function checkEnd(){
-  if(S.cash<=0)   return end('💸','破产收场','钱烧光了，老哥含泪进厂打工。');
-  if(S.sanity<=0) return end('🫠','彻底 Burnout','心态崩了，删库归隐，转行开麻辣烫。');
-  if(S.proj.done>=100) return end('🚀','项目爆火被收购！','你做出来了！大厂捧着钱来收购，财务自由！',1);
-  if(S.day>S.maxDay) return S.cash>=2000
-      ? end('🎉','稳健恰饭','撑过 30 天还没饿死，独立开发站稳了。',1)
-      : end('😮‍💨','勉强活着','30 天到了，没爆富也没饿死，明天继续。',1);
+  if(S.cash<=0)return end('💸','破产收场','钱烧光了，老哥含泪进厂打工。',0);
+  if(S.sanity<=0)return end('🫠','彻底 Burnout','心态崩了，删库归隐，转行开麻辣烫。',0);
+  if(S.proj.done>=100)return end('🚀','项目爆火被收购！','你做出来了！大厂捧着钱来收购，财务自由！',1);
+  if(S.day>=S.maxDay)return S.cash>=2000?end('🎉','稳健恰饭','撑过 30 天还没饿死，独立开发站稳了。',1):end('😮‍💨','勉强活着','30 天到了，没爆富也没饿死，明天继续。',1);
   return false;
 }
 function end(em,title,desc,good){
-  good?SFX.coin():SFX.rage();
-  setMood(good?'happy':'dead'); moodHold=1e15;
-  $('panel').innerHTML=`<div class="end"><div class="em">${em}</div><h1>${title}</h1>
-    <p>${desc}</p>
-    <p style="margin-top:12px;font-size:12px">撑了 ${S.day-1} 天 · 项目 ${Math.round(S.proj.done)}% · 用户 ${S.proj.users} · 余额 ${Math.round(S.cash)}</p>
-    <button class="btn" style="margin-top:18px" onclick="location.reload()">🔁 再来一局</button></div>`;
-  if(good) burstEmoji('🎉',10);
+  good?SFX.coin():SFX.rage();setMood(good?'happy':'dead');moodHold=1e15;closeOverlay();
+  openOverlay(`<div class="end"><div class="em">${em}</div><h1>${title}</h1><p>${desc}</p>
+    <p style="margin-top:12px;font-size:12px">撑了 ${S.day} 天 · 项目 ${Math.round(S.proj.done)}% · 用户 ${S.proj.users} · 余额 ¥${Math.round(S.cash)}</p>
+    <button class="bigbtn" style="margin-top:20px;max-width:240px" onclick="location.reload()">🔁 再来一局</button></div>`,true);
+  if(good)burst('🎉',12);
   return true;
 }
 
-/* ---------- BOOT ---------- */
+/* BOOT */
 $('code').textContent=CODE;
-// 闲置时角色偶尔吐槽
-setInterval(()=>{ if(Date.now()>moodHold && Math.random()<0.25){ rant(computeMood()); } }, 7000);
-// 首次点击解锁音频
+setInterval(()=>{if(Date.now()>moodHold&&Math.random()<.22&&S.phase!=='news'){const k=computeMood();const a=RANTS[k]||RANTS.annoyed;say(rand(a),k==='rage'||k==='angry');}},7000);
 document.body.addEventListener('pointerdown',()=>ac(),{once:true});
-render();
-say('"新的一天……又是被新闻气到的一天。"');
+renderHUD();render();
 </script>
 </body>
 </html>
