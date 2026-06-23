@@ -3,458 +3,613 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>暴躁老哥 Vibe Coding 模拟器 (原型)</title>
+<title>暴躁老哥 · Vibe Coding 模拟器</title>
 <style>
-  :root{
-    --bg:#0e1014; --panel:#171a21; --panel2:#1f242e; --line:#2a313d;
-    --txt:#e6e9ef; --dim:#8b94a3; --accent:#ff7847;
-    --rage:#ff5a4d; --sanity:#5ab0ff; --energy:#ffd24d; --cash:#4ade80;
-  }
-  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  html,body{margin:0;height:100%}
-  body{
-    background:var(--bg); color:var(--txt);
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
-    display:flex; justify-content:center;
-  }
-  #app{width:100%; max-width:480px; min-height:100%; background:var(--bg);
-    display:flex; flex-direction:column; position:relative; padding-bottom:12px;}
-  header{padding:12px 14px 8px; border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--bg); z-index:5}
-  .topbar{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px}
-  .day{font-weight:800; font-size:18px}
-  .day small{color:var(--dim); font-weight:500; font-size:12px}
-  .phase-tag{font-size:11px; color:var(--bg); background:var(--accent); padding:3px 8px; border-radius:99px; font-weight:700}
-  .stats{display:grid; grid-template-columns:1fr 1fr; gap:8px}
-  .stat{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:7px 9px}
-  .stat .lbl{display:flex; justify-content:space-between; font-size:11px; color:var(--dim); margin-bottom:4px}
-  .stat .lbl b{color:var(--txt); font-weight:700}
-  .bar{height:7px; background:#0a0c10; border-radius:99px; overflow:hidden}
-  .bar > i{display:block; height:100%; border-radius:99px; transition:width .35s}
-  .b-rage{background:var(--rage)} .b-sanity{background:var(--sanity)}
-  .b-energy{background:var(--energy)} .b-cash{background:var(--cash)}
+:root{
+  --bg:#0a0c12; --ink:#e8ecf5; --dim:#7c879b; --line:#262d3b;
+  --rage:#ff4d4d; --sanity:#54a9ff; --energy:#ffcb3d; --cash:#3ddc84; --accent:#ff7a3c;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
+html,body{margin:0;height:100%;overflow:hidden}
+body{background:#000;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;color:var(--ink);display:flex;justify-content:center}
+#app{width:100%;max-width:460px;height:100dvh;position:relative;background:var(--bg);overflow:hidden;display:flex;flex-direction:column}
 
-  main{flex:1; padding:14px; display:flex; flex-direction:column; gap:12px}
-  .card{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:14px; animation:pop .25s ease}
-  @keyframes pop{from{opacity:0; transform:translateY(8px)}to{opacity:1; transform:none}}
-  .card h2{margin:0 0 4px; font-size:15px}
-  .card .sub{color:var(--dim); font-size:12px; margin-bottom:10px}
-  .news-cat{display:inline-block; font-size:11px; font-weight:700; padding:2px 8px; border-radius:99px; margin-bottom:8px}
-  .news-body{font-size:14px; line-height:1.5}
-  .news-eff{margin-top:10px; font-size:12px; color:var(--dim); display:flex; flex-wrap:wrap; gap:6px}
-  .chip{background:var(--panel2); border:1px solid var(--line); padding:3px 8px; border-radius:8px}
-  .chip.up{color:var(--cash)} .chip.down{color:var(--rage)}
+/* ---------- HUD ---------- */
+#hud{position:absolute;top:0;left:0;right:0;z-index:30;padding:8px 10px;display:flex;gap:6px;align-items:center;
+  background:linear-gradient(#0a0c12ee,#0a0c1200)}
+.daybadge{font-weight:900;font-size:13px;background:#0a0c12cc;border:1px solid var(--line);border-radius:9px;padding:5px 9px;white-space:nowrap}
+.daybadge small{color:var(--dim);font-weight:600;font-size:10px}
+.gauges{flex:1;display:flex;gap:5px}
+.g{flex:1;background:#0a0c12cc;border:1px solid var(--line);border-radius:9px;padding:4px 6px;position:relative;overflow:hidden}
+.g .ic{font-size:12px;line-height:1}
+.g .num{font-size:12px;font-weight:800;line-height:1.1}
+.g .track{height:4px;background:#000;border-radius:9px;margin-top:3px;overflow:hidden}
+.g .track > i{display:block;height:100%;border-radius:9px;transition:width .4s cubic-bezier(.2,.8,.2,1)}
+.g.flash{animation:gflash .5s}
+@keyframes gflash{0%,100%{transform:none}30%{transform:scale(1.12)}}
+.rg .track>i{background:var(--rage)} .sn .track>i{background:var(--sanity)}
+.en .track>i{background:var(--energy)} .cs .track>i{background:var(--cash)}
 
-  .opts{display:flex; flex-direction:column; gap:9px}
-  .opt{width:100%; text-align:left; background:var(--panel2); border:1px solid var(--line); color:var(--txt);
-    padding:11px 12px; border-radius:11px; font-size:14px; cursor:pointer; transition:.12s; font-family:inherit}
-  .opt:hover{border-color:var(--accent); transform:translateY(-1px)}
-  .opt:active{transform:scale(.99)}
-  .opt .t{font-weight:700; display:flex; justify-content:space-between; align-items:center}
-  .opt .d{color:var(--dim); font-size:12px; margin-top:3px}
-  .opt .cost{font-size:11px; color:var(--energy); font-weight:700}
+/* ---------- SCENE ---------- */
+#scene{position:absolute;inset:0;z-index:1;overflow:hidden}
+#sky{position:absolute;inset:0;transition:background 1.2s}
+.win{position:absolute;top:9%;right:7%;width:34%;height:30%;border:5px solid #11151f;border-radius:8px;
+  background:linear-gradient(180deg,#0e1830,#1b2747);box-shadow:inset 0 0 30px #0006;overflow:hidden}
+.win::before{content:"";position:absolute;inset:0;background:
+  radial-gradient(1px 1px at 20% 30%,#fff,transparent),
+  radial-gradient(1px 1px at 60% 50%,#fff9,transparent),
+  radial-gradient(1px 1px at 80% 20%,#fff7,transparent),
+  radial-gradient(1px 1px at 40% 70%,#fffa,transparent);opacity:.7}
+.moon{position:absolute;top:12%;left:18%;width:26px;height:26px;border-radius:50%;background:#f2efd6;box-shadow:0 0 18px #f2efd680;transition:.8s}
+.deskline{position:absolute;left:0;right:0;bottom:23%;height:2px;background:#000a;box-shadow:0 -16px 30px #0008}
+.desk{position:absolute;left:0;right:0;bottom:0;height:23%;background:linear-gradient(#1a2030,#10131c)}
+/* monitor */
+.mon{position:absolute;left:7%;bottom:24%;width:40%;height:30%;border:4px solid #0c0f17;border-radius:7px;background:#050a14;overflow:hidden}
+.mon .code{position:absolute;inset:0;padding:6px 7px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:7px;line-height:1.5;color:#37e07a;opacity:.85;white-space:pre;animation:scroll 8s linear infinite}
+@keyframes scroll{from{transform:translateY(0)}to{transform:translateY(-50%)}}
+.mon .glow{position:absolute;inset:0;box-shadow:inset 0 0 22px #37e07a44;pointer-events:none}
+.monstand{position:absolute;left:23%;bottom:21%;width:5%;height:4%;background:#0c0f17}
 
-  .btn{display:block; width:100%; background:var(--accent); color:#1a0e07; border:none; padding:13px;
-    border-radius:12px; font-size:15px; font-weight:800; cursor:pointer; font-family:inherit; margin-top:4px}
-  .btn:active{transform:scale(.99)}
-  .btn.ghost{background:transparent; color:var(--dim); border:1px solid var(--line); font-weight:600}
+/* coffee cups grow with energy spent */
+.cups{position:absolute;right:9%;bottom:24%;display:flex;gap:3px;align-items:flex-end}
+.cup{font-size:15px;filter:drop-shadow(0 2px 2px #0008)}
 
-  .log{background:#0a0c10; border:1px solid var(--line); border-radius:10px; padding:10px; font-size:12px;
-    color:var(--dim); max-height:140px; overflow-y:auto; line-height:1.6}
-  .log .hl{color:var(--accent)} .log .g{color:var(--cash)} .log .r{color:var(--rage)}
+/* ---------- CHARACTER ---------- */
+#charWrap{position:absolute;left:50%;bottom:21%;transform:translateX(-50%);width:54%;max-width:230px;z-index:6;transition:filter .4s}
+#char{width:100%;display:block;overflow:visible}
+.breathe{animation:breathe 3.4s ease-in-out infinite}
+@keyframes breathe{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.5%)}}
+#charWrap.shake{animation:cshake .28s infinite}
+@keyframes cshake{0%,100%{transform:translateX(-50%)}25%{transform:translate(-53%,1px)}75%{transform:translate(-47%,-1px)}}
 
-  .agent-row{display:flex; align-items:center; gap:10px; background:var(--panel2); border:1px solid var(--line);
-    border-radius:11px; padding:10px; margin-bottom:8px}
-  .agent-row .face{font-size:26px}
-  .agent-row .meta{flex:1}
-  .agent-row .nm{font-weight:700; font-size:14px}
-  .agent-row .ds{color:var(--dim); font-size:11px}
-  .temper{height:5px; background:#0a0c10; border-radius:99px; margin-top:5px; overflow:hidden}
-  .temper > i{display:block; height:100%; background:var(--rage)}
+/* expression parts: hide all variants by default, mood class reveals */
+#char .eyes>g,#char .mouth>path{display:none}
+#char .brow{transition:transform .25s}
+#char .fire,#char .steam,#char .sweat,#char .vein,#char .blush{opacity:0;transition:opacity .3s}
+#char .face{transition:fill .4s}
 
-  .proj{background:var(--panel2); border:1px solid var(--line); border-radius:11px; padding:11px; margin-bottom:6px}
-  .proj .pn{font-weight:700; font-size:14px; display:flex; justify-content:space-between}
-  .proj .meta{color:var(--dim); font-size:11px; margin:6px 0}
-  .prog{height:8px; background:#0a0c10; border-radius:99px; overflow:hidden}
-  .prog > i{display:block; height:100%; background:linear-gradient(90deg,var(--accent),var(--cash)); transition:width .4s}
+/* CALM */
+.m-calm .e-norm{display:block}.m-calm .mo-smile{display:block}
+.m-calm .browL{transform:translateY(2px)}.m-calm .browR{transform:translateY(2px)}
+/* FOCUS */
+.m-focus .e-norm{display:block}.m-focus .mo-flat{display:block}
+/* ANNOYED */
+.m-annoyed .e-norm{display:block}.m-annoyed .mo-frown{display:block}
+.m-annoyed .browL{transform:rotate(12deg) translateY(1px)}.m-annoyed .browR{transform:rotate(-12deg) translateY(1px)}
+.m-annoyed .vein{opacity:.9}
+/* ANGRY */
+.m-angry .e-rage{display:block}.m-angry .mo-grit{display:block}
+.m-angry .browL{transform:rotate(20deg)}.m-angry .browR{transform:rotate(-20deg)}
+.m-angry .face{fill:#ffb3a0}.m-angry .vein{opacity:1}.m-angry .steam{opacity:.8}
+/* RAGE */
+.m-rage .e-rage{display:block}.m-rage .mo-yell{display:block}
+.m-rage .browL{transform:rotate(26deg) translateY(-1px)}.m-rage .browR{transform:rotate(-26deg) translateY(-1px)}
+.m-rage .face{fill:#ff8e76}.m-rage .fire{opacity:1}.m-rage .steam{opacity:1}.m-rage .vein{opacity:1}
+/* DEAD/tired */
+.m-dead .e-x{display:block}.m-dead .mo-flat{display:block}
+.m-dead .face{fill:#cfd6df}.m-dead .sweat{opacity:.9}
+.m-dead .browL{transform:translateY(4px) rotate(-8deg)}.m-dead .browR{transform:translateY(4px) rotate(8deg)}
+/* HAPPY */
+.m-happy .e-happy{display:block}.m-happy .mo-open{display:block}
+.m-happy .browL{transform:translateY(-1px)}.m-happy .browR{transform:translateY(-1px)}
+.m-happy .blush{opacity:.8}
 
-  .rage-mode{animation:shake .3s infinite}
-  @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-2px)}75%{transform:translateX(2px)}}
-  .banner{background:linear-gradient(90deg,#3a1108,#5c1a0a); border:1px solid var(--rage); color:#ffd0c4;
-    padding:8px 12px; border-radius:10px; font-size:13px; font-weight:700; text-align:center}
+.firewrap{animation:flick .12s infinite alternate}
+@keyframes flick{from{transform:scaleY(1)}to{transform:scaleY(1.12)}}
 
-  .end{text-align:center; padding:30px 16px}
-  .end .em{font-size:60px} .end h1{margin:10px 0 4px} .end p{color:var(--dim)}
-  .footer{text-align:center; color:var(--dim); font-size:11px; padding:6px}
+/* speech bubble */
+#speech{position:absolute;left:50%;bottom:calc(21% + 30vw);max-bottom:0;transform:translateX(-50%);
+  z-index:8;background:#fff;color:#15171d;font-size:13px;font-weight:700;line-height:1.35;
+  padding:9px 12px;border-radius:13px;max-width:78%;text-align:center;box-shadow:0 6px 20px #000a;opacity:0;
+  transition:opacity .25s;pointer-events:none}
+#speech.show{opacity:1}
+#speech::after{content:"";position:absolute;left:50%;bottom:-8px;transform:translateX(-50%);
+  border:8px solid transparent;border-top-color:#fff;border-bottom:0}
+#speech.angry{background:#ffe3da;color:#8a1a00}
+#speech.angry::after{border-top-color:#ffe3da}
+
+/* fx layer: floating numbers / emojis */
+#fx{position:absolute;inset:0;z-index:20;pointer-events:none;overflow:hidden}
+.float{position:absolute;font-weight:900;font-size:16px;animation:floatUp 1.1s ease-out forwards;text-shadow:0 2px 4px #000}
+@keyframes floatUp{0%{opacity:0;transform:translateY(0) scale(.6)}15%{opacity:1;transform:translateY(-8px) scale(1.1)}100%{opacity:0;transform:translateY(-70px) scale(1)}}
+.burst{position:absolute;font-size:22px;animation:burst .9s ease-out forwards}
+@keyframes burst{0%{opacity:1;transform:translate(0,0) scale(.4)}100%{opacity:0;transform:translate(var(--dx),var(--dy)) scale(1.3)}}
+#flashfx{position:absolute;inset:0;z-index:25;pointer-events:none;opacity:0;background:radial-gradient(circle,#ff4d4d55,transparent 70%)}
+#flashfx.on{animation:redflash .4s}
+@keyframes redflash{0%{opacity:0}30%{opacity:1}100%{opacity:0}}
+
+/* ---------- PANEL ---------- */
+#panel{position:absolute;left:0;right:0;bottom:0;z-index:15;
+  background:linear-gradient(#0a0c1200,#0a0c12 16%);padding:14px 12px calc(12px + env(safe-area-inset-bottom));
+  max-height:62%;overflow-y:auto}
+.phasetag{display:inline-block;font-size:11px;font-weight:800;color:#0a0c12;background:var(--accent);padding:3px 10px;border-radius:99px;margin-bottom:8px}
+.sheet{background:#12151fcc;backdrop-filter:blur(6px);border:1px solid var(--line);border-radius:16px;padding:13px;animation:rise .3s ease}
+@keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.sheet h2{margin:0 0 3px;font-size:15px}
+.sheet .sub{color:var(--dim);font-size:12px;margin-bottom:11px}
+
+.news{border-left:3px solid var(--accent);padding-left:10px}
+.cat{display:inline-block;font-size:10px;font-weight:800;padding:2px 8px;border-radius:99px;margin-bottom:6px}
+.headline{font-size:14px;line-height:1.5}
+.effrow{margin-top:9px;display:flex;flex-wrap:wrap;gap:5px}
+.chip{font-size:11px;background:#1c2130;border:1px solid var(--line);padding:3px 8px;border-radius:8px;color:var(--dim)}
+.chip.up{color:var(--cash);border-color:#3ddc8455}.chip.down{color:var(--rage);border-color:#ff4d4d55}
+
+.opts{display:flex;flex-direction:column;gap:8px;margin-top:4px}
+.opt{width:100%;text-align:left;background:#171b27;border:1px solid var(--line);color:var(--ink);
+  padding:11px 12px;border-radius:12px;font-family:inherit;font-size:14px;cursor:pointer;transition:.12s;display:flex;gap:10px;align-items:center}
+.opt:active{transform:scale(.98);background:#1e2433}
+.opt .ico{font-size:22px;flex:none}
+.opt .t{font-weight:700}
+.opt .d{color:var(--dim);font-size:12px;margin-top:2px}
+.opt .tag{margin-left:auto;font-size:10px;font-weight:800;color:var(--energy);white-space:nowrap}
+
+.btn{display:block;width:100%;background:linear-gradient(135deg,#ff7a3c,#ff4d4d);color:#1a0c05;border:none;
+  padding:14px;border-radius:13px;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;
+  box-shadow:0 6px 18px #ff4d4d33}
+.btn:active{transform:scale(.98)}
+
+/* agent chat (对线) */
+.chat{display:flex;flex-direction:column;gap:8px;margin:6px 0 12px}
+.bub{max-width:82%;padding:8px 11px;border-radius:13px;font-size:13px;line-height:1.4;animation:rise .25s}
+.bub.ag{align-self:flex-start;background:#1b2433;border:1px solid var(--line);border-bottom-left-radius:4px}
+.bub.me{align-self:flex-end;background:#3a1e12;border:1px solid #5a2a16;border-bottom-right-radius:4px}
+.bub .who{font-size:10px;color:var(--dim);margin-bottom:3px}
+.agavatar{font-size:16px;margin-right:4px}
+
+/* end screen */
+.end{text-align:center;padding:24px 16px}
+.end .em{font-size:62px;animation:pop .5s}
+@keyframes pop{0%{transform:scale(.3);opacity:0}70%{transform:scale(1.15)}100%{transform:scale(1);opacity:1}}
+.end h1{margin:8px 0 4px}.end p{color:var(--dim);margin:4px 0}
+
+.hint{text-align:center;color:#4a5468;font-size:10px;margin-top:8px}
 </style>
 </head>
 <body>
 <div id="app">
-  <header>
-    <div class="topbar">
-      <div class="day">Day <span id="day">1</span> <small id="goal">/ 撑到第 30 天且不破产</small></div>
-      <div class="phase-tag" id="phaseTag">早报</div>
+
+  <!-- HUD -->
+  <div id="hud">
+    <div class="daybadge">DAY <span id="day">1</span><br><small id="goalTxt">/30 别破产</small></div>
+    <div class="gauges">
+      <div class="g rg" id="gRage"><div class="ic">🔥</div><div class="num" id="vRage">50</div><div class="track"><i id="bRage"></i></div></div>
+      <div class="g sn" id="gSanity"><div class="ic">🧠</div><div class="num" id="vSanity">70</div><div class="track"><i id="bSanity"></i></div></div>
+      <div class="g en" id="gEnergy"><div class="ic">⚡</div><div class="num" id="vEnergy">80</div><div class="track"><i id="bEnergy"></i></div></div>
+      <div class="g cs" id="gCash"><div class="ic">💰</div><div class="num" id="vCash">1k</div><div class="track"><i id="bCash"></i></div></div>
     </div>
-    <div class="stats">
-      <div class="stat"><div class="lbl">🔥 暴躁 <b id="vRage">50</b></div><div class="bar"><i class="b-rage" id="bRage"></i></div></div>
-      <div class="stat"><div class="lbl">🧠 心态 <b id="vSanity">70</b></div><div class="bar"><i class="b-sanity" id="bSanity"></i></div></div>
-      <div class="stat"><div class="lbl">⚡ 精力 <b id="vEnergy">80</b></div><div class="bar"><i class="b-energy" id="bEnergy"></i></div></div>
-      <div class="stat"><div class="lbl">💰 恰饭 <b id="vCash">1000</b></div><div class="bar"><i class="b-cash" id="bCash"></i></div></div>
+  </div>
+
+  <!-- SCENE -->
+  <div id="scene">
+    <div id="sky"></div>
+    <div class="win"><div class="moon" id="moon"></div></div>
+    <div class="monstand"></div>
+    <div class="mon"><div class="code" id="code"></div><div class="glow"></div></div>
+    <div class="cups" id="cups"></div>
+    <div class="deskline"></div>
+    <div class="desk"></div>
+
+    <div id="charWrap">
+      <svg id="char" class="char breathe m-focus" viewBox="0 0 200 200">
+        <!-- fire aura -->
+        <g class="fire firewrap">
+          <path d="M100 40 C70 70 60 110 100 140 C140 110 130 70 100 40Z" fill="#ff5a1a" opacity=".5"/>
+          <path d="M100 60 C82 82 78 110 100 130 C122 110 118 82 100 60Z" fill="#ffb13c" opacity=".7"/>
+        </g>
+        <!-- hoodie body -->
+        <path d="M40 200 C40 150 60 132 100 132 C140 132 160 150 160 200Z" fill="#2a3142"/>
+        <path d="M70 134 C80 150 120 150 130 134 L130 132 L70 132Z" fill="#222838"/>
+        <!-- head -->
+        <ellipse class="face" cx="100" cy="92" rx="46" ry="48" fill="#f3c9a8"/>
+        <!-- ears -->
+        <ellipse class="face" cx="55" cy="95" rx="7" ry="11" fill="#f3c9a8"/>
+        <ellipse class="face" cx="145" cy="95" rx="7" ry="11" fill="#f3c9a8"/>
+        <!-- hair / stubble cap -->
+        <path d="M55 78 C58 44 142 44 145 78 C140 64 60 64 55 78Z" fill="#2b2620"/>
+        <!-- headphones -->
+        <path d="M50 92 C46 50 154 50 150 92" stroke="#15181f" stroke-width="7" fill="none" stroke-linecap="round"/>
+        <rect x="40" y="84" width="16" height="26" rx="6" fill="#15181f"/>
+        <rect x="144" y="84" width="16" height="26" rx="6" fill="#15181f"/>
+        <!-- blush -->
+        <g class="blush"><circle cx="70" cy="108" r="7" fill="#ff7a7a" opacity=".5"/><circle cx="130" cy="108" r="7" fill="#ff7a7a" opacity=".5"/></g>
+        <!-- vein/anger mark -->
+        <g class="vein" transform="translate(120,58)"><path d="M0 6 L6 0 M6 0 L12 6 M6 0 L6 10" stroke="#ff2d2d" stroke-width="2.4" fill="none" stroke-linecap="round"/></g>
+        <!-- brows -->
+        <g class="brow browL" style="transform-origin:78px 78px"><rect x="62" y="74" width="30" height="6" rx="3" fill="#2b2620"/></g>
+        <g class="brow browR" style="transform-origin:122px 78px"><rect x="108" y="74" width="30" height="6" rx="3" fill="#2b2620"/></g>
+        <!-- eyes -->
+        <g class="eyes">
+          <g class="e-norm"><circle cx="78" cy="92" r="6.5" fill="#1a1a1a"/><circle cx="122" cy="92" r="6.5" fill="#1a1a1a"/><circle cx="80" cy="90" r="2" fill="#fff"/><circle cx="124" cy="90" r="2" fill="#fff"/></g>
+          <g class="e-rage"><path d="M70 88 L88 94 M70 96 L88 94" stroke="#1a1a1a" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M130 88 L112 94 M130 96 L112 94" stroke="#1a1a1a" stroke-width="3" fill="none" stroke-linecap="round"/><circle cx="82" cy="93" r="3.5" fill="#c00"/><circle cx="118" cy="93" r="3.5" fill="#c00"/></g>
+          <g class="e-x"><path d="M72 86 L86 98 M86 86 L72 98" stroke="#555" stroke-width="3" stroke-linecap="round"/><path d="M114 86 L128 98 M128 86 L114 98" stroke="#555" stroke-width="3" stroke-linecap="round"/></g>
+          <g class="e-happy"><path d="M70 94 C76 86 84 86 90 94" stroke="#1a1a1a" stroke-width="3.4" fill="none" stroke-linecap="round"/><path d="M110 94 C116 86 124 86 130 94" stroke="#1a1a1a" stroke-width="3.4" fill="none" stroke-linecap="round"/></g>
+        </g>
+        <!-- mouths -->
+        <g class="mouth">
+          <path class="mo-flat" d="M86 118 L114 118" stroke="#7a4a2a" stroke-width="3.5" stroke-linecap="round"/>
+          <path class="mo-smile" d="M84 114 C94 124 106 124 116 114" stroke="#7a4a2a" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+          <path class="mo-frown" d="M84 122 C94 113 106 113 116 122" stroke="#7a4a2a" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+          <path class="mo-grit" d="M84 114 H116 V124 H84 Z M90 114 V124 M98 114 V124 M106 114 V124 M114 114 V124" stroke="#5a3418" stroke-width="2" fill="#fff"/>
+          <path class="mo-yell" d="M86 112 C86 132 114 132 114 112 C108 118 92 118 86 112Z" fill="#5a1810" stroke="#3a0e08" stroke-width="2"/>
+          <path class="mo-open" d="M88 114 C88 128 112 128 112 114 Z" fill="#7a2a1a"/>
+        </g>
+        <!-- sweat -->
+        <g class="sweat"><path d="M140 78 C146 88 150 92 144 96 C138 92 136 86 140 78Z" fill="#7ec8ff"/></g>
+        <!-- steam -->
+        <g class="steam" stroke="#cfd8e6" stroke-width="3" fill="none" stroke-linecap="round" opacity="0">
+          <path d="M64 52 q-6 -8 0 -16"><animate attributeName="opacity" values="0;1;0" dur="1.1s" repeatCount="indefinite"/></path>
+          <path d="M136 52 q6 -8 0 -16"><animate attributeName="opacity" values="0;1;0" dur="1.1s" begin=".5s" repeatCount="indefinite"/></path>
+        </g>
+      </svg>
     </div>
-  </header>
-  <main id="main"></main>
-  <div class="footer">原型 v0.1 · 暴躁老哥 Vibe Coding 模拟器</div>
+
+    <div id="speech"></div>
+    <div id="fx"></div>
+    <div id="flashfx"></div>
+  </div>
+
+  <!-- PANEL -->
+  <div id="panel"></div>
 </div>
 
 <script>
 "use strict";
-
-/* ---------- 状态 ---------- */
-const S = {
-  day:1, maxDay:30, phase:0, // 0新闻 1鸡血 2干活 3结算
-  rage:50, sanity:70, energy:80, cash:1000,
-  rageMode:false,
-  buffs:[],
-  agents:[
-    {id:'a', face:'🤖', nm:'乖学生 GPT仔', ds:'听话稳定·没创意·爱幻觉', temper:10, power:8, hallu:0.35},
-    {id:'b', face:'😼', nm:'杠精 Claude佬', ds:'能力强·爱抬杠·要哄', temper:20, power:14, hallu:0.15},
-    {id:'c', face:'🐢', nm:'划水 Copilot', ds:'便宜·偷懒·爱简化', temper:5, power:6, hallu:0.25},
-  ],
-  proj:{ nm:'某不知名 SaaS', done:0, bugs:0, users:0, debt:0 },
-  log:[],
-  todayNews:null,
-};
-
-/* ---------- 新闻库 ---------- */
-const NEWS = [
-  {cat:'融资', col:'#ff5a4d', body:'"19岁辍学生 demo 截图融资 3 亿。"评论区都在喊颠覆。', eff:{rage:+18,sanity:-10}, note:'破防打鸡血：今日产出↑'},
-  {cat:'融资', col:'#ff5a4d', body:'你三年前看不上的项目，今天被大厂收购了。', eff:{rage:+12,sanity:-12,cash:0}, note:'"我上我也行"'},
-  {cat:'模型', col:'#5ab0ff', body:'新模型发布，便宜 10 倍还更聪明。', eff:{sanity:+6,energy:-8}, note:'agent 能力暂时↑'},
-  {cat:'模型', col:'#5ab0ff', body:'你在用的框架宣布弃坑，文档已 404。', eff:{rage:+10,sanity:-6}, note:'技术债 +1'},
-  {cat:'风口', col:'#4ade80', body:'XX 概念一夜爆火，热钱疯狂涌入赛道。', eff:{rage:+6}, note:'限时风口：赶工收益↑'},
-  {cat:'风口', col:'#4ade80', body:'风口似乎是泡沫……但万一是真的呢？', eff:{}, note:'赌一把？'},
-  {cat:'黑天鹅', col:'#a78bfa', body:'各家 API 集体涨价，成本起飞。', eff:{cash:-200,rage:+8}, note:'运营成本↑'},
-  {cat:'黑天鹅', col:'#a78bfa', body:'全网大宕机，你的 app 也躺了，用户在骂。', eff:{rage:+14,sanity:-8}, note:'紧急救火'},
-  {cat:'舆论', col:'#fb923c', body:'有人在论坛阴阳你的开源项目是"AI 缝合怪"。', eff:{rage:+16,sanity:-6}, note:'嘴硬反击'},
-  {cat:'舆论', col:'#fb923c', body:'你的 app 莫名上了热搜，流量暴涨！', eff:{sanity:+8}, note:'用户 +大量'},
-  {cat:'生活', col:'#94a3b8', body:'房贷涨了，对象问你"这班到底还上不上"。', eff:{rage:+8,sanity:-10}, note:'现实暴击'},
-  {cat:'生活', col:'#94a3b8', body:'体检报告出了，医生建议你"别熬夜"。你笑了。', eff:{energy:-6,sanity:+4}, note:''},
-  {cat:'玄学', col:'#f0abfc', body:'今日黄历：宜删库，忌发版。', eff:{}, note:'今日事故概率波动'},
-];
-
-/* ---------- 鸡血库 ---------- */
-const BUFFS = [
-  {nm:'☕ 第八杯咖啡', d:'精力↑↑ 但手抖(bug+)、夜里失眠', cost:0, apply:s=>{s.energy+=25; s.buffs.push('手抖')}},
-  {nm:'🎵 赛博朋克歌单', d:'暴躁↑ 沉浸 但听不见 agent 警告', cost:0, apply:s=>{s.rage+=15; s.buffs.push('沉浸')}},
-  {nm:'📈 看竞品融资', d:'暴躁↑↑(破防式) 心态↓', cost:0, apply:s=>{s.rage+=22; s.sanity-=10}},
-  {nm:'🧘 冥想回血', d:'心态↑ 但今日产出腰斩', cost:0, apply:s=>{s.sanity+=22; s.buffs.push('摆烂')}},
-  {nm:'🍜 泡面+老番', d:'全属性微回·稳健过渡', cost:0, apply:s=>{s.energy+=8; s.sanity+=8; s.rage-=4}},
-];
-
-/* ---------- 工具 ---------- */
 const $=id=>document.getElementById(id);
 const clamp=(v,a=0,b=100)=>Math.max(a,Math.min(b,v));
-const rand=arr=>arr[Math.floor(Math.random()*arr.length)];
-function log(msg,cls=''){ S.log.unshift(`<span class="${cls}">${msg}</span>`); S.log=S.log.slice(0,30); }
+const rand=a=>a[Math.floor(Math.random()*a.length)];
 
-function applyEff(e){
-  if(!e) return;
-  if(e.rage)   S.rage   = clamp(S.rage+e.rage);
-  if(e.sanity) S.sanity = clamp(S.sanity+e.sanity);
-  if(e.energy) S.energy = clamp(S.energy+e.energy);
-  if(e.cash)   S.cash   = Math.max(0,S.cash+e.cash);
+/* ---------- AUDIO (WebAudio, no assets) ---------- */
+let AC=null;
+function ac(){ if(!AC){ try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){} } return AC; }
+function beep(freq,dur=0.08,type="square",vol=0.05,slide=0){
+  const c=ac(); if(!c) return;
+  const o=c.createOscillator(),g=c.createGain();
+  o.type=type;o.frequency.value=freq;
+  if(slide)o.frequency.exponentialRampToValueAtTime(Math.max(40,freq+slide),c.currentTime+dur);
+  g.gain.value=vol;g.gain.exponentialRampToValueAtTime(0.0001,c.currentTime+dur);
+  o.connect(g);g.connect(c.destination);o.start();o.stop(c.currentTime+dur);
+}
+const SFX={
+  tap:()=>beep(420,0.05,"square",0.04),
+  good:()=>{beep(660,0.07,"square",0.05);setTimeout(()=>beep(880,0.09,"square",0.05),70);},
+  bad:()=>beep(180,0.18,"sawtooth",0.06,-90),
+  coin:()=>{beep(988,0.06,"square",0.05);setTimeout(()=>beep(1319,0.1,"square",0.05),60);},
+  rage:()=>{beep(120,0.25,"sawtooth",0.07,-50);},
+  news:()=>beep(520,0.06,"triangle",0.05),
+};
+
+/* ---------- STATE ---------- */
+const S={
+  day:1,maxDay:30,phase:0,
+  rage:50,sanity:70,energy:80,cash:1000,
+  rageMode:false,buffs:[],cupCount:0,
+  agents:[
+    {id:'a',face:'🤖',nm:'乖学生 GPT仔',ds:'听话稳·没创意·爱幻觉',temper:10,power:8,hallu:.35},
+    {id:'b',face:'😼',nm:'杠精 Claude佬',ds:'能力强·爱抬杠·要哄',temper:20,power:14,hallu:.15},
+    {id:'c',face:'🐢',nm:'划水 Copilot',ds:'便宜·偷懒·爱简化',temper:5,power:6,hallu:.25},
+  ],
+  proj:{nm:'某不知名 SaaS',done:0,bugs:0,users:0,debt:0},
+};
+
+const NEWS=[
+ {cat:'融资',col:'#ff4d4d',body:'"19岁辍学生 demo 截图融资 3 亿。"评论区都在喊颠覆。',eff:{rage:18,sanity:-10},note:'破防打鸡血'},
+ {cat:'融资',col:'#ff4d4d',body:'你三年前看不上的项目，今天被大厂收购了。',eff:{rage:12,sanity:-12},note:'"我上我也行"'},
+ {cat:'模型',col:'#54a9ff',body:'新模型发布，便宜 10 倍还更聪明。',eff:{sanity:6,energy:-8},note:'agent 暂时变强'},
+ {cat:'模型',col:'#54a9ff',body:'你在用的框架宣布弃坑，文档已 404。',eff:{rage:10,sanity:-6},note:'技术债+1'},
+ {cat:'风口',col:'#3ddc84',body:'XX 概念一夜爆火，热钱疯狂涌入赛道。',eff:{rage:6},note:'限时风口'},
+ {cat:'黑天鹅',col:'#a78bfa',body:'各家 API 集体涨价，成本起飞。',eff:{cash:-200,rage:8},note:'运营成本↑'},
+ {cat:'黑天鹅',col:'#a78bfa',body:'全网大宕机，你的 app 也躺了，用户在骂。',eff:{rage:14,sanity:-8},note:'紧急救火'},
+ {cat:'舆论',col:'#fb923c',body:'有人在论坛阴阳你的开源项目是"AI 缝合怪"。',eff:{rage:16,sanity:-6},note:'嘴硬反击'},
+ {cat:'舆论',col:'#fb923c',body:'你的 app 莫名上了热搜，流量暴涨！',eff:{sanity:8},note:'用户+'},
+ {cat:'生活',col:'#94a3b8',body:'房贷涨了，对象问你"这班到底还上不上"。',eff:{rage:8,sanity:-10},note:'现实暴击'},
+ {cat:'生活',col:'#94a3b8',body:'体检报告出了，医生建议你"别熬夜"。你笑了。',eff:{energy:-6,sanity:4},note:''},
+ {cat:'玄学',col:'#f0abfc',body:'今日黄历：宜删库，忌发版。',eff:{},note:'事故概率波动'},
+];
+const BUFFS=[
+ {ic:'☕',nm:'第八杯咖啡',d:'精力↑↑ 但手抖(bug+)、失眠',f:s=>{s.energy+=25;s.buffs.push('手抖');}},
+ {ic:'🎵',nm:'赛博朋克歌单',d:'暴躁↑ 沉浸 但听不见 agent 警告',f:s=>{s.rage+=15;s.buffs.push('沉浸');}},
+ {ic:'📈',nm:'看竞品融资',d:'暴躁↑↑(破防式) 心态↓',f:s=>{s.rage+=22;s.sanity-=10;}},
+ {ic:'🧘',nm:'冥想回血',d:'心态↑ 但今日产出腰斩',f:s=>{s.sanity+=22;s.buffs.push('摆烂');}},
+ {ic:'🍜',nm:'泡面+老番',d:'全属性微回·稳健过渡',f:s=>{s.energy+=8;s.sanity+=8;s.rage-=4;}},
+];
+
+/* 老哥嘴臭语录 */
+const RANTS={
+  rage:['"就这？我上我也行！"','"这破需求是人想出来的？"','"删了删了，重写！"','"@#¥%……跟我斗？"'],
+  angry:['"你确定这代码能跑？"','"又幻觉……气死我了"','"别给我整这些没用的"'],
+  annoyed:['"啧。"','"行吧行吧。"','"早晚把它换了。"'],
+  calm:['"今天状态不错。"','"稳住，能赢。"','"喝口咖啡先。"'],
+  dead:['"我是谁…我在哪…"','"不想干了想开麻辣烫…"','"脑子是空的。"'],
+  happy:['"哈哈哈成了！"','"这波啊，这波是阳谋。"','"爷青回！"'],
+};
+const CODE=`function ship(){\n  while(rage>0){\n    let pr = agent.code();\n    if(buggy(pr)) yell();\n    merge(pr);\n  }\n  return "🚀";\n}\nconst app = vibe(coding);\napp.deploy(); // pray\nTODO: fix later (never)\n// 别问，问就是能跑\n`.repeat(4);
+
+/* ---------- VISUAL HELPERS ---------- */
+function setMood(m){ $('char').className='char breathe m-'+m; }
+function computeMood(){
+  if(S.rageMode) return 'rage';
+  if(S.sanity<=22) return 'dead';
+  if(S.rage>=75) return 'angry';
+  if(S.rage>=55) return 'annoyed';
+  if(S.sanity>=72 && S.rage<42) return 'calm';
+  return 'focus';
+}
+let moodHold=0;
+function flashMood(m,ms=1100){ setMood(m); moodHold=Date.now()+ms; }
+function refreshMood(){ if(Date.now()>moodHold) setMood(computeMood()); }
+
+function say(txt,angry){
+  const sp=$('speech'); sp.textContent=txt; sp.className='show'+(angry?' angry':'');
+  clearTimeout(say._t); say._t=setTimeout(()=>sp.className=sp.className.replace('show',''),2600);
+}
+function rant(kind){ const arr=RANTS[kind]||RANTS.annoyed; say(rand(arr), kind==='rage'||kind==='angry'); }
+
+function floatNum(text,color,x,y){
+  const f=document.createElement('div');f.className='float';f.textContent=text;f.style.color=color;
+  f.style.left=(x||50)+'%';f.style.top=(y||45)+'%';$('fx').appendChild(f);
+  setTimeout(()=>f.remove(),1100);
+}
+function burstEmoji(emoji,n=6){
+  for(let i=0;i<n;i++){
+    const b=document.createElement('div');b.className='burst';b.textContent=emoji;
+    b.style.left='50%';b.style.top='40%';
+    b.style.setProperty('--dx',(Math.random()*160-80)+'px');
+    b.style.setProperty('--dy',(-Math.random()*120-30)+'px');
+    $('fx').appendChild(b);setTimeout(()=>b.remove(),900);
+  }
+}
+function shake(){ const w=$('charWrap');w.classList.add('shake');setTimeout(()=>w.classList.remove('shake'),420);}
+function redflash(){ const f=$('flashfx');f.classList.remove('on');void f.offsetWidth;f.classList.add('on');}
+
+/* stat change with juice */
+function delta(key,v){
+  if(!v) return;
+  const before={rage:S.rage,sanity:S.sanity,energy:S.energy,cash:S.cash}[key];
+  if(key==='cash') S.cash=Math.max(0,S.cash+v); else S[key]=clamp(S[key]+v);
+  const map={rage:['🔥','var(--rage)','gRage'],sanity:['🧠','var(--sanity)','gSanity'],energy:['⚡','var(--energy)','gEnergy'],cash:['💰','var(--cash)','gCash']};
+  const [ic,col,gid]=map[key];
+  const g=$(gid); g.classList.remove('flash');void g.offsetWidth;g.classList.add('flash');
+  floatNum((v>0?'+':'')+v+'',v>0?'#3ddc84':'#ff6b6b',30+Math.random()*40,38);
+}
+function applyEff(e){ if(!e)return; for(const k in e) delta(k,e[k]); }
+
+/* sky by day progress + night */
+function paintSky(){
+  const t=S.day/S.maxDay;
+  const night=`linear-gradient(180deg,#070b18,#0c1226 55%,#0a0c12)`;
+  const dusk=`linear-gradient(180deg,#2a2140,#3a2330 50%,#120e16)`;
+  const day=`linear-gradient(180deg,#26405e,#33506e 50%,#101620)`;
+  $('sky').style.background = t>0.75?night : t>0.45?dusk : day;
+  $('moon').style.opacity = t>0.45?1:0.15;
 }
 
-function renderStats(){
+function renderHUD(){
   $('day').textContent=S.day;
   $('vRage').textContent=Math.round(S.rage);
   $('vSanity').textContent=Math.round(S.sanity);
   $('vEnergy').textContent=Math.round(S.energy);
-  $('vCash').textContent=Math.round(S.cash);
+  $('vCash').textContent=S.cash>=1000?(S.cash/1000).toFixed(1)+'k':Math.round(S.cash);
   $('bRage').style.width=clamp(S.rage)+'%';
   $('bSanity').style.width=clamp(S.sanity)+'%';
   $('bEnergy').style.width=clamp(S.energy)+'%';
   $('bCash').style.width=clamp(S.cash/30)+'%';
-  $('app').classList.toggle('rage-mode', S.rageMode);
+  // cups
+  const c=$('cups'); c.innerHTML='';
+  for(let i=0;i<Math.min(5,S.cupCount);i++){const s=document.createElement('span');s.className='cup';s.textContent=i%2?'🥤':'☕';c.appendChild(s);}
+  paintSky();
 }
 
-function logHTML(){
-  return `<div class="log">${S.log.join('<br>')||'……新的一天开始了。'}</div>`;
-}
-
-/* ---------- 阶段渲染 ---------- */
+/* ---------- PHASES ---------- */
 function render(){
-  renderStats();
-  const m=$('main');
-  const tags=['📰 早报','💪 打鸡血','⌨️ 干活','🌙 结算'];
-  $('phaseTag').textContent=tags[S.phase];
-
-  // 检查暴躁狂暴
   S.rageMode = S.rage>=90;
-
-  if(S.phase===0) m.innerHTML=viewNews();
-  else if(S.phase===1) m.innerHTML=viewBuff();
-  else if(S.phase===2) m.innerHTML=viewWork();
-  else if(S.phase===3) m.innerHTML=viewSettle();
+  renderHUD(); refreshMood();
+  if(S.phase===0) viewNews();
+  else if(S.phase===1) viewBuff();
+  else if(S.phase===2) viewWork();
+  else if(S.phase===3) viewSettle();
 }
 
-/* 阶段0：新闻 */
+let todayNews=null;
 function viewNews(){
-  if(!S.todayNews) S.todayNews=rand(NEWS);
-  const n=S.todayNews;
-  const effChips=Object.entries(n.eff||{}).map(([k,v])=>{
-    const map={rage:'暴躁',sanity:'心态',energy:'精力',cash:'恰饭'};
-    return `<span class="chip ${v>0?'up':'down'}">${map[k]} ${v>0?'+':''}${v}</span>`;
-  }).join('');
-  const banner = S.rageMode?`<div class="banner">⚠️ 暴躁狂暴模式：产出翻倍，但 bug 与事故概率飙升！</div>`:'';
-  return `
-    ${banner}
-    <div class="card">
-      <span class="news-cat" style="background:${n.col}22;color:${n.col};border:1px solid ${n.col}">${n.cat}</span>
-      <h2>📰 今日头条</h2>
-      <div class="news-body">${n.body}</div>
-      <div class="news-eff">${effChips}${n.note?`<span class="chip">🎯 ${n.note}</span>`:''}</div>
-    </div>
-    <button class="btn" onclick="ackNews()">${pickReaction()}</button>
-    ${logHTML()}
-  `;
+  if(!todayNews){ todayNews=rand(NEWS); SFX.news(); }
+  const n=todayNews;
+  const eff=Object.entries(n.eff).map(([k,v])=>{const nm={rage:'暴躁',sanity:'心态',energy:'精力',cash:'恰饭'}[k];return `<span class="chip ${v>0?'up':'down'}">${nm} ${v>0?'+':''}${v}</span>`;}).join('');
+  const banner=S.rageMode?`<div class="chip down" style="display:block;text-align:center;margin-bottom:8px">⚠️ 狂暴模式：产出翻倍，bug 与事故飙升</div>`:'';
+  $('panel').innerHTML=`
+    <div class="phasetag">📰 早报</div>${banner}
+    <div class="sheet">
+      <div class="news">
+        <span class="cat" style="background:${n.col}22;color:${n.col};border:1px solid ${n.col}">${n.cat}</span>
+        <div class="headline">${n.body}</div>
+        <div class="effrow">${eff}${n.note?`<span class="chip">🎯 ${n.note}</span>`:''}</div>
+      </div>
+      <button class="btn" style="margin-top:12px" onclick="ackNews()">${rand(['"就这？我上我也行" 💢','"卧槽……" 破防了','深吸一口气','键政结束，干活！'])}</button>
+    </div>`;
 }
-function pickReaction(){
-  return rand(['"就这？我上我也行" →','"卧槽……" 破防了 →','深吸一口气 →','"键政时间结束，干活" →']);
-}
-function ackNews(){
-  applyEff(S.todayNews.eff);
-  log(`📰 [${S.todayNews.cat}] ${S.todayNews.body}`,'hl');
+window.ackNews=function(){
+  SFX.tap(); applyEff(todayNews.eff);
+  const ragey = (todayNews.eff.rage||0)>0;
+  if(ragey){ shake(); flashMood('angry'); rant(S.rage>80?'rage':'angry'); burstEmoji('💢',4); }
+  else { flashMood('focus'); }
   S.phase=1; render();
-}
+};
 
-/* 阶段1：鸡血 */
 function viewBuff(){
-  const opts=BUFFS.map((b,i)=>`
-    <button class="opt" onclick="pickBuff(${i})">
-      <div class="t">${b.nm}</div>
-      <div class="d">${b.d}</div>
-    </button>`).join('');
-  return `
-    <div class="card">
-      <h2>💪 今天靠什么续命？</h2>
-      <div class="sub">选一个鸡血来源，副作用自负。</div>
-      <div class="opts">${opts}</div>
-    </div>
-    ${logHTML()}
-  `;
+  const opts=BUFFS.map((b,i)=>`<button class="opt" onclick="pickBuff(${i})">
+     <span class="ico">${b.ic}</span><span><span class="t">${b.nm}</span><div class="d">${b.d}</div></span></button>`).join('');
+  $('panel').innerHTML=`<div class="phasetag">💪 打鸡血</div>
+    <div class="sheet"><h2>今天靠什么续命？</h2><div class="sub">选一个，副作用自负。</div>
+    <div class="opts">${opts}</div></div>`;
 }
-function pickBuff(i){
-  const b=BUFFS[i];
-  b.apply(S);
-  S.rage=clamp(S.rage); S.sanity=clamp(S.sanity); S.energy=clamp(S.energy);
-  log(`💪 打鸡血：${b.nm}`);
+window.pickBuff=function(i){
+  const b=BUFFS[i]; b.f(S);
+  S.rage=clamp(S.rage);S.sanity=clamp(S.sanity);S.energy=clamp(S.energy);
+  if(b.ic==='☕'){S.cupCount++;}
+  SFX.good(); burstEmoji(b.ic,5); flashMood(b.ic==='🧘'?'calm':'focus');
+  say('"'+b.nm+'，整！"');
   S.phase=2; render();
-}
+};
 
-/* 阶段2：干活 + 和 agent 较劲 */
 function viewWork(){
-  const agents=S.agents.map(a=>`
-    <div class="agent-row">
-      <div class="face">${a.face}</div>
-      <div class="meta">
-        <div class="nm">${a.nm}</div>
-        <div class="ds">${a.ds} · 战力${a.power}</div>
-        <div class="temper"><i style="width:${a.temper}%"></i></div>
-      </div>
-    </div>`).join('');
-  const proj=S.proj;
-  const actions = S.agents.map(a=>`
-    <button class="opt" onclick="assign('${a.id}')">
-      <div class="t">派活给 ${a.face} ${a.nm} <span class="cost">-15 精力</span></div>
-      <div class="d">交活后你来 review；脾气越高越容易摆烂/幻觉</div>
-    </button>`).join('');
-  return `
-    <div class="card">
-      <h2>👥 你的 Agent 团队</h2>
-      <div class="sub">和它们较劲，看谁先崩。</div>
-      ${agents}
+  const p=S.proj;
+  const ags=S.agents.map(a=>`<button class="opt" onclick="assign('${a.id}')">
+    <span class="ico">${a.face}</span><span><span class="t">${a.nm}</span><div class="d">${a.ds} · 战力${a.power} · 脾气${a.temper}</div></span>
+    <span class="tag">-15⚡</span></button>`).join('');
+  $('panel').innerHTML=`<div class="phasetag">⌨️ 干活</div>
+    <div class="sheet" style="margin-bottom:10px">
+      <h2>${p.nm} · ${Math.round(p.done)}%</h2>
+      <div class="track" style="height:9px;background:#000;border-radius:9px;overflow:hidden;margin:6px 0 8px"><i style="display:block;height:100%;width:${clamp(p.done)}%;background:linear-gradient(90deg,var(--accent),var(--cash));transition:width .4s"></i></div>
+      <div class="effrow"><span class="chip">🐛 bug ${p.bugs}</span><span class="chip">👤 用户 ${p.users}</span><span class="chip">🧱 债 ${p.debt}</span></div>
     </div>
-    <div class="card">
-      <div class="proj">
-        <div class="pn">${proj.nm} <span>${Math.round(proj.done)}%</span></div>
-        <div class="prog"><i style="width:${clamp(proj.done)}%"></i></div>
-        <div class="meta">🐛 bug ${proj.bugs} · 👤 用户 ${proj.users} · 🧱 技术债 ${proj.debt}</div>
-      </div>
-    </div>
-    <div class="card">
-      <h2>⌨️ 今天怎么干？</h2>
-      <div class="opts">
-        ${actions}
-        <button class="opt" onclick="selfCode()">
-          <div class="t">🙋 自己硬写 <span class="cost">-25 精力</span></div>
-          <div class="d">不靠 agent，产出看暴躁值，但很累</div>
-        </button>
-        <button class="opt" onclick="endDay()">
-          <div class="t">😮‍💨 今天摸了，直接收工</div>
-          <div class="d">保存精力，但啥也没干</div>
-        </button>
-      </div>
-    </div>
-    ${logHTML()}
-  `;
+    <div class="sheet"><h2>派活 / 自己上</h2><div class="sub">和 agent 较劲，看谁先崩。</div>
+    <div class="opts">${ags}
+      <button class="opt" onclick="selfCode()"><span class="ico">🙋</span><span><span class="t">自己硬写</span><div class="d">产出看暴躁值，但很累</div></span><span class="tag">-25⚡</span></button>
+      <button class="opt" onclick="endDay()"><span class="ico">😮‍💨</span><span><span class="t">今天摸了，收工</span><div class="d">省精力，但啥也没干</div></span></button>
+    </div></div>`;
 }
 
-function assign(id){
-  if(S.energy<15){ log('⚡ 精力不够派活了…','r'); render(); return; }
-  S.energy=clamp(S.energy-15);
+window.assign=function(id){
+  if(S.energy<15){ say('"精力不够了…"',true); SFX.bad(); return; }
+  delta('energy',-15); S.cupCount++; SFX.tap();
   const a=S.agents.find(x=>x.id===id);
-  // agent 产出 = 战力 受脾气与暴躁影响
-  let out=a.power*(0.8+Math.random()*0.6);
-  const halluHit=Math.random() < (a.hallu + a.temper/300);
-  // 进入 review 对线
-  showReview(a, out, halluHit);
-}
+  const out=a.power*(0.8+Math.random()*0.6);
+  const hallu=Math.random()<(a.hallu+a.temper/300);
+  showReview(a,out,hallu);
+};
 
-function showReview(a,out,halluHit){
-  const m=$('main');
-  const issue = halluHit ? `它似乎<strong style="color:var(--rage)">一本正经地幻觉</strong>了一段不存在的 API…`
-                         : `代码看起来还行，但你总觉得哪里不对劲。`;
-  m.innerHTML=`
-    <div class="card">
-      <h2>🔍 Review ${a.face} ${a.nm} 的产出</h2>
-      <div class="sub">${issue}</div>
-      <div class="opts">
-        <button class="opt" onclick="reviewChoice('trust',${out},${halluHit},'${a.id}')">
-          <div class="t">✅ 直接信它</div><div class="d">快，但幻觉会变成线上 bug</div>
-        </button>
-        <button class="opt" onclick="reviewChoice('audit',${out},${halluHit},'${a.id}')">
-          <div class="t">🔎 仔细审 <span class="cost">-8 精力</span></div><div class="d">揪出 bug，但揪太多会破防(心态-)</div>
-        </button>
-        <button class="opt" onclick="reviewChoice('fight',${out},${halluHit},'${a.id}')">
-          <div class="t">🗣️ 开喷·逼它返工</div><div class="d">暴躁↑；赢→神级代码，输→它摆烂</div>
-        </button>
+function showReview(a,out,hallu){
+  const issue = hallu
+    ? {who:`它<b style="color:#ff8a8a">一本正经地幻觉</b>了一段不存在的 API…`, ag:'"放心老板，这个 SuperFastAPI 绝对存在！"'}
+    : {who:`代码看着还行，但你总觉得哪里不对劲。`, ag:'"按你需求做完了，要不直接合？"'};
+  $('panel').innerHTML=`<div class="phasetag">🔍 Review · 较劲</div>
+    <div class="sheet">
+      <div class="chat">
+        <div class="bub ag"><div class="who"><span class="agavatar">${a.face}</span>${a.nm}</div>${issue.ag}</div>
       </div>
-    </div>
-    ${logHTML()}
-  `;
+      <div class="sub">${issue.who}</div>
+      <div class="opts">
+        <button class="opt" onclick="rev('trust',${out},${hallu},'${a.id}')"><span class="ico">✅</span><span><span class="t">直接信它</span><div class="d">快，但幻觉变线上 bug</div></span></button>
+        <button class="opt" onclick="rev('audit',${out},${hallu},'${a.id}')"><span class="ico">🔎</span><span><span class="t">仔细审</span><div class="d">揪 bug，但揪太多会破防</div></span><span class="tag">-8⚡</span></button>
+        <button class="opt" onclick="rev('fight',${out},${hallu},'${a.id}')"><span class="ico">🗣️</span><span><span class="t">开喷·逼返工</span><div class="d">暴躁↑；赢→神级代码，输→它摆烂</div></span></button>
+      </div>
+    </div>`;
 }
 
-function reviewChoice(mode,out,halluHit,aid){
+window.rev=function(mode,out,hallu,aid){
   const a=S.agents.find(x=>x.id===aid);
-  let gained=out, bugs=0, msg='';
-  const mult = S.rageMode?2:1;
+  const mult=S.rageMode?2:1; let gained=out,bugs=0,agLine='',meLine='',kind='good';
 
   if(mode==='trust'){
     gained=out*mult;
-    if(halluHit){ bugs=2; S.proj.debt++; msg=`✅ 直接合并… 幻觉代码已上线，<span class="r">埋了 2 个雷</span>。`; }
-    else msg=`✅ 直接信，推进 +${gained.toFixed(0)}%。`;
-  }
-  else if(mode==='audit'){
-    S.energy=clamp(S.energy-8);
-    gained=out*0.9*mult;
-    if(halluHit){ bugs=0; S.sanity=clamp(S.sanity-8); msg=`🔎 揪出了幻觉 bug，破防 -8 心态，但没埋雷。`; }
-    else msg=`🔎 仔细审过，干净推进 +${gained.toFixed(0)}%。`;
-  }
-  else { // fight 对线
-    S.rage=clamp(S.rage+12);
-    a.temper=clamp(a.temper+25);
-    const win = (S.rage + Math.random()*40) > (a.temper + 50);
-    if(win){ gained=out*1.6*mult; msg=`🗣️ 你赢了对线！它服软交出<span class="g">神级代码</span> +${gained.toFixed(0)}%。`; }
-    else { gained=0; S.sanity=clamp(S.sanity-10);
-      if(Math.random()<0.2){ S.proj.done=Math.max(0,S.proj.done-10); msg=`🗣️ 它"已读乱改"，<span class="r">把进度删了 10%</span>！`; }
-      else msg=`🗣️ 对线失败，它开始摆烂，今天白干，心态-10。`;
+    if(hallu){bugs=2;S.proj.debt++;meLine='"行，合了！"';agLine='"已合并 ✅"（埋了俩雷）';kind='bad';}
+    else {meLine='"过。"';agLine='"安排！"';}
+  } else if(mode==='audit'){
+    delta('energy',-8); gained=out*0.9*mult;
+    if(hallu){delta('sanity',-8);meLine='"这 API 根本不存在！"';agLine='"啊这…我重写下😅"';kind='bad';}
+    else {meLine='"还行，干净。"';agLine='"👌"';}
+  } else { // fight
+    delta('rage',12); a.temper=clamp(a.temper+25);
+    const win=(S.rage+Math.random()*40)>(a.temper+50);
+    if(win){gained=out*1.6*mult;meLine='"重写！现在！"';agLine='"…好的老板您说得对 🫡"（交出神级代码）';kind='good';}
+    else{
+      gained=0; delta('sanity',-10);
+      if(Math.random()<0.2){S.proj.done=Math.max(0,S.proj.done-10);meLine='"你给我把这删了！"';agLine='"已读乱改，进度-10% 🙃"';}
+      else{meLine='"你听不懂人话是吧？"';agLine='"建议您先休息一下。"（开始摆烂）';}
+      kind='bad';
     }
   }
-  S.proj.done=clamp(S.proj.done+gained,0,100);
-  S.proj.bugs+=bugs;
-  log(msg, mode==='fight'?'hl':'');
-  S.phase=3; render();
-}
+  S.proj.done=clamp(S.proj.done+gained,0,100); S.proj.bugs+=bugs;
 
-function selfCode(){
-  if(S.energy<25){ log('⚡ 太累了，自己写不动…','r'); render(); return; }
-  S.energy=clamp(S.energy-25);
-  const moody = S.buffs.includes('摆烂')?0.5:1;
-  let out=(6 + S.rage*0.12)*moody*(S.rageMode?2:1);
-  let bugs=0;
-  if(S.buffs.includes('手抖') && Math.random()<0.5){ bugs=1; }
-  if(S.rageMode && Math.random()<0.4){ bugs+=2; }
-  S.proj.done=clamp(S.proj.done+out,0,100);
-  S.proj.bugs+=bugs;
-  log(`🙋 自己硬写 +${out.toFixed(0)}%${bugs?` 但手抖出 ${bugs} 个 bug`:''}。`, bugs?'r':'g');
-  S.phase=3; render();
-}
+  // juice
+  if(kind==='good'){SFX.good();burstEmoji('✨',5);flashMood(mode==='fight'?'happy':'focus');}
+  else{SFX.bad();shake();redflash();flashMood('angry');burstEmoji('💢',5);}
+  if(gained>0) floatNum('+'+gained.toFixed(0)+'%','#3ddc84',50,46);
 
-/* 阶段3：结算 + 夜间随机事件 */
-function viewSettle(){
-  return `
-    <div class="card">
-      <h2>🌙 一天结束</h2>
-      <div class="sub">深夜了，结算今天的收成。</div>
-      <button class="btn" onclick="endDay()">睡了（进入下一天）</button>
+  // show chat result briefly then settle
+  $('panel').innerHTML=`<div class="phasetag">🔍 Review · 较劲</div>
+    <div class="sheet"><div class="chat">
+      <div class="bub me"><div class="who">暴躁老哥 🔥</div>${meLine}</div>
+      <div class="bub ag"><div class="who"><span class="agavatar">${a.face}</span>${a.nm}</div>${agLine}</div>
     </div>
-    ${logHTML()}
-  `;
+    <button class="btn" onclick="afterReview()">${rand(['继续','下一步','哼'])}</button></div>`;
+  say(meLine.replace(/"/g,''), kind==='bad');
+};
+window.afterReview=function(){SFX.tap();S.phase=3;render();};
+
+window.selfCode=function(){
+  if(S.energy<25){say('"太累了，写不动…"',true);SFX.bad();return;}
+  delta('energy',-25);S.cupCount++;SFX.tap();
+  const moody=S.buffs.includes('摆烂')?0.5:1;
+  let out=(6+S.rage*0.12)*moody*(S.rageMode?2:1),bugs=0;
+  if(S.buffs.includes('手抖')&&Math.random()<0.5)bugs=1;
+  if(S.rageMode&&Math.random()<0.4)bugs+=2;
+  S.proj.done=clamp(S.proj.done+out,0,100);S.proj.bugs+=bugs;
+  floatNum('+'+out.toFixed(0)+'%','#3ddc84',50,46);
+  if(bugs){SFX.bad();shake();floatNum('🐛x'+bugs,'#ff6b6b',62,52);flashMood('angry');}
+  else{SFX.good();flashMood('focus');}
+  say(S.rageMode?'"键盘冒烟了！"':'"自己来还快点。"');
+  S.phase=3;render();
+};
+
+function viewSettle(){
+  $('panel').innerHTML=`<div class="phasetag">🌙 结算</div>
+    <div class="sheet"><h2>一天结束</h2><div class="sub">深夜了，结算今天的收成。</div>
+    <button class="btn" onclick="endDay()">😴 睡了（下一天）</button></div>`;
 }
 
-function endDay(){
-  if(S.phase<3){ // 直接摸鱼收工
-    log('😮‍💨 今天摸了，啥也没干。');
-  }
-  // 暴躁持续侵蚀心态
-  S.sanity=clamp(S.sanity - S.rage*0.04);
-  // bug 转化为用户流失 / 收入
-  const income = Math.round(S.proj.done*1.5 + S.proj.users*0.3 - S.proj.bugs*8);
-  S.cash=Math.max(0,S.cash+income);
-  log(`💰 今日恰饭结算：${income>=0?'+':''}${income}`, income>=0?'g':'r');
-  // 用户增长（口碑受 bug 影响）
-  const grow=Math.round(S.proj.done*0.4 - S.proj.bugs*1.2);
-  S.proj.users=Math.max(0,S.proj.users+grow);
+window.endDay=function(){
+  SFX.tap();
+  if(S.phase<3) say('"今天摸了，明天再说。"');
+  // 暴躁侵蚀心态
+  delta('sanity', -Math.round(S.rage*0.04));
+  // 恰饭结算
+  const income=Math.round(S.proj.done*1.5+S.proj.users*0.3-S.proj.bugs*8);
+  delta('cash',income);
+  if(income>=0){SFX.coin();burstEmoji('💰',5);flashMood('happy');say('"恰饭 +'+income+'！"');}
+  else{SFX.bad();flashMood('annoyed');say('"又倒贴 '+income+'…"',true);}
+  // 用户增长
+  S.proj.users=Math.max(0,S.proj.users+Math.round(S.proj.done*0.4-S.proj.bugs*1.2));
+  // 夜间事件
+  const r=Math.random();
+  if(r<0.15){delta('sanity',-15);say('"深夜 emo，怀疑人生…"',true);flashMood('dead');}
+  else if(r<0.30){delta('rage',10);S.proj.done=clamp(S.proj.done+8);say('"灵感爆发！"');burstEmoji('💡',4);}
+  else if(r<0.40&&S.proj.debt>0){S.proj.bugs+=2;say('"技术债爆雷！线上事故！"',true);shake();redflash();}
+  delta('energy',-10+(Math.random()<0.5?10:0));
 
-  // 夜间随机事件
-  const nightRoll=Math.random();
-  if(nightRoll<0.15){ S.sanity=clamp(S.sanity-15); log('🌙 深夜 emo：怀疑人生，心态-15。','r'); }
-  else if(nightRoll<0.30){ S.rage=clamp(S.rage+10); S.proj.done=clamp(S.proj.done+8); log('🌙 灵感爆发！偷偷推进 +8%，但越想越气。','hl'); }
-  else if(nightRoll<0.40 && S.proj.debt>0){ S.proj.bugs+=2; log('🌙 技术债爆雷：线上事故，bug+2！','r'); }
-
-  // 精力自然消耗 + 小恢复
-  S.energy=clamp(S.energy-10+ (Math.random()<0.5?10:0));
-
-  // 推进天数
-  S.day++;
-  S.phase=0;
-  S.todayNews=null;
-  S.buffs=[];
-
-  // 结束判定
-  const over=checkEnd();
-  if(over) return;
-  render();
-}
+  S.day++;S.phase=0;todayNews=null;S.buffs=[];S.cupCount=Math.max(0,S.cupCount-3);
+  if(checkEnd())return;
+  setTimeout(render,650);
+};
 
 function checkEnd(){
-  if(S.cash<=0){ showEnd('💸','破产收场','钱烧光了，老哥含泪进厂打工。',false); return true; }
-  if(S.sanity<=0){ showEnd('🫠','彻底 Burnout','心态崩了，删库归隐，转行开麻辣烫。',false); return true; }
-  if(S.proj.done>=100){ showEnd('🚀','项目爆火被收购！','你做出来了！大厂捧着钱来收购，财务自由！',true); return true; }
-  if(S.day>S.maxDay){
-    if(S.cash>=2000) showEnd('🎉','稳健恰饭','撑过了 30 天还没饿死，独立开发算是站稳了。',true);
-    else showEnd('😮‍💨','勉强活着','30 天到了，没爆富也没饿死，明天继续。',true);
-    return true;
-  }
+  if(S.cash<=0)   return end('💸','破产收场','钱烧光了，老哥含泪进厂打工。');
+  if(S.sanity<=0) return end('🫠','彻底 Burnout','心态崩了，删库归隐，转行开麻辣烫。');
+  if(S.proj.done>=100) return end('🚀','项目爆火被收购！','你做出来了！大厂捧着钱来收购，财务自由！',1);
+  if(S.day>S.maxDay) return S.cash>=2000
+      ? end('🎉','稳健恰饭','撑过 30 天还没饿死，独立开发站稳了。',1)
+      : end('😮‍💨','勉强活着','30 天到了，没爆富也没饿死，明天继续。',1);
   return false;
 }
-
-function showEnd(em,title,desc,good){
-  $('main').innerHTML=`
-    <div class="end">
-      <div class="em">${em}</div>
-      <h1>${title}</h1>
-      <p>${desc}</p>
-      <p style="margin-top:14px;color:var(--dim);font-size:13px">
-        撑了 ${S.day-1} 天 · 项目 ${Math.round(S.proj.done)}% · 用户 ${S.proj.users} · 余额 ${Math.round(S.cash)}
-      </p>
-      <button class="btn" style="margin-top:20px" onclick="location.reload()">🔁 再来一局</button>
-    </div>`;
-  $('phaseTag').textContent='结束';
+function end(em,title,desc,good){
+  good?SFX.coin():SFX.rage();
+  setMood(good?'happy':'dead'); moodHold=1e15;
+  $('panel').innerHTML=`<div class="end"><div class="em">${em}</div><h1>${title}</h1>
+    <p>${desc}</p>
+    <p style="margin-top:12px;font-size:12px">撑了 ${S.day-1} 天 · 项目 ${Math.round(S.proj.done)}% · 用户 ${S.proj.users} · 余额 ${Math.round(S.cash)}</p>
+    <button class="btn" style="margin-top:18px" onclick="location.reload()">🔁 再来一局</button></div>`;
+  if(good) burstEmoji('🎉',10);
+  return true;
 }
 
-/* ---------- 启动 ---------- */
+/* ---------- BOOT ---------- */
+$('code').textContent=CODE;
+// 闲置时角色偶尔吐槽
+setInterval(()=>{ if(Date.now()>moodHold && Math.random()<0.25){ rant(computeMood()); } }, 7000);
+// 首次点击解锁音频
+document.body.addEventListener('pointerdown',()=>ac(),{once:true});
 render();
+say('"新的一天……又是被新闻气到的一天。"');
 </script>
 </body>
 </html>
