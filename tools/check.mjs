@@ -58,7 +58,13 @@ for (const f of files) {
   if (/export\s+default/.test(src)) names.add('default');
   exportsOf.set(f, names);
 
-  if (/\bfetch\s*\(|XMLHttpRequest|https?:\/\/(?!localhost|127\.)/.test(src.replace(/^\s*\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, ''))) {
+  // Loading our OWN assets over a relative path is fine — that is how the
+  // Blender-built GLBs and their manifest get in. What must never appear is an
+  // absolute URL to somewhere else, or a raw XHR.
+  const code = src.replace(/^\s*\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  const absoluteFetch = /\bfetch\s*\(\s*[`'"]?\s*(https?:)?\/\//.test(code);
+  const externalUrl = /['"`]https?:\/\/(?!localhost|127\.0\.0\.1)/.test(code);
+  if (absoluteFetch || externalUrl || /XMLHttpRequest/.test(code)) {
     problems.push(`NETWORK ${rel}  reaches the network or embeds an external URL`);
   }
 }
