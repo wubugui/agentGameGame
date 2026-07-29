@@ -1,33 +1,54 @@
-# 暴躁老哥 Vibe Coding 模拟器（原型）
+# 热血传奇 · Legend of Mir — Three.js Edition
 
-模拟一个暴躁老哥用 vibe coding、指挥一堆不太听话的 AI agent 做应用恰饭。
-每天被新闻刺激、靠打鸡血硬撑、跟 agent 较劲——看谁先崩。
+A 3D homage to *热血传奇* (Legend of Mir 2, 1.76-era), built with Three.js.
+No build step, no bundler, no runtime downloads: open `index.html` and play.
 
-## 玩法
+Every texture, mesh, animation, and sound is **generated procedurally in JS** —
+there is not a single image or audio file in this repository. The homage is to
+the game's silhouette, palette, UI language, and content design; none of the
+original art is reproduced.
 
-每天 = 一回合，四个阶段：
+## Playing
 
-1. **📰 早报**：抽一条新闻（融资 / 模型 / 风口 / 黑天鹅 / 舆论 / 生活 / 玄学），刺激你的情绪。
-2. **💪 打鸡血**：选一个续命方式（咖啡 / 歌单 / 看竞品 / 冥想 / 泡面），各有副作用。
-3. **⌨️ 干活**：派活给 agent → Review 对线（直接信 / 仔细审 / 开喷逼返工），或自己硬写。
-4. **🌙 结算**：算钱、涨用户、夜间随机事件。
+```
+python3 -m http.server 8080   # or any static file server
+open http://localhost:8080
+```
 
-### 四条核心数值
+| control | action |
+|---|---|
+| left click | move / attack / talk |
+| right click held (or Shift) | run |
+| `F1`–`F8` / `1`–`8` | skills |
+| `Space` / `Z` | drink healing potion |
+| `X` | drink mana potion |
+| `E` / `G` | pick up loot, interact |
+| `T` | toggle auto-pickup |
+| `I` `C` `K` `M` | bag / character / skills / map |
+| wheel | zoom |
+| `+` `-` | quality tier |
+| `[` `]` | scrub time of day |
 
-| 🔥 暴躁 | 🧠 心态 | ⚡ 精力 | 💰 恰饭 |
-|---|---|---|---|
-| 火力，越高产出越猛但持续掉心态 | 理智，归零 burnout | 体力，干活消耗 | 钱，归零破产 |
+`?q=ultra` / `?map=zuma` in the URL override quality and starting map.
 
-- 暴躁 ≥ 90 触发 **狂暴模式**：产出翻倍，但 bug 与事故概率飙升。
-- 终局：项目做到 100% 被收购 / 撑过 30 天恰饭 / 破产 / burnout。
+## Layout
 
-## 本地运行
+```
+index.html          shell, import map, boot screen
+styles/ui.css       Mir2-style HUD skin
+docs/CONTRACTS.md   normative module interfaces
+src/core/           engine, input, event bus, RNG
+src/gfx/            procedural textures, materials, sky, weather, VFX, post
+src/world/          maps, terrain, props, navigation
+src/entities/       character rigs, animation, bestiary, AI
+src/game/           combat, inventory, content tables, orchestration
+src/ui/             HUD
+src/audio/          WebAudio synthesis
+vendor/three/       Three.js r185 (MIT)
+```
 
-直接用浏览器打开 `index.html` 即可，纯单文件、无需联网或构建。
+## Credits
 
-## 在线试玩
-
-推送后由 GitHub Actions 自动部署到 GitHub Pages。
-首次需在仓库 **Settings → Pages → Build and deployment → Source** 选 **GitHub Actions**。
-
-> 原型 v0.1，数值与玩法都还在毛坯阶段，欢迎乱拍。
+Three.js © the Three.js authors, MIT.
+*Legend of Mir 2* is a trademark of its respective owners; this project is an
+unaffiliated fan homage and contains none of its assets.
