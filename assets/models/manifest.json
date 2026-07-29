@@ -1,0 +1,321 @@
+{
+  "generated": "tools/blender/build.py",
+  "count": 39,
+  "totalTris": 96698,
+  "totalBytes": 6649508,
+  "overBudget": [],
+  "assets": {
+    "wpn_wooden_sword": {
+      "name": "wpn_wooden_sword",
+      "category": "weapon",
+      "tris": 550,
+      "budget": 1200,
+      "overBudget": false,
+      "bytes": 29212
+    },
+    "wpn_bronze_sword": {
+      "name": "wpn_bronze_sword",
+      "category": "weapon",
+      "tris": 548,
+      "budget": 1200,
+      "overBudget": false,
+      "bytes": 26192
+    },
+    "wpn_iron_sword": {
+      "name": "wpn_iron_sword",
+      "category": "weapon",
+      "tris": 560,
+      "budget": 1200,
+      "overBudget": false,
+      "bytes": 26572
+    },
+    "wpn_ebony_sword": {
+      "name": "wpn_ebony_sword",
+      "category": "weapon",
+      "tris": 472,
+      "budget": 1200,
+      "overBudget": false,
+      "bytes": 33172
+    },
+    "wpn_bluesky": {
+      "name": "wpn_bluesky",
+      "category": "weapon",
+      "tris": 928,
+      "budget": 1200,
+      "overBudget": false,
+      "bytes": 41788
+    },
+    "wpn_dagger": {
+      "name": "wpn_dagger",
+      "category": "weapon",
+      "tris": 488,
+      "budget": 1200,
+      "overBudget": false,
+      "bytes": 23256
+    },
+    "wpn_crescent": {
+      "name": "wpn_crescent",
+      "category": "weapon",
+      "tris": 828,
+      "budget": 1200,
+      "overBudget": false,
+      "bytes": 46508
+    },
+    "wpn_dragon_sword": {
+      "name": "wpn_dragon_sword",
+      "category": "weapon",
+      "tris": 844,
+      "budget": 1200,
+      "overBudget": false,
+      "bytes": 39812
+    },
+    "wpn_bloodlust": {
+      "name": "wpn_bloodlust",
+      "category": "weapon",
+      "tris": 628,
+      "budget": 1200,
+      "overBudget": false,
+      "bytes": 33572
+    },
+    "wpn_asura": {
+      "name": "wpn_asura",
+      "category": "weapon",
+      "tris": 674,
+      "budget": 1200,
+      "overBudget": false,
+      "bytes": 35340
+    },
+    "wpn_serpent": {
+      "name": "wpn_serpent",
+      "category": "weapon",
+      "tris": 594,
+      "budget": 1200,
+      "overBudget": false,
+      "bytes": 32248
+    },
+    "wpn_dragonslayer": {
+      "name": "wpn_dragonslayer",
+      "category": "weapon",
+      "tris": 1188,
+      "budget": 1200,
+      "overBudget": false,
+      "bytes": 63012
+    },
+    "wpn_bone_staff": {
+      "name": "wpn_bone_staff",
+      "category": "weapon",
+      "tris": 978,
+      "budget": 1200,
+      "overBudget": false,
+      "bytes": 46712
+    },
+    "wpn_dragon_tooth": {
+      "name": "wpn_dragon_tooth",
+      "category": "weapon",
+      "tris": 846,
+      "budget": 1200,
+      "overBudget": false,
+      "bytes": 35512
+    },
+    "wpn_soul_staff": {
+      "name": "wpn_soul_staff",
+      "category": "weapon",
+      "tris": 1042,
+      "budget": 1200,
+      "overBudget": false,
+      "bytes": 54044
+    },
+    "wpn_judgement": {
+      "name": "wpn_judgement",
+      "category": "weapon",
+      "tris": 1198,
+      "budget": 1200,
+      "overBudget": false,
+      "bytes": 61652
+    },
+    "wpn_axe": {
+      "name": "wpn_axe",
+      "category": "weapon",
+      "tris": 726,
+      "budget": 1200,
+      "overBudget": false,
+      "bytes": 38112
+    },
+    "wpn_spear": {
+      "name": "wpn_spear",
+      "category": "weapon",
+      "tris": 726,
+      "budget": 1200,
+      "overBudget": false,
+      "bytes": 37300
+    },
+    "wpn_bow": {
+      "name": "wpn_bow",
+      "category": "weapon",
+      "tris": 470,
+      "budget": 1200,
+      "overBudget": false,
+      "bytes": 25056
+    },
+    "wpn_wooden_staff": {
+      "name": "wpn_wooden_staff",
+      "category": "weapon",
+      "tris": 546,
+      "budget": 1200,
+      "overBudget": false,
+      "bytes": 22072
+    },
+    "wpn_shield_wood": {
+      "name": "wpn_shield_wood",
+      "category": "weapon",
+      "tris": 926,
+      "budget": 1200,
+      "overBudget": false,
+      "bytes": 63320
+    },
+    "wpn_shield_iron": {
+      "name": "wpn_shield_iron",
+      "category": "weapon",
+      "tris": 1130,
+      "budget": 1200,
+      "overBudget": false,
+      "bytes": 65340
+    },
+    "char_warrior_m": {
+      "name": "char_warrior_m",
+      "category": "character",
+      "tris": 4906,
+      "budget": 6000,
+      "overBudget": false,
+      "bytes": 420508
+    },
+    "char_warrior_f": {
+      "name": "char_warrior_f",
+      "category": "character",
+      "tris": 4632,
+      "budget": 6000,
+      "overBudget": false,
+      "bytes": 397268
+    },
+    "char_mage_m": {
+      "name": "char_mage_m",
+      "category": "character",
+      "tris": 4770,
+      "budget": 6000,
+      "overBudget": false,
+      "bytes": 313072
+    },
+    "char_mage_f": {
+      "name": "char_mage_f",
+      "category": "character",
+      "tris": 4778,
+      "budget": 6000,
+      "overBudget": false,
+      "bytes": 312224
+    },
+    "char_taoist_m": {
+      "name": "char_taoist_m",
+      "category": "character",
+      "tris": 4638,
+      "budget": 6000,
+      "overBudget": false,
+      "bytes": 318220
+    },
+    "char_taoist_f": {
+      "name": "char_taoist_f",
+      "category": "character",
+      "tris": 4526,
+      "budget": 6000,
+      "overBudget": false,
+      "bytes": 312444
+    },
+    "npc_blacksmith": {
+      "name": "npc_blacksmith",
+      "category": "character",
+      "tris": 4198,
+      "budget": 6000,
+      "overBudget": false,
+      "bytes": 294152
+    },
+    "npc_apothecary": {
+      "name": "npc_apothecary",
+      "category": "character",
+      "tris": 4436,
+      "budget": 6000,
+      "overBudget": false,
+      "bytes": 294312
+    },
+    "npc_general_store": {
+      "name": "npc_general_store",
+      "category": "character",
+      "tris": 4662,
+      "budget": 6000,
+      "overBudget": false,
+      "bytes": 323452
+    },
+    "npc_tailor": {
+      "name": "npc_tailor",
+      "category": "character",
+      "tris": 4850,
+      "budget": 6000,
+      "overBudget": false,
+      "bytes": 325360
+    },
+    "npc_storage": {
+      "name": "npc_storage",
+      "category": "character",
+      "tris": 4404,
+      "budget": 6000,
+      "overBudget": false,
+      "bytes": 312704
+    },
+    "npc_guard": {
+      "name": "npc_guard",
+      "category": "character",
+      "tris": 5244,
+      "budget": 6000,
+      "overBudget": false,
+      "bytes": 448116
+    },
+    "npc_master_warrior": {
+      "name": "npc_master_warrior",
+      "category": "character",
+      "tris": 5468,
+      "budget": 6000,
+      "overBudget": false,
+      "bytes": 452680
+    },
+    "npc_master_mage": {
+      "name": "npc_master_mage",
+      "category": "character",
+      "tris": 5132,
+      "budget": 6000,
+      "overBudget": false,
+      "bytes": 340488
+    },
+    "npc_master_taoist": {
+      "name": "npc_master_taoist",
+      "category": "character",
+      "tris": 4854,
+      "budget": 6000,
+      "overBudget": false,
+      "bytes": 333676
+    },
+    "npc_villager_m": {
+      "name": "npc_villager_m",
+      "category": "character",
+      "tris": 3798,
+      "budget": 6000,
+      "overBudget": false,
+      "bytes": 261692
+    },
+    "npc_villager_f": {
+      "name": "npc_villager_f",
+      "category": "character",
+      "tris": 4512,
+      "budget": 6000,
+      "overBudget": false,
+      "bytes": 309336
+    }
+  }
+}

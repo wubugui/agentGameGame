@@ -89,21 +89,42 @@ def write_manifest():
     """
     A machine-readable index the game loads to know what exists, and the QA
     pass reads to weigh fidelity against cost.
+
+    MERGES with whatever is already on disk, because a partial build
+    (`build.py weapons`) must not erase the entries for assets built by an
+    earlier run. Records for GLBs that no longer exist are pruned, so the
+    manifest stays an honest picture of the directory.
     """
     os.makedirs(OUT_DIR, exist_ok=True)
     path = os.path.abspath(os.path.join(OUT_DIR, "manifest.json"))
-    total = sum(r["tris"] for r in _manifest)
+
+    merged = {}
+    if os.path.exists(path):
+        try:
+            with open(path) as f:
+                merged = json.load(f).get("assets", {})
+        except (ValueError, OSError):
+            merged = {}
+
+    for r in _manifest:
+        merged[r["name"]] = r
+
+    # Drop entries whose GLB has been deleted.
+    merged = {k: v for k, v in merged.items()
+              if os.path.exists(os.path.join(OUT_DIR, f"{k}.glb"))}
+
+    records = list(merged.values())
     payload = {
         "generated": "tools/blender/build.py",
-        "count": len(_manifest),
-        "totalTris": total,
-        "totalBytes": sum(r["bytes"] for r in _manifest),
-        "overBudget": [r["name"] for r in _manifest if r["overBudget"]],
-        "assets": {r["name"]: r for r in _manifest},
+        "count": len(records),
+        "totalTris": sum(r["tris"] for r in records),
+        "totalBytes": sum(r["bytes"] for r in records),
+        "overBudget": [r["name"] for r in records if r.get("overBudget")],
+        "assets": merged,
     }
     with open(path, "w") as f:
         json.dump(payload, f, indent=2, ensure_ascii=False)
-    print(f"\n  manifest: {len(_manifest)} assets, {total} tris, {payload['totalBytes']/1024/1024:.2f} MB")
+    print(f"\n  manifest: {len(records)} assets, {payload['totalTris']} tris, {payload['totalBytes']/1024/1024:.2f} MB")
     if payload["overBudget"]:
         print(f"  over budget: {', '.join(payload['overBudget'])}")
     return payload

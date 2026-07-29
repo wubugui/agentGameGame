@@ -1,3 +1,5 @@
 node_modules/
 shots/
 package-lock.json
+__pycache__/
+*.pyc
