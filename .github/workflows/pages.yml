@@ -3,7 +3,7 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches:
-      - claude/irritable-dev-game-design-n73akt
+      - claude/legend-game-development-dfhp4i
       - main
   workflow_dispatch:
 

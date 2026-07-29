@@ -1,0 +1,12 @@
+{
+  "name": "legend-of-mir-three",
+  "private": true,
+  "type": "module",
+  "description": "热血传奇 Three.js edition — a fully procedural 3D homage",
+  "scripts": {
+    "serve": "python3 -m http.server 8080",
+    "shoot": "node tools/shoot.mjs",
+    "check": "node tools/check.mjs"
+  },
+  "devDependencies": { "playwright": "^1.56.0" }
+}
