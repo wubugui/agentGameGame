@@ -7,7 +7,7 @@
  *
  * Exit code is non-zero if the page threw. Not part of the shipped game.
  */
-import { chromium } from 'playwright';
+import { launch } from './browser.mjs';
 import { createServer } from 'node:http';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { extname, join, resolve } from 'node:path';
@@ -54,9 +54,7 @@ const BASE = `http://127.0.0.1:${server.address().port}`;
 
 await mkdir(OUT, { recursive: true });
 
-const browser = await chromium.launch({
-  args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--disable-gpu-sandbox'],
-});
+const browser = await launch();
 const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
 
 const logs = [];
