@@ -181,7 +181,9 @@ export class Weather {
     for (const k of KINDS) this._goal[k] = (k === kind) ? 1 : 0;
     this._fadeRate = fadeSeconds > 0.01 ? 1 / fadeSeconds : 1000;
     if (fadeSeconds <= 0.01) for (const k of KINDS) this._w[k] = this._goal[k];
-    if (kind === 'storm') this._boltTimer = Math.min(this._boltTimer, 2.5);
+    // A storm should establish itself with one readable flash early in the
+    // transition.  Later strikes keep their natural, irregular cadence.
+    if (kind === 'storm') this._boltTimer = Math.min(this._boltTimer, 1.8);
   }
 
   /* --------------------------------------------------------------- frame */
@@ -217,7 +219,7 @@ export class Weather {
     const sandW = w.sandstorm * it.sandstorm;
     const fogW = w.fog * it.fog;
 
-    const pq = (this.engine.preset && this.engine.preset.particles) || 1;
+    const pq = Math.min(1, (this.engine.preset && this.engine.preset.particles) || 1);
 
     // ---- ambient colour pulled from the fog the sky just wrote ------------
     const fog = this.scene.fog;
@@ -230,17 +232,35 @@ export class Weather {
         const on = rainW > 0.002;
         s.mesh.visible = on;
         if (on) {
-          const gust = 1 + stormW * 2.2;
+          // Two incommensurate waves keep storm rain from reading as a fixed,
+          // vertical screen-space overlay.  The base wind never reverses, but
+          // the crosswind rolls through visibly different gust directions.
+          const gustPulse = 0.55
+            + Math.sin(this._time * 0.52) * 0.30
+            + Math.sin(this._time * 1.31 + 0.7) * 0.15;
+          const crossWind = Math.sin(
+            this._time * 0.24 + Math.sin(this._time * 0.07) * 1.6
+          );
+          const gust = 1 + stormW * (2.25 + gustPulse * 1.4);
           const u = s.u;
           u.uTime.value = this._time;
           u.uCenter.value.copy(this._precip);
-          u.uOpacity.value = clamp(0.22 + 0.40 * rainW, 0, 1) * clamp(rainW * 1.6, 0, 1);
-          u.uSpeed.value = 26 + 16 * stormW;
-          u.uWind.value.set(2.6 * gust, 1.1 * gust);
-          u.uLen.value = 0.55 + 0.55 * rainW + 0.5 * stormW;
-          _c2.copy(_c1).multiplyScalar(1.9).addScalar(0.09);
+          // Keep precipitation subordinate to the world.  The old values made
+          // every drop a bloom-bright white bar and hid the player in storms.
+          u.uOpacity.value = clamp(0.09 + 0.12 * rainW + 0.065 * stormW, 0, 0.28)
+            * clamp(rainW * 1.6, 0, 1);
+          u.uSpeed.value = 24 + 10 * stormW;
+          u.uWind.value.set(
+            2.6 * gust,
+            1.1 * gust + stormW * 2.4 * crossWind
+          );
+          u.uLen.value = 0.36 + 0.22 * rainW + 0.20 * stormW;
+          _c2.copy(_c1).multiplyScalar(1.28).addScalar(0.025);
           u.uColor.value.copy(_c2);
-          s.geo.instanceCount = Math.max(1, Math.floor(s.max * pq * clamp(rainW, 0, 1)));
+          s.geo.instanceCount = Math.min(
+            s.max,
+            Math.max(1, Math.floor(s.max * pq * clamp(rainW, 0, 1)))
+          );
         }
       }
       // splash rings
@@ -251,10 +271,13 @@ export class Weather {
         if (on) {
           sp.u.uTime.value = this._time;
           sp.u.uCenter.value.copy(this._center);
-          sp.u.uOpacity.value = clamp(rainW * 0.9, 0, 1);
-          _c2.copy(_c1).multiplyScalar(1.6).addScalar(0.06);
+          sp.u.uOpacity.value = clamp(rainW * 0.14, 0, 0.17);
+          _c2.copy(_c1).multiplyScalar(1.16).addScalar(0.025);
           sp.u.uColor.value.copy(_c2);
-          sp.geo.instanceCount = Math.max(1, Math.floor(sp.max * pq * clamp(rainW, 0, 1)));
+          sp.geo.instanceCount = Math.min(
+            sp.max,
+            Math.max(1, Math.floor(sp.max * pq * clamp(rainW, 0, 1)))
+          );
         }
       }
     }
@@ -265,15 +288,18 @@ export class Weather {
     this._driveFlakes('ember', emberW, pq, _c1);
     this._driveFlakes('sand', sandW, pq, _c1);
 
-    // ---- haze sheets for sandstorm / thick fog ----------------------------
-    const hazeW = clamp(sandW * 1.0 + fogW * 0.7, 0, 1.2);
+    // ---- haze sheets for sandstorm / thick fog / distant storm rain -------
+    // Storm mist is intentionally a small fraction of the dedicated fog
+    // preset: enough to layer the horizon, never enough to veil the player.
+    const stormMist = stormW * 0.16;
+    const hazeW = clamp(sandW * 1.0 + fogW * 0.7 + stormMist, 0, 1.2);
     if (hazeW > 0.004 || this._sys.haze) {
       const h = hazeW > 0.004 ? this._ensureHaze() : this._sys.haze;
       if (h) {
         const on = hazeW > 0.004;
         h.mesh.visible = on;
         if (on) {
-          const sandMix = sandW / Math.max(1e-4, sandW + fogW * 0.7);
+          const sandMix = sandW / Math.max(1e-4, sandW + fogW * 0.7 + stormMist);
           // keep the sheets at the ambient exposure so they never glow at night
           const lum = _c1.r * 0.3 + _c1.g * 0.59 + _c1.b * 0.11;
           _c2.setHex(0xc8a165).multiplyScalar(clamp(lum * 3.4, 0.04, 1.3));
@@ -281,16 +307,19 @@ export class Weather {
           h.u.uTime.value = this._time;
           h.u.uCenter.value.copy(this._precip);
           h.u.uOpacity.value = clamp(hazeW * 0.5, 0, 0.75);
-          h.u.uSpeed.value = 6 + 17 * sandMix;
+          h.u.uSpeed.value = 6 + 17 * sandMix + stormW * 2.5;
           h.u.uColor.value.copy(_c2);
-          h.geo.instanceCount = Math.max(1, Math.floor(h.max * clamp(hazeW, 0.2, 1)));
+          h.geo.instanceCount = Math.min(
+            h.max,
+            Math.max(1, Math.floor(h.max * clamp(hazeW, 0.2, 1)))
+          );
         }
       }
     }
 
     // ---- fog + wetness ----------------------------------------------------
     this._applyFog(fogW, sandW, rainW, ashW, stormW);
-    this._updateWetness(rainW, d);
+    this._updateWetness(rainW, stormW, d);
 
     // ---- lightning --------------------------------------------------------
     this._updateLightning(d, stormW);
@@ -329,9 +358,11 @@ export class Weather {
 
   /* ------------------------------------------------------------- wetness */
 
-  _updateWetness(rainW, dt) {
-    const goal = clamp(rainW * 0.92, 0, 1);
-    const rate = goal > this._wet ? 0.085 : 0.05;
+  _updateWetness(rainW, stormW, dt) {
+    const goal = clamp(rainW * 0.90 + stormW * 0.10, 0, 1);
+    // A storm must visibly wet the scene during its fade-in, not twelve
+    // seconds later after the screenshot (and usually the fight) is over.
+    const rate = goal > this._wet ? 0.32 : 0.07;
     this._wet = approach(this._wet, goal, rate, dt);
     if (Math.abs(this._wet - this._wetEmitted) > 0.015) {
       this._wetEmitted = this._wet;
@@ -355,9 +386,9 @@ export class Weather {
       if (this._restrikeT <= 0) {
         this._restrikes--;
         this._restrikeT = this._rng.range(0.06, 0.16);
-        this._flashLevel = Math.max(this._flashLevel, 1.1 + this._rng() * 0.8);
-        this._flashDecay = 7.5;
-        this.engine.postfx?.flash?.(0xd6e6ff, 0.45, 0.12);
+        this._flashLevel = Math.max(this._flashLevel, 0.7 + this._rng() * 0.55);
+        this._flashDecay = 3.8;
+        this.engine.postfx?.flash?.(0xd6e6ff, 0.22, 0.16);
       }
     }
 
@@ -399,9 +430,9 @@ export class Weather {
     });
 
     // screen flash + key light kick
-    this.engine.postfx?.flash?.(0xdbe9ff, 0.5 + near * 0.85, 0.22 + near * 0.12);
-    this._flashLevel = 1.4 + near * 2.2;
-    this._flashDecay = 6.0;
+    this.engine.postfx?.flash?.(0xdbe9ff, 0.28 + near * 0.42, 0.28 + near * 0.16);
+    this._flashLevel = 0.9 + near * 1.45;
+    this._flashDecay = 2.8;
     _v2.set(x, y + 60, z);
     this._flash.position.copy(_v2);
     this._flashTarget.position.copy(this._center);
@@ -449,7 +480,7 @@ export class Weather {
   _ensureRain() {
     if (this._sys.rain) return this._sys.rain;
     const q = this.quality;
-    const max = q === 'low' ? 2200 : q === 'med' ? 3600 : q === 'ultra' ? 7000 : 5200;
+    const max = q === 'low' ? 1100 : q === 'med' ? 1800 : q === 'ultra' ? 3600 : 2700;
     const geo = this._makeQuad(max);
 
     const u = {
@@ -459,7 +490,7 @@ export class Weather {
       uSpeed: { value: 28 },
       uWind: { value: new THREE.Vector2(2.4, 1.0) },
       uLen: { value: 0.9 },
-      uWidth: { value: 0.0038 },  // radians of screen width -> ~2.5px at any depth
+      uWidth: { value: 0.00175 }, // ~1px mid-layer; only sparse near drops get thicker
       uOpacity: { value: 0 },
       uColor: { value: new THREE.Color(0.55, 0.62, 0.74) },
     };
@@ -477,13 +508,26 @@ export class Weather {
         uniform float uWidth;
         varying vec2  vUv;
         varying float vFade;
+        varying float vEnergy;
         void main() {
           float rs = fract(sin(dot(aSeed, vec3(12.9898, 78.233, 45.164))) * 43758.5453);
-          float sp = uSpeed * (0.80 + 0.45 * rs);
-          float px = mod(aSeed.x * uBox.x + uWind.x * uTime, uBox.x) - uBox.x * 0.5;
-          float pz = mod(aSeed.z * uBox.z + uWind.y * uTime, uBox.z) - uBox.z * 0.5;
-          float py = uBox.y - mod(uTime * sp + aSeed.y * uBox.y * 3.0, uBox.y);
-          vec3 wp = uCenter + vec3(px, py, pz);
+          // One draw call, three perceptual volumes.  Far rain is numerous,
+          // fine and dim; the sparse camera-local layer is faster, longer and
+          // a little thicker.  This depth hierarchy breaks the old wall of
+          // identical white strokes without multiplying draw calls.
+          float ls = fract(rs * 7.13 + aSeed.y * 2.71);
+          float nearL = step(0.86, ls);
+          float midL = step(0.53, ls) * (1.0 - nearL);
+          float farL = 1.0 - nearL - midL;
+          float vol = farL * 1.0 + midL * 0.70 + nearL * 0.40;
+          float speedTier = farL * 0.82 + midL * 1.0 + nearL * 1.16;
+          float sp = uSpeed * speedTier * (0.82 + 0.34 * rs);
+          vec3 center = mix(uCenter, cameraPosition, midL * 0.25 + nearL * 0.74);
+          vec3 box = vec3(uBox.x * vol, uBox.y * (0.82 + vol * 0.18), uBox.z * vol);
+          float px = mod(aSeed.x * box.x + uWind.x * uTime * speedTier, box.x) - box.x * 0.5;
+          float pz = mod(aSeed.z * box.z + uWind.y * uTime * speedTier, box.z) - box.z * 0.5;
+          float py = box.y - mod(uTime * sp + aSeed.y * box.y * 3.0, box.y);
+          vec3 wp = center + vec3(px, py, pz);
 
           vec3 vel = normalize(vec3(uWind.x, -sp, uWind.y));
           vec4 mv = viewMatrix * vec4(wp, 1.0);
@@ -497,13 +541,16 @@ export class Weather {
           // length is world-space (real motion blur shrinks with distance);
           // width is screen-space so far drops never fall below a pixel
           float depth = max(-mv.z, 1.0);
-          mv.xy += dir * (position.y * uLen * sp * 0.011 * stretch)
-                 + perp * (position.x * uWidth * depth);
+          float lenTier = farL * 0.56 + midL * 0.78 + nearL * 1.08;
+          float widthTier = farL * 0.62 + midL * 0.88 + nearL * 1.22;
+          mv.xy += dir * (position.y * uLen * lenTier * sp * 0.011 * stretch)
+                 + perp * (position.x * uWidth * widthTier * depth);
           gl_Position = projectionMatrix * mv;
 
           vUv = uv;
-          float rad = length(vec2(px, pz)) / (0.5 * max(uBox.x, uBox.z));
+          float rad = length(vec2(px, pz)) / (0.5 * max(box.x, box.z));
           vFade = (1.0 - smoothstep(0.72, 1.0, rad)) * smoothstep(0.0, 0.10, py / uBox.y);
+          vEnergy = (farL * 0.44 + midL * 0.66 + nearL * 0.92) * (0.72 + 0.28 * rs);
         }
       `,
       fragmentShader: /* glsl */`
@@ -511,12 +558,13 @@ export class Weather {
         uniform vec3  uColor;
         varying vec2  vUv;
         varying float vFade;
+        varying float vEnergy;
         void main() {
-          float taper = smoothstep(0.0, 0.35, vUv.y) * (1.0 - smoothstep(0.55, 1.0, vUv.y));
-          float edge = 1.0 - abs(vUv.x - 0.5) * 2.0;
-          float a = uOpacity * vFade * taper * edge * 0.75;
+          float taper = smoothstep(0.02, 0.30, vUv.y) * (1.0 - smoothstep(0.64, 0.98, vUv.y));
+          float edge = smoothstep(0.0, 0.72, 1.0 - abs(vUv.x - 0.5) * 2.0);
+          float a = uOpacity * vFade * taper * edge * vEnergy;
           if (a < 0.004) discard;
-          gl_FragColor = vec4(uColor, a);
+          gl_FragColor = vec4(uColor * (0.72 + 0.28 * vEnergy), a);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
         }
@@ -544,7 +592,9 @@ export class Weather {
   _ensureSplash() {
     if (this._sys.splash) return this._sys.splash;
     const q = this.quality;
-    const max = q === 'low' ? 90 : q === 'med' ? 160 : q === 'ultra' ? 420 : 280;
+    // Coverage, not raw instance count, is the limiting factor here.  These
+    // values yield only a few dozen tiny live impacts in an Ultra frame.
+    const max = q === 'low' ? 12 : q === 'med' ? 22 : q === 'ultra' ? 48 : 34;
     const geo = this._makeQuad(max);
 
     const u = {
@@ -566,16 +616,25 @@ export class Weather {
         uniform float uRate;
         varying vec2  vUv;
         varying float vA;
+        varying float vSeed;
         void main() {
-          float t = fract(uTime * uRate * (0.75 + 0.5 * aSeed.z) + aSeed.z * 7.13);
-          float r = 0.05 + t * 0.38;
-          vA = (1.0 - t) * (1.0 - t);
+          float t = fract(uTime * uRate * (0.72 + 0.72 * aSeed.z) + aSeed.z * 7.13);
+          float r = 0.018 + t * (0.075 + 0.075 * aSeed.z);
+          vA = pow(1.0 - t, 3.2) * (0.42 + 0.58 * aSeed.x);
           vec3 wp = uCenter + vec3((aSeed.x - 0.5) * uRadius, 0.035, (aSeed.y - 0.5) * uRadius);
           wp.x += sin(aSeed.z * 31.7) * 0.6;
           wp.z += cos(aSeed.x * 27.1) * 0.6;
-          wp.xz += position.xy * r * 2.0;
+          float a = aSeed.z * 19.0;
+          float ca = cos(a), sa = sin(a);
+          vec2 q = vec2(
+            position.x * (0.72 + 0.34 * aSeed.x),
+            position.y * (0.42 + 0.22 * aSeed.y)
+          );
+          q = vec2(ca * q.x - sa * q.y, sa * q.x + ca * q.y);
+          wp.xz += q * r * 2.0;
           gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
           vUv = uv;
+          vSeed = aSeed.z;
         }
       `,
       fragmentShader: /* glsl */`
@@ -583,18 +642,27 @@ export class Weather {
         uniform vec3  uColor;
         varying vec2  vUv;
         varying float vA;
+        varying float vSeed;
         void main() {
-          float d = length(vUv - 0.5) * 2.0;
-          float ring = smoothstep(0.45, 0.82, d) * (1.0 - smoothstep(0.84, 1.0, d));
-          float a = ring * vA * uOpacity;
+          vec2 p = (vUv - 0.5) * 2.0;
+          float d = length(p);
+          float ring = smoothstep(0.58, 0.80, d) * (1.0 - smoothstep(0.82, 0.96, d));
+          float ang = atan(p.y, p.x);
+          // Broken crescents and a rare micro-crown: no repeated neon donuts.
+          float arc = smoothstep(-0.18, 0.42,
+            sin(ang * (2.0 + floor(vSeed * 3.0)) + vSeed * 23.0));
+          float crown = smoothstep(0.86, 1.0, vSeed)
+            * pow(max(0.0, 1.0 - d), 7.0)
+            * (0.45 + 0.55 * abs(cos(ang * 3.0)));
+          float a = (ring * arc + crown * 0.32) * vA * uOpacity;
           if (a < 0.004) discard;
-          gl_FragColor = vec4(uColor * (0.6 + 0.8 * vA), a);
+          gl_FragColor = vec4(uColor * (0.62 + 0.25 * vA), a);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
         }
       `,
       transparent: true,
-      blending: THREE.AdditiveBlending,
+      blending: THREE.NormalBlending,
       depthWrite: false,
       depthTest: true,
       side: THREE.DoubleSide,

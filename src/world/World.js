@@ -156,6 +156,83 @@ export class World {
     return false;
   }
 
+  /**
+   * Resolve the small overlaps that path-following agents can accumulate at a
+   * doorway or around a target. Static navigation keeps units out of props;
+   * this pass handles dynamic bodies and re-samples terrain height after every
+   * accepted correction so feet never hover on a sloped tile.
+   *
+   * The active population is capped at 90, making this bounded O(n²) pass
+   * cheaper than maintaining a per-frame allocating spatial hash.
+   */
+  _resolveCrowding(dt) {
+    const list = this.entities;
+    const focus = this.player;
+    const simR = WORLD.simulationRadius + 4;
+    const simR2 = simR * simR;
+    const relax = Math.min(1, Math.max(0, dt) * 18);
+    if (relax <= 0) return;
+
+    for (let i = 0; i < list.length; i++) {
+      const a = list[i];
+      if (!a || a.dead || !a.position) continue;
+      if (focus && a !== focus) {
+        const ax = a.position.x - focus.position.x;
+        const az = a.position.z - focus.position.z;
+        if (ax * ax + az * az > simR2) continue;
+      }
+
+      for (let j = i + 1; j < list.length; j++) {
+        const b = list[j];
+        if (!b || b.dead || !b.position) continue;
+        if (a.faction === 'npc' && b.faction === 'npc') continue;
+
+        let dx = b.position.x - a.position.x;
+        let dz = b.position.z - a.position.z;
+        let d2 = dx * dx + dz * dz;
+        const ar = Math.max(0.2, a.radius || 0.35);
+        const br = Math.max(0.2, b.radius || 0.35);
+        const minD = (ar + br) * 0.78;
+        if (d2 >= minD * minD) continue;
+
+        let dist;
+        if (d2 < 1e-8) {
+          // Stable id-based direction: no random jitter and no temporary vec.
+          const ang = (((a.id || i) * 17 + (b.id || j) * 31) % 360) * Math.PI / 180;
+          dx = Math.cos(ang);
+          dz = Math.sin(ang);
+          dist = 0;
+          d2 = 1;
+        } else {
+          dist = Math.sqrt(d2);
+          dx /= dist;
+          dz /= dist;
+        }
+
+        const correction = Math.min(0.12, Math.max(0, minD - dist) * 0.52 * relax);
+        if (correction <= 0) continue;
+        const aFixed = a.faction === 'npc';
+        const bFixed = b.faction === 'npc';
+        const aw = aFixed ? 0 : (bFixed ? 1 : 0.5);
+        const bw = bFixed ? 0 : (aFixed ? 1 : 0.5);
+        if (aw > 0) this._moveBodyIfClear(a, -dx * correction * aw, -dz * correction * aw);
+        if (bw > 0) this._moveBodyIfClear(b, dx * correction * bw, dz * correction * bw);
+      }
+    }
+  }
+
+  _moveBodyIfClear(entity, ox, oz) {
+    const x = entity.position.x + ox;
+    const z = entity.position.z + oz;
+    if (x < 0.05 || z < 0.05 || x >= this.def.width - 0.05 || z >= this.def.height - 0.05) return;
+    if (!this.nav.isWalkable(Math.floor(x), Math.floor(z))) return;
+    if (!this.nav.lineOfWalk(entity.position.x, entity.position.z, x, z)) return;
+    entity.position.x = x;
+    entity.position.z = z;
+    entity.position.y = this.heightAt(x, z);
+    entity.root?.position.copy(entity.position);
+  }
+
   nearestInteractable(pos, radius = 2.6) {
     let best = null, bestD = radius;
     for (const e of this.entities) {
@@ -266,6 +343,7 @@ export class World {
     }
     if (p) p.update(dt, input);
 
+    this._resolveCrowding(dt);
     this.combat.update(dt);
 
     for (let i = this.loot.length - 1; i >= 0; i--) {

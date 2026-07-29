@@ -87,13 +87,27 @@ export class Entity {
   moveTo(x, z) {
     const nav = this.world.nav;
     const gx = Math.floor(x), gz = Math.floor(z);
-    const goal = nav.isWalkable(gx, gz) ? { x: gx, z: gz } : nav.nearestWalkable(gx, gz, 6);
+    const exactGoal = nav.isWalkable(gx, gz);
+    const goal = exactGoal ? { x: gx, z: gz } : nav.nearestWalkable(gx, gz, 6);
     if (!goal) { this.path = null; return false; }
+    const final = exactGoal ? { x, z } : { x: goal.x + 0.5, z: goal.z + 0.5 };
+    if (this.tileX === goal.x && this.tileZ === goal.z) {
+      if (Math.hypot(final.x - this.position.x, final.z - this.position.z) <= 0.08) {
+        this.stop();
+      } else {
+        this.path = [final];
+        this.pathIndex = 0;
+      }
+      return true;
+    }
     const p = nav.findPath(this.tileX, this.tileZ, goal.x, goal.z);
     if (!p || !p.length) { this.path = null; return false; }
     // Replace the final waypoint with the exact requested point so the unit
-    // stops where the player clicked, not at the tile centre.
-    p[p.length - 1] = { x, z };
+    // stops where the player clicked, not at the tile centre. If the click was
+    // inside blocked geometry, keep the nearest walkable tile centre instead;
+    // replacing that waypoint with the original click would walk straight
+    // through the blocker after A* had correctly routed around it.
+    p[p.length - 1] = final;
     this.path = p;
     this.pathIndex = 0;
     return true;
@@ -160,7 +174,12 @@ export class Entity {
     this.hp -= amount;
     bus.emit('entity:damaged', { target: this, amount, kind, crit, source });
     if (this.hp <= 0) { this.hp = 0; this.die(source); return true; }
-    if (this.animator && amount > this.hpMax * 0.08) this.animator.overlay('hurt');
+    // Do not interrupt a committed attack/cast overlay. Animator deliberately
+    // resolves a pending impact when an overlay is replaced; using `hurt` here
+    // during wind-up would therefore make a hit land before the weapon connects.
+    if (this.animator && !this.animator.busy && amount > this.hpMax * 0.08) {
+      this.animator.overlay('hurt');
+    }
     return false;
   }
 
@@ -171,6 +190,7 @@ export class Entity {
     this.stop();
     this.target = null;
     this.effects.length = 0;
+    this.animator?.clearOverlay?.();
     this.animator?.play('die', { loop: false });
     bus.emit('entity:died', { entity: this, killer });
   }

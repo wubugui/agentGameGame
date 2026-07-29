@@ -68,8 +68,14 @@ async function boot(map, quality = values.quality) {
   await page.goto(`${BASE}/index.html?q=${quality}&map=${map}`, { waitUntil: 'load' });
   // Character select
   await page.waitForSelector('#charsel:not(.hidden)', { timeout: 60000 });
-  await page.click(`.cs-class[data-klass="${values.klass}"]`).catch(() => {});
-  await page.click('#csGo');
+  // The WebGL canvas can keep Chromium's "stable element" heuristic busy for
+  // tens of seconds under SwiftShader. Dispatch through the DOM after the
+  // character-select visibility gate; this exercises the same handlers without
+  // turning a graphics-driver stall into a false UI failure.
+  await page.evaluate((klass) => {
+    document.querySelector(`.cs-class[data-klass="${klass}"]`)?.click();
+    document.querySelector('#csGo')?.click();
+  }, values.klass);
   // World build is synchronous and slow; wait for the game object to be live.
   await page.waitForFunction(() => window.game && window.game.player && !window.game.player.dead, null, { timeout: 180000 });
   // Let a few frames of easing, LOD and particle warm-up settle.

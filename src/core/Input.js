@@ -19,43 +19,49 @@ export class Input {
 
     /** @type {{ground:THREE.Object3D[], entities:THREE.Object3D[]}} */
     this.pickables = { ground: [], entities: [] };
+    this._listeners = [];
 
     this._bind();
   }
 
   _bind() {
     const c = this.canvas;
+    const listen = (target, type, fn, opts) => {
+      target.addEventListener(type, fn, opts);
+      this._listeners.push(() => target.removeEventListener(type, fn, opts));
+    };
     const upd = (e) => {
       const r = c.getBoundingClientRect();
+      if (r.width <= 0 || r.height <= 0) return;
       this.ndc.x = ((e.clientX - r.left) / r.width) * 2 - 1;
       this.ndc.y = -((e.clientY - r.top) / r.height) * 2 + 1;
       this.screen = { x: e.clientX, y: e.clientY };
     };
 
-    c.addEventListener('pointerenter', () => (this.pointerInside = true));
-    c.addEventListener('pointerleave', () => (this.pointerInside = false));
-    c.addEventListener('pointermove', upd);
+    listen(c, 'pointerenter', () => (this.pointerInside = true));
+    listen(c, 'pointerleave', () => (this.pointerInside = false));
+    listen(c, 'pointermove', upd);
 
-    c.addEventListener('pointerdown', (e) => {
+    listen(c, 'pointerdown', (e) => {
       upd(e);
       c.setPointerCapture?.(e.pointerId);
       this.mouseDown[e.button] = true;
       bus.emit('input:down', { button: e.button, ndc: this.ndc.clone(), shift: e.shiftKey, alt: e.altKey });
     });
 
-    window.addEventListener('pointerup', (e) => {
+    listen(window, 'pointerup', (e) => {
       this.mouseDown[e.button] = false;
       bus.emit('input:up', { button: e.button });
     });
 
-    c.addEventListener('contextmenu', (e) => e.preventDefault());
+    listen(c, 'contextmenu', (e) => e.preventDefault());
 
-    c.addEventListener('wheel', (e) => {
+    listen(c, 'wheel', (e) => {
       e.preventDefault();
       this.wheelDelta += Math.sign(e.deltaY);
     }, { passive: false });
 
-    window.addEventListener('keydown', (e) => {
+    listen(window, 'keydown', (e) => {
       if (e.target && /INPUT|TEXTAREA/.test(e.target.tagName)) return;
       if (!e.repeat) bus.emit('input:key', { code: e.code, key: e.key, shift: e.shiftKey, ctrl: e.ctrlKey });
       this.keys.add(e.code);
@@ -63,8 +69,8 @@ export class Input {
       if (/^(F1|F2|F3|F4|F5|F6|F7|F8|Tab|Space)$/.test(e.code) || e.code.startsWith('Digit')) e.preventDefault();
     });
 
-    window.addEventListener('keyup', (e) => this.keys.delete(e.code));
-    window.addEventListener('blur', () => { this.keys.clear(); this.mouseDown = [false, false, false]; });
+    listen(window, 'keyup', (e) => this.keys.delete(e.code));
+    listen(window, 'blur', () => { this.keys.clear(); this.mouseDown.fill(false); });
   }
 
   isDown(code) { return this.keys.has(code); }
@@ -93,6 +99,14 @@ export class Input {
     if (gh.length) { point = gh[0].point.clone(); object = gh[0].object; }
 
     return { point, entity, object };
+  }
+
+  dispose() {
+    for (const off of this._listeners.splice(0)) off();
+    this.keys.clear();
+    this.mouseDown.fill(false);
+    this.pickables.ground = [];
+    this.pickables.entities = [];
   }
 }
 

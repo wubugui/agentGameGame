@@ -406,13 +406,19 @@ function buildBichon() {
     width: 128, height: 128,
     safeZone: true,
     sky: 'day',
-    weather: ['clear', 'clear', 'clear', 'rain'],
+    // Keep the first town reveal readable and deterministic. Rain remains
+    // available in field maps and the weather QA scene, where it can be judged
+    // without obscuring the player's first look at the plaza.
+    weather: ['clear'],
     ambientLoop: 'town',
     music: 'town',
     grade: 'normal',
     seed: 20011128,
-    entry: { x: 64, z: 96 },
-    respawn: { x: 64, z: 96 },
+    // Spawn in the open south edge of the central plaza. The former z=96
+    // position sat inside the tight shop canyon, so the default isometric
+    // camera began behind two façades even after roof fading.
+    entry: { x: 64, z: 68 },
+    respawn: { x: 64, z: 68 },
     respawnMap: 'bichon',
     terrain: {
       base: 'grass',

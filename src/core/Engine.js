@@ -1,6 +1,19 @@
 import * as THREE from 'three';
 import { CAMERA, QUALITY_PRESETS } from '../game/Config.js';
 
+class FrameClock {
+  constructor() {
+    this._last = (globalThis.performance?.now?.() ?? Date.now()) * 0.001;
+  }
+
+  getDelta() {
+    const now = (globalThis.performance?.now?.() ?? Date.now()) * 0.001;
+    const dt = Math.max(0, now - this._last);
+    this._last = now;
+    return dt;
+  }
+}
+
 /**
  * Renderer + camera rig + frame timing. Owns nothing about gameplay; the Game
  * pushes a follow target each frame and Engine smooths the isometric rig onto
@@ -21,7 +34,9 @@ export class Engine {
     });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.preset.pixelRatio));
     this.renderer.shadowMap.enabled = this.preset.shadows;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // PCFSoftShadowMap aliases to deprecated behaviour in Three r185 and emits
+    // a warning every boot. PCFShadowMap is the supported filtered path.
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.0;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -51,7 +66,7 @@ export class Engine {
     /** @type {import('../gfx/PostFX.js').PostFX|null} */
     this.postfx = null;
 
-    this.clock = new THREE.Clock();
+    this.clock = new FrameClock();
     this.elapsed = 0;
     this.frame = 0;
 

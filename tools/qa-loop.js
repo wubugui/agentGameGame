@@ -9,7 +9,7 @@ export const meta = {
   ],
 }
 
-const REPO = '/home/user/agentGameGame'
+const REPO = (args && args.repo) || '/Users/dannyteng/AIWork/AgentGame'
 const SHOTS = `${REPO}/shots`
 
 // Each reviewer sees the same frames through a different lens. Redundant

@@ -64,6 +64,16 @@ const INSTANCED_KINDS = new Set([
 /** Library materials that carry their own shader; leave their defines alone. */
 const SHADER_MATERIALS = new Set(['lava', 'water', 'rune', 'crystal', 'glass', 'eye.glow', 'shadowBlob']);
 
+/** Roof skins are emitted as their own meshes so they can fade out of the camera sightline. */
+const ROOF_MATERIALS = new Set(['roofTile', 'thatch']);
+/** Upper building shell materials which must reveal a character standing indoors. */
+const STRUCTURE_SIGHT_MATERIALS = new Set([
+  'roofTile', 'thatch', 'plank', 'plaster', 'paperScreen', 'banner',
+]);
+const STRUCTURE_SIGHT_KINDS = new Set([
+  'house.tiled', 'house.thatch', 'shop', 'inn', 'temple.hall',
+]);
+
 const MAX_LIGHTS = { low: 3, med: 5, high: 8, ultra: 8 };
 /** How many flame/smoke plumes may be alive at once. */
 const MAX_FX = { low: 3, med: 6, high: 10, ultra: 14 };
@@ -118,6 +128,13 @@ const STYLES = {
 };
 
 function styleOf(name) { return STYLES[name] || STYLES.stone; }
+
+/** Resolve a material-cache key back to its library name (`!` marks unlit variants). */
+function materialName(key) {
+  const hash = key.indexOf('#');
+  const name = hash < 0 ? key : key.slice(0, hash);
+  return name.charCodeAt(0) === 33 ? name.slice(1) : name;
+}
 
 /** Which tree species a biome grows, and how thick the ambient cover is. */
 const BIOME_FLORA = {
@@ -218,8 +235,9 @@ class Mesher {
    * @param {number} us  uv units per world unit
    * @param {number|Function} [wind] constant, or fn(x,y,z)
    * @param {number[]} [ref] outward reference; winding flips to match it
+   * @param {number[]} [uvRect] explicit [u0,v0,u1,v1], for continuous atlases
    */
-  face(a, b, c, d, col, us, wind, ref) {
+  face(a, b, c, d, col, us, wind, ref, uvRect) {
     _e1[0] = b[0] - a[0]; _e1[1] = b[1] - a[1]; _e1[2] = b[2] - a[2];
     _e2[0] = d[0] - a[0]; _e2[1] = d[1] - a[1]; _e2[2] = d[2] - a[2];
     _nn[0] = _e1[1] * _e2[2] - _e1[2] * _e2[1];
@@ -233,14 +251,16 @@ class Mesher {
       _nn[0] = -_nn[0]; _nn[1] = -_nn[1]; _nn[2] = -_nn[2];
     }
     const nx = _nn[0] / len, ny = _nn[1] / len, nz = _nn[2] / len;
-    const lu = Math.hypot(_e1[0], _e1[1], _e1[2]) * us;
-    const lv = Math.hypot(_e2[0], _e2[1], _e2[2]) * us;
+    const u0 = uvRect ? uvRect[0] : 0;
+    const v0 = uvRect ? uvRect[1] : 0;
+    const u1 = uvRect ? uvRect[2] : Math.hypot(_e1[0], _e1[1], _e1[2]) * us;
+    const v1 = uvRect ? uvRect[3] : Math.hypot(_e2[0], _e2[1], _e2[2]) * us;
     const wf = typeof wind === 'function' ? wind : null;
     const wc = wf ? 0 : (wind || 0);
-    const i0 = this.vert(a[0], a[1], a[2], nx, ny, nz, 0, 0, col[0], col[1], col[2], wf ? wf(a[0], a[1], a[2]) : wc);
-    const i1 = this.vert(b[0], b[1], b[2], nx, ny, nz, lu, 0, col[0], col[1], col[2], wf ? wf(b[0], b[1], b[2]) : wc);
-    const i2 = this.vert(c[0], c[1], c[2], nx, ny, nz, lu, lv, col[0], col[1], col[2], wf ? wf(c[0], c[1], c[2]) : wc);
-    const i3 = this.vert(d[0], d[1], d[2], nx, ny, nz, 0, lv, col[0], col[1], col[2], wf ? wf(d[0], d[1], d[2]) : wc);
+    const i0 = this.vert(a[0], a[1], a[2], nx, ny, nz, u0, v0, col[0], col[1], col[2], wf ? wf(a[0], a[1], a[2]) : wc);
+    const i1 = this.vert(b[0], b[1], b[2], nx, ny, nz, u1, v0, col[0], col[1], col[2], wf ? wf(b[0], b[1], b[2]) : wc);
+    const i2 = this.vert(c[0], c[1], c[2], nx, ny, nz, u1, v1, col[0], col[1], col[2], wf ? wf(c[0], c[1], c[2]) : wc);
+    const i3 = this.vert(d[0], d[1], d[2], nx, ny, nz, u0, v1, col[0], col[1], col[2], wf ? wf(d[0], d[1], d[2]) : wc);
     if (flip) this.quad(i0, i3, i2, i1);
     else this.quad(i0, i1, i2, i3);
   }
@@ -505,7 +525,13 @@ function addRoof(kit, o) {
     + up * Math.pow(t, 4) * (0.3 + 0.7 * Math.pow(Math.abs(2 * u - 1), 2));
 
   const col = [tint, tint, tint];
-  const us = 1.15;
+  // The texture already contains 8 barrel tiles × 6 courses and the material
+  // repeats it three times. A world-scale UV multiplier of 1.15 turned roofs
+  // into dense blue pinstripes; this lands near two tiles per world unit.
+  const us = 0.11;
+  const roofU = ew * 2 * us;
+  const roofV = Math.hypot(ed, rise) * us;
+  const uv = [0, 0, 0, 0];
 
   // ---- the two long slopes ------------------------------------------------
   const eaveCurves = [];
@@ -524,8 +550,12 @@ function addRoof(kit, o) {
     }
     for (let iu = 0; iu < NU; iu++) {
       for (let it = 0; it < NT; it++) {
+        uv[0] = (iu / NU) * roofU;
+        uv[1] = (it / NT) * roofV;
+        uv[2] = ((iu + 1) / NU) * roofU;
+        uv[3] = ((it + 1) / NT) * roofV;
         rm.face(grid[iu][it], grid[iu + 1][it], grid[iu + 1][it + 1], grid[iu][it + 1],
-          col, us, 0, [0, 1, side]);
+          col, us, 0, [0, 1, side], uv);
       }
     }
     eaveCurves.push(grid.map((row) => row[NT]));
@@ -548,8 +578,12 @@ function addRoof(kit, o) {
       }
       for (let iu = 0; iu < NU; iu++) {
         for (let it = 0; it < NT; it++) {
+          uv[0] = (iu / NU) * (ed * 2 * us);
+          uv[1] = (it / NT) * roofV;
+          uv[2] = ((iu + 1) / NU) * (ed * 2 * us);
+          uv[3] = ((it + 1) / NT) * roofV;
           rm.face(grid[iu][it], grid[iu + 1][it], grid[iu + 1][it + 1], grid[iu][it + 1],
-            col, us, 0, [side, 1, 0]);
+            col, us, 0, [side, 1, 0], uv);
         }
       }
     }
@@ -643,6 +677,10 @@ function addThatch(kit, o) {
   const rng = o.rng;
   const NU = 7, NT = 4;
   const ew = w * 0.5 + ov, ed = d * 0.5 + ov;
+  const us = 0.16;
+  const roofU = ew * 2 * us;
+  const roofV = Math.hypot(ed, rise) * us;
+  const uv = [0, 0, 0, 0];
 
   for (let side = -1; side <= 1; side += 2) {
     const grid = [];
@@ -663,8 +701,12 @@ function addThatch(kit, o) {
     }
     for (let iu = 0; iu < NU; iu++) {
       for (let it = 0; it < NT; it++) {
+        uv[0] = (iu / NU) * roofU;
+        uv[1] = (it / NT) * roofV;
+        uv[2] = ((iu + 1) / NU) * roofU;
+        uv[3] = ((it + 1) / NT) * roofV;
         m.face(grid[iu][it], grid[iu + 1][it], grid[iu + 1][it + 1], grid[iu][it + 1],
-          [1, 1, 1], 0.9, 0, [0, 1, side]);
+          [1, 1, 1], us, 0, [0, 1, side], uv);
       }
     }
     // thick cut edge at the eave
@@ -707,6 +749,24 @@ function addPlinth(kit, o) {
   const w = o.w, d = o.d;
   m.box(0, h * 0.34, 0, w + 0.9, h * 0.68, d + 0.9, [0.94, 0.93, 0.92], 0.55);
   m.box(0, h * 0.83, 0, w + 0.5, h * 0.34, d + 0.5, [1.02, 1.01, 1.0], 0.55);
+  if (o.outline) {
+    // When the upper structure reveals the player, retain a knee-low dressed
+    // stone outline. It gives the exposed floor a readable architectural edge
+    // without putting any new mass in front of the character.
+    const rim = kit.d(o.key);
+    // A shallow, lighter ashlar inset breaks up the rain-darkened brick slab.
+    // Its top is only five centimetres above navigation height, so feet stay
+    // grounded while the revealed interior no longer reads as a black void.
+    const floor = kit.g(mk('stoneWall', 0xa6987d));
+    floor.box(0, h + 0.025, 0, w - 0.22, 0.05, d - 0.22, [1.08, 1.06, 1.0], 0.72);
+    const rw = w + 0.58, rd = d + 0.58;
+    const ry = h + 0.045;
+    const rc = [1.12, 1.08, 0.98];
+    rim.box(0, ry, -rd * 0.5, rw, 0.09, 0.16, rc, 0.8);
+    rim.box(0, ry, rd * 0.5, rw, 0.09, 0.16, rc, 0.8);
+    rim.box(-rw * 0.5, ry, 0, 0.16, 0.09, rd, rc, 0.8);
+    rim.box(rw * 0.5, ry, 0, 0.16, 0.09, rd, rc, 0.8);
+  }
   // corner blocks read as dressed stone
   for (let sx = -1; sx <= 1; sx += 2) {
     for (let sz = -1; sz <= 1; sz += 2) {
@@ -1211,7 +1271,7 @@ function buildBuilding(B, kind) {
 
   addPlinth(kit, {
     key: mk(st.plinth[0], st.plinth[1]), w, d, h: plinthH,
-    steps: true, stepSide: 1, stepWidth: Math.min(w * 0.45, 3.0),
+    steps: true, stepSide: 1, stepWidth: Math.min(w * 0.45, 3.0), outline: true,
   });
 
   const doorAt = addTimberWalls(kit, {
@@ -2047,32 +2107,47 @@ function makeBush(rng) {
   return { wood, leaf, height: s, radius: 0.55 * s };
 }
 
-/** 草丛 — three crossed tapered blades. Pure vertex-shader sway. */
+/** Grass tuft — a low, broad fan of tapered blades with vertex-shader sway. */
 function makeGrass(rng, tall) {
   const m = new Mesher();
-  const h = (tall ? 1.35 : 0.52) * (0.75 + rng() * 0.6);
-  const blades = tall ? 4 : 3;
+  // The old field grass was tall, wide and spaced on an almost one-tile grid.
+  // From the isometric camera every tuft became a dark conifer-shaped spike.
+  // Keep reeds tall, but make ordinary grass a broad knee-high tuft.
+  const h = (tall ? 1.35 : 0.32) * (0.78 + rng() * 0.52);
+  const blades = tall ? 4 : 6;
   const SEGS = tall ? 3 : 2;
-  const green = 0.82 + rng() * 0.3;
+  const green = tall ? (0.9 + rng() * 0.22) : (0.78 + rng() * 0.14);
   for (let i = 0; i < blades; i++) {
-    const a = (i / blades) * Math.PI + rng() * 0.5;
+    const a = (i / blades) * TAU + rng() * 0.32;
     const ux = Math.cos(a), uz = Math.sin(a);
-    const bw = (tall ? 0.07 : 0.15) * (0.8 + rng() * 0.5);
-    const bend = (rng() - 0.5) * h * 0.35;
-    const col = [green * (0.85 + rng() * 0.3), green * (0.95 + rng() * 0.2), green * (0.78 + rng() * 0.3)];
+    const bw = (tall ? 0.07 : 0.055) * (0.82 + rng() * 0.42);
+    const bend = (0.12 + rng() * 0.22) * h;
+    const rootR = tall ? rng() * 0.025 : (0.045 + rng() * 0.08);
+    const rootX = ux * rootR, rootZ = uz * rootR;
+    const col = tall
+      ? [
+        green * (0.78 + rng() * 0.18),
+        green * (0.96 + rng() * 0.12),
+        green * (0.62 + rng() * 0.18),
+      ]
+      : [
+        green * (0.74 + rng() * 0.13),
+        green * (0.82 + rng() * 0.12),
+        green * (0.58 + rng() * 0.11),
+      ];
     const N = SEGS;
     // blade normal: mostly the card normal, tilted up so tufts catch skylight
-    const nl = Math.hypot(uz, 0.55, ux) || 1;
-    const bnx = -uz / nl, bny = 0.55 / nl, bnz = ux / nl;
+    const nl = Math.hypot(uz, 0.78, ux) || 1;
+    const bnx = -uz / nl, bny = 0.78 / nl, bnz = ux / nl;
     for (let k = 0; k < N; k++) {
       const t0 = k / N, t1 = (k + 1) / N;
       const w0 = bw * (1 - t0 * 0.75), w1 = bw * (1 - t1 * 0.75);
       const y0 = h * t0, y1 = h * t1;
       const x0 = bend * t0 * t0, x1 = bend * t1 * t1;
-      const i0 = m.vert(x0 * ux - uz * w0, y0, x0 * uz + ux * w0, bnx, bny, bnz, 1, t0, col[0], col[1], col[2], t0 * t0);
-      const i1 = m.vert(x0 * ux + uz * w0, y0, x0 * uz - ux * w0, bnx, bny, bnz, 0, t0, col[0], col[1], col[2], t0 * t0);
-      const i2 = m.vert(x1 * ux + uz * w1, y1, x1 * uz - ux * w1, bnx, bny, bnz, 0, t1, col[0], col[1], col[2], t1 * t1);
-      const i3 = m.vert(x1 * ux - uz * w1, y1, x1 * uz + ux * w1, bnx, bny, bnz, 1, t1, col[0], col[1], col[2], t1 * t1);
+      const i0 = m.vert(rootX + x0 * ux - uz * w0, y0, rootZ + x0 * uz + ux * w0, bnx, bny, bnz, 1, t0, col[0], col[1], col[2], t0 * t0);
+      const i1 = m.vert(rootX + x0 * ux + uz * w0, y0, rootZ + x0 * uz - ux * w0, bnx, bny, bnz, 0, t0, col[0], col[1], col[2], t0 * t0);
+      const i2 = m.vert(rootX + x1 * ux + uz * w1, y1, rootZ + x1 * uz - ux * w1, bnx, bny, bnz, 0, t1, col[0], col[1], col[2], t1 * t1);
+      const i3 = m.vert(rootX + x1 * ux - uz * w1, y1, rootZ + x1 * uz + ux * w1, bnx, bny, bnz, 1, t1, col[0], col[1], col[2], t1 * t1);
       m.quad(i0, i1, i2, i3);
     }
     if (tall && rng() < 0.7) {
@@ -2173,6 +2248,7 @@ const _wm = new THREE.Matrix4();
 const _wc = new THREE.Color();
 const _cam = new THREE.Vector3();
 const _up = new THREE.Vector3(0, 1, 0);
+const EMPTY_FX_OPTS = Object.freeze({});
 
 export class Props {
   /**
@@ -2208,6 +2284,13 @@ export class Props {
     this._matCache = new Map();
     /** @type {THREE.Object3D[]} meshes hidden past LOD_DETAIL */
     this._lod = [];
+    /**
+     * Structure roof skins which may sit between the isometric camera and its
+     * focus.  The opaque material stays the common library material; a local
+     * transparent clone is only switched in while the roof is actually fading.
+     * @type {object[]}
+     */
+    this._roofOccluders = [];
     /** @type {THREE.PointLight[]} */
     this._lightPool = [];
     /** @type {object[]} candidate light emitters */
@@ -2243,6 +2326,7 @@ export class Props {
       this._buildExclusion();
       this._buildStructures();
       this._buildScatter();
+      this._buildAmbientFx();
       this._buildLightPool();
     } catch (e) {
       console.warn('[props] build failed', e);
@@ -2312,6 +2396,7 @@ export class Props {
       return mat;
     }
     if (key === '__banner_wind') return this._windMat('banner', 0.16);
+    if (key === '__grass_wind') return this._windMat('grass', 0.10, 0x59683d);
     if (key.charCodeAt(0) === 33) return this._windMat(key.slice(1), 0.2);
 
     const hash = key.indexOf('#');
@@ -2335,12 +2420,31 @@ export class Props {
    * A cloned library material with a vertex-shader sway driven by `aWind`,
    * `uTime` and a per-instance phase read straight off `instanceMatrix`.
    */
-  _windMat(name, amp) {
+  _windMat(name, amp, plainColor) {
     const lib = this.ctx.materials;
-    const base = (lib && typeof lib.get === 'function')
-      ? lib.get(name, { vertexColors: true })
-      : new THREE.MeshStandardMaterial({ color: 0x5a7a3a, vertexColors: true });
-    const mat = base.clone();
+    let mat;
+    if (plainColor !== undefined) {
+      // Grass uses its authored blade silhouette, not the very dark bush
+      // cut-out texture. Multiplying that texture by vertex + instance colour
+      // drove distant tufts nearly black.
+      mat = new THREE.MeshStandardMaterial({
+        color: plainColor,
+        roughness: 0.94,
+        metalness: 0,
+        vertexColors: true,
+        side: THREE.DoubleSide,
+      });
+    } else if (lib && typeof lib.get === 'function') {
+      mat = lib.get(name, { vertexColors: true }).clone();
+    } else {
+      mat = new THREE.MeshStandardMaterial({
+        color: 0x5a7a3a,
+        roughness: 0.9,
+        metalness: 0,
+        vertexColors: true,
+        side: THREE.DoubleSide,
+      });
+    }
     mat.name = `${name}.wind`;
     const U = this._wind;
     const A = amp === undefined ? 0.2 : amp;
@@ -2603,7 +2707,17 @@ attribute float aWind;`)
         break;
     }
 
-    this._emitKit(kit, holder, { shadow: true });
+    const structureFade = STRUCTURE_SIGHT_KINDS.has(s.kind);
+    const sightW = Math.max(4, s.w || 8);
+    const sightD = Math.max(4, s.d || 6);
+    const sightH = Math.max(3, s.h || 6);
+    this._emitKit(kit, holder, {
+      shadow: true,
+      roofFade: true,
+      structureFade,
+      sightY: sightH * 0.54,
+      sightRadius: Math.hypot(sightW * 0.5 + 1.2, sightD * 0.5 + 1.2, sightH * 0.56),
+    });
     for (const sg of B.rec.signs) this._addSign(holder, sg);
     this._absorbRecord(B.rec, holder, s);
     if (holder.children.length) this.group.add(holder);
@@ -2616,19 +2730,70 @@ attribute float aWind;`)
       const geo = m.geometry(key.charCodeAt(0) === 33 || key === '__banner_wind');
       if (!geo) continue;
       this._geoms.add(geo);
-      const mesh = new THREE.Mesh(geo, this._mat(key));
+      const opaqueMat = this._mat(key);
+      const matName = materialName(key);
+      const isStructureShell = !!(o && o.structureFade) && STRUCTURE_SIGHT_MATERIALS.has(matName);
+      const canFade = !!(o && o.roofFade) && (ROOF_MATERIALS.has(matName) || isStructureShell);
+      let fadeMat = null;
+      if (canFade) {
+        // Clone at build time, never in update(). Textures remain shared and
+        // owned by MaterialLibrary; this Props instance owns only the material.
+        fadeMat = opaqueMat.clone();
+        fadeMat.name = `${opaqueMat.name || matName}.sightFade`;
+        fadeMat.transparent = true;
+        fadeMat.opacity = 1;
+        fadeMat.depthWrite = false;
+        fadeMat.needsUpdate = true;
+        this._mats.add(fadeMat);
+      }
+      const mesh = new THREE.Mesh(geo, opaqueMat);
       mesh.castShadow = !!shadow && key !== '__flame' && key !== '__dark';
       mesh.receiveShadow = key !== '__flame';
       mesh.matrixAutoUpdate = false;
       mesh.updateMatrix();
       parent.add(mesh);
+      if (fadeMat) {
+        if (!geo.boundingSphere) geo.computeBoundingSphere();
+        const bounds = geo.boundingSphere;
+        this._roofOccluders.push({
+          mesh,
+          parent,
+          opaqueMat,
+          fadeMat,
+          alpha: 1,
+          baseCastShadow: mesh.castShadow,
+          // Every upper-shell part of a building shares the same sight volume.
+          // This prevents the roof from fading while its beams and wall panels
+          // continue to hide the player underneath.
+          localX: isStructureShell ? 0 : (bounds ? bounds.center.x : 0),
+          localY: isStructureShell ? o.sightY : (bounds ? bounds.center.y : 0),
+          localZ: isStructureShell ? 0 : (bounds ? bounds.center.z : 0),
+          radius: isStructureShell
+            ? Math.max(2.5, o.sightRadius || 5)
+            : Math.max(1.5, bounds ? bounds.radius : 4),
+        });
+      }
     }
     if (this.quality === 'low') return;
     for (const [key, m] of kit.far) {
       const geo = m.geometry(key.charCodeAt(0) === 33 || key === '__banner_wind');
       if (!geo) continue;
       this._geoms.add(geo);
-      const mesh = new THREE.Mesh(geo, this._mat(key));
+      const opaqueMat = this._mat(key);
+      const matName = materialName(key);
+      const isStructureShell = !!(o && o.structureFade) && STRUCTURE_SIGHT_MATERIALS.has(matName);
+      const canFade = !!(o && o.roofFade) && (ROOF_MATERIALS.has(matName) || isStructureShell);
+      let fadeMat = null;
+      if (canFade) {
+        fadeMat = opaqueMat.clone();
+        fadeMat.name = `${opaqueMat.name || matName}.sightFade.detail`;
+        fadeMat.transparent = true;
+        fadeMat.opacity = 1;
+        fadeMat.depthWrite = false;
+        fadeMat.needsUpdate = true;
+        this._mats.add(fadeMat);
+      }
+      const mesh = new THREE.Mesh(geo, opaqueMat);
       mesh.castShadow = false;
       mesh.receiveShadow = true;
       mesh.matrixAutoUpdate = false;
@@ -2636,6 +2801,24 @@ attribute float aWind;`)
       mesh.userData.lodParent = parent;
       parent.add(mesh);
       this._lod.push(mesh);
+      if (fadeMat) {
+        if (!geo.boundingSphere) geo.computeBoundingSphere();
+        const bounds = geo.boundingSphere;
+        this._roofOccluders.push({
+          mesh,
+          parent,
+          opaqueMat,
+          fadeMat,
+          alpha: 1,
+          baseCastShadow: false,
+          localX: isStructureShell ? 0 : (bounds ? bounds.center.x : 0),
+          localY: isStructureShell ? o.sightY : (bounds ? bounds.center.y : 0),
+          localZ: isStructureShell ? 0 : (bounds ? bounds.center.z : 0),
+          radius: isStructureShell
+            ? Math.max(2.5, o.sightRadius || 5)
+            : Math.max(1.5, bounds ? bounds.radius : 4),
+        });
+      }
     }
   }
 
@@ -2705,8 +2888,8 @@ attribute float aWind;`)
     });
   }
 
-  _addFxSource(name, pos) {
-    this._fxSources.push({ name, pos, handle: null, d2: 0 });
+  _addFxSource(name, pos, opts = EMPTY_FX_OPTS) {
+    this._fxSources.push({ name, pos, opts, handle: null, d2: 0 });
   }
 
   /* --------------------------------------------------------- instancing */
@@ -2918,6 +3101,36 @@ attribute float aWind;`)
     this._scatterReeds(flora, dens, t);
   }
 
+  /**
+   * Sparse looping ambience gives woodland silhouettes motion even while the
+   * player is idle. These are candidates, not live emitters: the existing
+   * nearest-N FX selector activates only the few close to the camera.
+   */
+  _buildAmbientFx() {
+    if (this.def.biome !== 'meadow' || !this._groves.length) return;
+    let fireflyToggle = 0;
+    for (let i = 0; i < this._groves.length; i++) {
+      const g = this._groves[i];
+      if (!g || g.r < 5 || g.kind === 'palm') continue;
+      const y = this._h(g.x, g.z);
+      const scale = clamp(g.r / 7.5, 1.0, 2.8);
+      this._addFxSource(
+        'leaf.fall',
+        new THREE.Vector3(g.x, y + 0.05, g.z),
+        { scale }
+      );
+      // Alternate groves so the glints remain a discovery instead of visual
+      // confetti. At noon bloom keeps them nearly invisible; dusk reveals them.
+      if ((fireflyToggle++ & 1) === 0) {
+        this._addFxSource(
+          'firefly',
+          new THREE.Vector3(g.x + g.r * 0.18, y + 0.08, g.z - g.r * 0.12),
+          { scale: clamp(scale * 0.82, 1.0, 2.1) }
+        );
+      }
+    }
+  }
+
   /** Build (and cache) instanced parts from a set of meshers. */
   _parts(list) {
     const parts = [];
@@ -3086,26 +3299,37 @@ attribute float aWind;`)
   _scatterGrass(flora, dens) {
     if (!(flora.grass > 0)) return;
     const vars = [];
-    for (let v = 0; v < 2; v++) {
+    for (let v = 0; v < 3; v++) {
       const rng = makeRng(((this.def.seed | 0) ^ 0x9911) + v * 1291);
       const g = makeGrass(rng, false);
-      vars.push({ parts: this._parts([{ key: '!bush', m: g.leaf }]), list: [] });
+      vars.push({ parts: this._parts([{ key: '__grass_wind', m: g.leaf }]), list: [] });
     }
-    const cap = Math.round(19000 * clamp(dens, 0.25, 1.5));
+    const cap = Math.round(6100 * clamp(dens, 0.25, 1.5));
+    const palettes = [
+      [0.74, 0.80, 0.58], // deep meadow olive
+      [0.82, 0.78, 0.55], // dry yellow-green
+      [0.66, 0.77, 0.62], // cool shaded grass
+    ];
     let placed = 0;
-    this._sample(1.05, (x, z, rng) => {
+    this._sample(1.95, (x, z, rng) => {
       if (placed >= cap) return;
       if (this._blocked(x, z, EX_SMALL)) return;
       if (this._water(x, z) !== null) return;
       if (this._slope(x, z) > 0.5) return;
-      const clump = 0.45 + hash3(Math.round(x * 0.35), Math.round(z * 0.35), 91) * 0.9;
+      const patch = hash3(Math.round(x * 0.22), Math.round(z * 0.22), 91);
+      const clump = 0.10 + smoothstep(0.24, 0.84, patch) * 0.84;
       if (rng() > flora.grass * dens * clump) return;
-      const v = vars[Math.floor(rng() * vars.length)];
-      const s = 0.7 + rng() * 0.8;
-      const tint = 0.78 + rng() * 0.42;
+      const vi = Math.floor(rng() * vars.length);
+      const v = vars[vi];
+      const pal = palettes[vi];
+      const s = 0.70 + rng() * 0.54;
+      const tint = 0.86 + rng() * 0.16;
       v.list.push({
-        x, y: this._h(x, z) - 0.03, z, yaw: rng() * TAU, sx: s, sy: s * (0.75 + rng() * 0.7), sz: s,
-        cr: tint * (0.92 + rng() * 0.14), cg: tint, cb: tint * (0.8 + rng() * 0.2),
+        x, y: this._h(x, z) - 0.015, z, yaw: rng() * TAU,
+        sx: s * (0.82 + rng() * 0.28),
+        sy: s * (0.66 + rng() * 0.46),
+        sz: s * (0.82 + rng() * 0.28),
+        cr: tint * pal[0], cg: tint * pal[1], cb: tint * pal[2],
       });
       placed++;
     });
@@ -3258,7 +3482,7 @@ attribute float aWind;`)
       if (!s || s.dead) continue;
       if (!s.handle || s.handle.alive === false) {
         let h = null;
-        try { h = fx.spawn(s.name, s.pos, {}); } catch (e) { h = null; }
+        try { h = fx.spawn(s.name, s.pos, s.opts); } catch (e) { h = null; }
         // an effect the FxSystem doesn't know is never worth retrying
         if (!h || typeof h.stop !== 'function') { s.dead = true; s.handle = null; continue; }
         s.handle = h;
@@ -3274,6 +3498,63 @@ attribute float aWind;`)
       const x = p ? p.position.x : 0, z = p ? p.position.z : 0;
       const dx = x - cx, dz = z - cz;
       m.visible = (dx * dx + dz * dz) < LOD_DETAIL2;
+    }
+  }
+
+  /**
+   * Fade only the roof skin that crosses the camera-to-player sightline.
+   * Walls, posts, eaves and ridge trim remain fully readable, so this behaves
+   * like the classic RPG "roof reveal" while preserving architectural massing.
+   * The math is deliberately scalar to keep update() allocation-free.
+   */
+  _updateRoofOcclusion(dt, camera) {
+    const focus = this.ctx.engine && this.ctx.engine.camTarget;
+    if (!camera || !camera.position || !focus) return;
+
+    const ax = camera.position.x, ay = camera.position.y, az = camera.position.z;
+    const vx = focus.x - ax, vy = focus.y - ay, vz = focus.z - az;
+    const len2 = vx * vx + vy * vy + vz * vz;
+    const ease = 1 - Math.exp(-Math.max(0, dt) * 8.5);
+
+    for (let i = 0; i < this._roofOccluders.length; i++) {
+      const r = this._roofOccluders[i];
+      const p = r.parent.position;
+      const yaw = r.parent.rotation.y;
+      const ca = Math.cos(yaw), sa = Math.sin(yaw);
+      const bx = p.x + r.localX * ca + r.localZ * sa;
+      const by = p.y + r.localY;
+      const bz = p.z - r.localX * sa + r.localZ * ca;
+
+      let occlusion = 0;
+      if (len2 > 1e-5) {
+        const t = ((bx - ax) * vx + (by - ay) * vy + (bz - az) * vz) / len2;
+        if (t > 0.035 && t < 1.045) {
+          const px = ax + vx * t, py = ay + vy * t, pz = az + vz * t;
+          const dx = bx - px, dy = by - py, dz = bz - pz;
+          const lineDist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+          // Fade firmly once the camera ray enters the roof's broad projected
+          // mass. The outer band avoids a hard pop at upturned eave corners.
+          occlusion = 1 - smoothstep(r.radius * 0.70, r.radius * 1.20, lineDist);
+        }
+      }
+
+      // Also reveal the interior whenever the focus itself is beneath a broad
+      // roof, even at near-vertical camera angles.
+      const tx = bx - focus.x, tz = bz - focus.z;
+      const targetDist = Math.sqrt(tx * tx + tz * tz);
+      const overTarget = 1 - smoothstep(r.radius * 0.48, r.radius * 1.02, targetDist);
+      if (overTarget > occlusion) occlusion = overTarget;
+
+      const goal = 1 - occlusion * 0.92;
+      r.alpha += (goal - r.alpha) * ease;
+      if (r.alpha >= 0.992) {
+        if (r.mesh.material !== r.opaqueMat) r.mesh.material = r.opaqueMat;
+        r.mesh.castShadow = r.baseCastShadow;
+      } else {
+        r.fadeMat.opacity = clamp(r.alpha, 0.08, 1);
+        if (r.mesh.material !== r.fadeMat) r.mesh.material = r.fadeMat;
+        r.mesh.castShadow = r.baseCastShadow && r.alpha > 0.62;
+      }
     }
   }
 
@@ -3296,6 +3577,7 @@ attribute float aWind;`)
     } else {
       _cam.set(this.W * 0.5, 0, this.H * 0.5);
     }
+    this._updateRoofOcclusion(d, cam);
 
     this._lightTimer -= d;
     if (this._lightTimer <= 0) {
@@ -3372,6 +3654,7 @@ attribute float aWind;`)
     this._instKits.clear();
     this._instQueue.clear();
     this._lod.length = 0;
+    this._roofOccluders.length = 0;
     this.blockers.length = 0;
     this.interactables.length = 0;
     this._mask = null;

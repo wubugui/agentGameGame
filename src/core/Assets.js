@@ -48,7 +48,9 @@ export class Assets {
       if (!res.ok) throw new Error(`manifest ${res.status}`);
       this.manifest = await res.json();
     } catch (e) {
-      console.warn('[assets] no manifest; running without modeled assets', e.message);
+      // Modeled assets are an optional fidelity layer; every caller has a
+      // procedural fallback, so an absent manifest is a supported configuration.
+      console.info('[assets] no manifest; using procedural models', e.message);
       this.manifest = { assets: {} };
       this.ready = true;
       return this;
@@ -89,7 +91,7 @@ export class Assets {
     if (!proto) {
       if (!this.missing.has(name)) {
         this.missing.add(name);
-        console.warn(`[assets] '${name}' not built — did tools/blender/build.py run?`);
+        console.info(`[assets] optional model '${name}' unavailable; using procedural fallback`);
       }
       return null;
     }
@@ -164,8 +166,12 @@ export class Assets {
       meshes,
       source: name,
       dispose() {
-        for (const m of meshes) m.geometry?.dispose?.();
+        // SkeletonUtils clones Object3D/bones, but intentionally shares mesh
+        // geometry with the cached prototype. The Assets instance owns that
+        // shared buffer and releases it in Assets.dispose(); disposing it on a
+        // map change would invalidate every later clone of the same character.
         root.parent?.remove(root);
+        meshes.length = 0;
       },
     };
   }

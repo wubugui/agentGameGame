@@ -24,6 +24,7 @@
  */
 
 import * as THREE from 'three';
+import bus from '../core/EventBus.js';
 
 const QUALITIES = ['low', 'med', 'high', 'ultra'];
 
@@ -95,6 +96,7 @@ const DEFS = {
   bark: {
     kind: 'bark.oak', color: 0x6d5a44, rough: 0.95, metal: 0,
     repeat: [1, 2], sizeMul: 0.5, normalScale: 1.35, aoIntensity: 1.0,
+    wetResponse: 0.48, wetDark: 0.72,
   },
   leaf: {
     kind: 'leaf.broad', color: 0x3f6b2b, rough: 0.8, metal: 0,
@@ -112,10 +114,12 @@ const DEFS = {
   rock: {
     kind: 'rock', color: 0x77716a, rough: 0.92, metal: 0,
     repeat: [1, 1], sizeMul: 0.75, normalScale: 1.25,
+    wetResponse: 0.82, wetDark: 0.66,
   },
   cliff: {
     kind: 'cliff', color: 0x6b6560, rough: 0.95, metal: 0,
     repeat: [2, 2], sizeMul: 1, normalScale: 1.6,
+    wetResponse: 0.72, wetDark: 0.68,
   },
   gravel: {
     kind: 'gravel', color: 0x7a736a, rough: 0.96, metal: 0,
@@ -124,41 +128,50 @@ const DEFS = {
 
   // ---- built environment -------------------------------------------------
   plank: {
-    kind: 'plank', color: 0x8a6a45, rough: 0.85, metal: 0,
+    kind: 'plank', color: 0x8a6a45, mapColor: 0xffead4, rough: 0.85, metal: 0,
     repeat: [1, 1], sizeMul: 0.75, normalScale: 1.0,
+    wetResponse: 0.76, wetDark: 0.61,
   },
   'plank.worn': {
-    kind: 'plank.worn', color: 0x6f5941, rough: 0.94, metal: 0,
+    kind: 'plank.worn', color: 0x6f5941, mapColor: 0xead3b8, rough: 0.94, metal: 0,
     repeat: [1, 1], sizeMul: 0.75, normalScale: 1.2,
+    wetResponse: 0.70, wetDark: 0.60,
   },
   torchWood: {
     kind: 'bark.pine', color: 0x4d3a28, rough: 0.93, metal: 0,
     repeat: [1, 2], sizeMul: 0.35, normalScale: 1.1,
+    wetResponse: 0.42, wetDark: 0.68,
   },
   brick: {
-    kind: 'brick', color: 0x8a5a46, rough: 0.9, metal: 0,
+    kind: 'brick', color: 0x8a5a46, mapColor: 0xffd8c4, rough: 0.9, metal: 0,
     repeat: [2, 2], sizeMul: 1, normalScale: 1.5, aoIntensity: 1.1,
+    wetResponse: 0.70, wetDark: 0.67,
   },
   stoneWall: {
-    kind: 'stone.wall', color: 0x7c7568, rough: 0.93, metal: 0,
+    kind: 'stone.wall', color: 0x7c7568, mapColor: 0xf4e2c3, rough: 0.93, metal: 0,
     repeat: [2, 2], sizeMul: 1, normalScale: 1.55, aoIntensity: 1.15,
+    wetResponse: 0.82, wetDark: 0.64,
   },
   templeWall: {
-    kind: 'temple.wall', color: 0x8b7f66, rough: 0.88, metal: 0,
+    kind: 'temple.wall', color: 0x8b7f66, mapColor: 0xf0dfbd, rough: 0.88, metal: 0,
     repeat: [2, 2], sizeMul: 1, normalScale: 1.4, aoIntensity: 1.1,
+    wetResponse: 0.74, wetDark: 0.65,
   },
   roofTile: {
-    kind: 'roof.tile', color: 0x4a4048, rough: 0.72, metal: 0,
+    kind: 'roof.tile', color: 0x4a4048, mapColor: 0xc0c7d4, rough: 0.72, metal: 0,
     repeat: [3, 3], sizeMul: 0.75, normalScale: 1.5, physical: true,
     clearcoat: 0.18, clearcoatRoughness: 0.55,
+    wetResponse: 1.0, wetDark: 0.58,
   },
   thatch: {
-    kind: 'roof.thatch', color: 0x9c8348, rough: 0.98, metal: 0,
+    kind: 'roof.thatch', color: 0x9c8348, mapColor: 0xffe1a8, rough: 0.98, metal: 0,
     repeat: [3, 3], sizeMul: 0.75, normalScale: 1.7,
+    wetResponse: 0.40, wetDark: 0.72,
   },
   plaster: {
-    kind: 'plaster', color: 0xcabfa6, rough: 0.94, metal: 0,
+    kind: 'plaster', color: 0xcabfa6, mapColor: 0xfff1d6, rough: 0.94, metal: 0,
     repeat: [2, 2], sizeMul: 0.75, normalScale: 0.7,
+    wetResponse: 0.30, wetDark: 0.76,
   },
   paperScreen: {
     kind: 'paper.screen', color: 0xe6dcc0, rough: 0.9, metal: 0,
@@ -175,19 +188,23 @@ const DEFS = {
   iron: {
     kind: 'iron', color: 0xb7bdc4, rough: 0.42, metal: 1,
     sizeMul: 0.5, normalScale: 0.85, envBoost: 1.15,
+    wetResponse: 0.48, wetDark: 0.72,
   },
   ironRusted: {
     // Rust is a dielectric crust over metal: pull metalness down, roughness up.
     kind: 'iron.rusted', color: 0x8d5c3b, rough: 0.86, metal: 0.62,
     sizeMul: 0.5, normalScale: 1.35, envBoost: 0.8,
+    wetResponse: 0.58, wetDark: 0.63,
   },
   steel: {
     kind: 'steel', color: 0xdae0e8, rough: 0.26, metal: 1,
     sizeMul: 0.5, normalScale: 0.7, envBoost: 1.3,
+    wetResponse: 0.42, wetDark: 0.76,
   },
   bronze: {
     kind: 'bronze', color: 0xc98a45, rough: 0.38, metal: 1,
     sizeMul: 0.5, normalScale: 0.95, envBoost: 1.15,
+    wetResponse: 0.44, wetDark: 0.72,
   },
   gold: {
     kind: 'gold', color: 0xffd35e, rough: 0.2, metal: 1,
@@ -343,13 +360,30 @@ export class MaterialLibrary {
     this._elapsed = 0;
     this._missing = new Set();
 
+    // One shared rain-film uniform drives every compatible PBR shader.  The
+    // event only changes a scalar goal; update() eases it without allocations.
+    this._wetness = 0;
+    this._wetnessGoal = 0;
+    this._wetU = { value: 0 };
+    this._offWet = bus.on('weather:wetness', (v) => {
+      const n = typeof v === 'number' && isFinite(v) ? v : 0;
+      this._wetnessGoal = n < 0 ? 0 : n > 1 ? 1 : n;
+    });
+
     // Quality gates. Degrade the *shading model*, not the frame rate.
     const q = this.quality;
     this._allowPhysical = q !== 'low';
-    this._allowTransmission = q === 'high' || q === 'ultra';
+    // Ultra's denser prop population can put several transmissive paper/glass
+    // draws in the same frame. The extra transmission framebuffer sampler
+    // crosses ANGLE's stable sampler budget there; use the existing polished
+    // transparent fallback instead.
+    this._allowTransmission = q === 'high';
     this._allowAo = q !== 'low';
     this._allowRoughMap = q !== 'low';
-    this._allowIridescence = q === 'ultra';
+    // MeshPhysicalMaterial's iridescence path consumes an additional internal
+    // LUT sampler and is not worth destabilising the already texture-heavy
+    // Ultra scene. Chitin still reads through clearcoat + environment response.
+    this._allowIridescence = false;
     this._allowClearcoat = q !== 'low';
   }
 
@@ -393,6 +427,13 @@ export class MaterialLibrary {
       : this._elapsed + d;
     const t = this._elapsed;
 
+    if (this._wetness !== this._wetnessGoal) {
+      const rate = this._wetnessGoal > this._wetness ? 3.2 : 0.72;
+      this._wetness += (this._wetnessGoal - this._wetness) * (1 - Math.exp(-rate * d));
+      if (Math.abs(this._wetness - this._wetnessGoal) < 0.001) this._wetness = this._wetnessGoal;
+      this._wetU.value = this._wetness;
+    }
+
     const anim = this._animated;
     for (let i = 0; i < anim.length; i++) {
       const a = anim[i];
@@ -426,6 +467,7 @@ export class MaterialLibrary {
 
   /** Free every material and every texture this library owns. */
   dispose() {
+    if (this._offWet) { this._offWet(); this._offWet = null; }
     for (const mat of this._cache.values()) {
       if (!mat) continue;
       // Only null out slots holding textures we own; forge textures are the
@@ -574,10 +616,48 @@ export class MaterialLibrary {
 
     mat.envMapIntensity = def.envBoost !== undefined ? def.envBoost : 1;
     mat.userData.envBoost = mat.envMapIntensity;
+    this._installWetLayer(mat, def, name);
 
     this._applyOverrides(mat, overrides);
     this._applyEnv(mat);
     return mat;
+  }
+
+  /**
+   * Add a physically bounded rain film to surfaces that can actually become
+   * wet.  It is deliberately normal-aware: horizontal roof/beam/stone faces
+   * pool and polish, while walls receive only a dark damp veil.  This avoids
+   * the old "every material was dipped in varnish" look.
+   */
+  _installWetLayer(mat, def, name) {
+    const response = def.wetResponse || 0;
+    if (!(response > 0) || this.quality === 'low') return;
+    const dark = def.wetDark !== undefined ? def.wetDark : 0.68;
+    const wetU = this._wetU;
+    mat.onBeforeCompile = (shader) => {
+      shader.uniforms.uMirWetness = wetU;
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', `#include <common>
+uniform float uMirWetness;`)
+        .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+{
+  // 'normal' is in view space here; return it to world space before testing
+  // whether the surface faces the rain.
+  vec3 mirWetWorldN = inverseTransformDirection( normal, viewMatrix );
+  float mirWetUp = smoothstep( 0.04, 0.88, mirWetWorldN.y );
+  float mirWetFacing = mix( 0.20, 1.0, mirWetUp );
+  float mirWet = clamp( uMirWetness * ${response.toFixed(3)} * mirWetFacing, 0.0, 1.0 );
+  float mirWetPool = smoothstep( 0.58, 0.96, mirWetWorldN.y );
+  diffuseColor.rgb *= mix( 1.0, ${dark.toFixed(3)}, mirWet );
+  roughnessFactor = mix(
+    roughnessFactor,
+    mix( 0.31, 0.075, mirWetPool ),
+    mirWet * mix( 0.62, 0.92, mirWetPool )
+  );
+}`);
+    };
+    mat.customProgramCacheKey = () => `mir-wet:${name}:${response.toFixed(3)}:${dark.toFixed(3)}`;
+    mat.userData.wetResponse = response;
   }
 
   // ---- lava ---------------------------------------------------------------
@@ -929,7 +1009,7 @@ ${NOISE_GLSL}`)
       name: 'shadowBlob',
       color: 0x000000,
       transparent: true,
-      opacity: 0.42,
+      opacity: 0.48,
       depthWrite: false,
       depthTest: true,
       side: THREE.FrontSide,

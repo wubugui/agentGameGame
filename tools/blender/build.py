@@ -3,6 +3,7 @@ Asset build. Run from the repo root:
 
     python3 tools/blender/build.py                 # everything
     python3 tools/blender/build.py characters      # one module
+    python3 tools/blender/build.py characters --asset=char_warrior_m,char_mage_f
     python3 tools/blender/build.py --list          # what would be built
 
 Each asset module exposes:
@@ -28,6 +29,11 @@ sys.path.insert(0, HERE)
 
 from lib import mesh as M          # noqa: E402
 from lib import export as EX       # noqa: E402
+
+# Hero characters are selection-screen assets as well as isometric actors.
+# Their former 6k ceiling forced visible faceting in faces, hands and garment
+# hems, so the fourth-pass contract deliberately spends up to 20k triangles.
+EX.BUDGETS["character"] = 20000
 
 # Asset modules, in build order. A module that does not exist yet is skipped
 # with a notice rather than failing the whole build — this lets modeling work
@@ -66,17 +72,24 @@ def main():
     args = [a for a in sys.argv[1:] if not a.startswith("-")]
     flags = {a for a in sys.argv[1:] if a.startswith("-")}
     only = set(args) if args else None
+    asset_filter = set()
+    for flag in flags:
+        if flag.startswith("--asset="):
+            asset_filter.update(a.strip() for a in flag.split("=", 1)[1].split(",") if a.strip())
 
     mods = load_modules(only)
 
     if "--list" in flags:
         for name, mod in mods:
             for asset, (cat, _fn) in getattr(mod, "ASSETS", {}).items():
+                if asset_filter and asset not in asset_filter:
+                    continue
                 print(f"  {name:20s} {asset:28s} [{cat}]")
         return 0
 
     t0 = time.time()
     built = failed = 0
+    matched = set()
 
     for name, mod in mods:
         assets = getattr(mod, "ASSETS", {})
@@ -85,6 +98,9 @@ def main():
             continue
         print(f"\n=== {name} ({len(assets)} assets) ===")
         for asset, spec in assets.items():
+            if asset_filter and asset not in asset_filter:
+                continue
+            matched.add(asset)
             category, fn = spec
             try:
                 M.reset()
@@ -95,6 +111,11 @@ def main():
                 failed += 1
                 print(f"  ! {asset} FAILED")
                 traceback.print_exc(limit=6)
+
+    missing = asset_filter - matched
+    if missing:
+        failed += len(missing)
+        print(f"\n  ! unknown asset filter: {', '.join(sorted(missing))}")
 
     EX.write_manifest()
     print(f"\n{built} built, {failed} failed in {time.time() - t0:.1f}s")

@@ -157,6 +157,7 @@ const POINT_VERT = /* glsl */`
 
 const POINT_FRAG = /* glsl */`
   uniform sampler2D uMap;
+  uniform float uEnergy;
   varying vec3 vCol;
   varying float vAlpha;
   varying float vRot;
@@ -172,7 +173,12 @@ const POINT_FRAG = /* glsl */`
     // *shape* and hot-core ramp only, so a blue ice shard does not come out
     // muddy orange — the tint is entirely the particle's own colour.
     float core = max( t.r, max( t.g, t.b ) );
-    gl_FragColor = vec4( vCol * ( 0.4 + 0.6 * core ), a );
+    float hot = pow( core, 5.0 ) * uEnergy;
+    vec3 chroma = vCol * ( 0.32 + 0.78 * core );
+    // Additive sparks/flame carry a small white-energy nucleus surrounded by
+    // saturated colour. Normal-blended smoke has uEnergy=0 and stays diffuse.
+    vec3 outCol = chroma + mix( vCol, vec3( 1.0 ), 0.78 ) * hot * 0.62;
+    gl_FragColor = vec4( outCol, a );
   }
 `;
 
@@ -215,6 +221,7 @@ class PointBank {
         uMap: { value: map },
         uScale: { value: 400 },
         uMax: { value: 340 },
+        uEnergy: { value: blending === THREE.AdditiveBlending ? 1 : 0 },
       },
       vertexShader: POINT_VERT,
       fragmentShader: POINT_FRAG,
@@ -703,7 +710,10 @@ const ORB_FRAG = /* glsl */`
     float a = t.a * vA;
     if ( a < 0.004 ) discard;
     float core = max( t.r, max( t.g, t.b ) );
-    gl_FragColor = vec4( vCol * ( 0.35 + 0.75 * core ), a );
+    float nucleus = pow( core, 4.5 );
+    vec3 chroma = vCol * ( 0.28 + 0.86 * core );
+    vec3 hot = mix( vCol, vec3( 1.0 ), 0.82 ) * nucleus * 0.72;
+    gl_FragColor = vec4( chroma + hot, a );
   }
 `;
 
@@ -733,12 +743,18 @@ const RING_FRAG = /* glsl */`
   varying float vAng;
   void main() {
     float e = 1.0 - abs( vR * 2.0 - 1.0 );
-    float band = pow( clamp( e, 0.0, 1.0 ), 1.8 );
-    // faint sigil ticks so runes and portals read as carved, not as a donut
-    float ticks = 0.82 + 0.18 * cos( vAng * 12.0 );
-    float a = band * vA * ticks;
+    float band = pow( clamp( e, 0.0, 1.0 ), 1.65 );
+    float core = pow( band, 6.0 );
+    // Two incommensurate angular bands stop every rune/shockwave reading as
+    // the same twelve-toothed neon donut.
+    float glyphA = 0.76 + 0.24 * smoothstep( -0.25, 0.55, cos( vAng * 9.0 ) );
+    float glyphB = 0.84 + 0.16 * smoothstep( -0.45, 0.62, sin( vAng * 17.0 + vR * 7.0 ) );
+    float ticks = glyphA * glyphB;
+    float a = ( band * 0.82 + core * 0.18 ) * vA * ticks;
     if ( a < 0.004 ) discard;
-    gl_FragColor = vec4( vCol * ( band * 0.6 + 0.4 ), a );
+    vec3 c = vCol * ( 0.30 + band * 0.74 )
+      + mix( vCol, vec3( 1.0 ), 0.72 ) * core * 0.34;
+    gl_FragColor = vec4( c, a );
   }
 `;
 
@@ -2212,7 +2228,10 @@ export class FxSystem {
     this.scene = this.engine ? this.engine.scene : new THREE.Scene();
     this.quality = this.ctx.quality || (this.engine && this.engine.quality) || 'high';
     const preset = (this.engine && this.engine.preset) || QUALITY_PRESETS[this.quality] || QUALITY_PRESETS.high;
-    this.density = preset.particles || 1;
+    // Ultra spends its headroom on a third local light and denser world
+    // geometry; particle banks cap at the already-rich High emission density.
+    // This also keeps pooled attribute ranges inside the reliable ANGLE budget.
+    this.density = Math.min(1, preset.particles || 1);
     this.time = 0;
     this._disposed = false;
     this._warned = new Set();

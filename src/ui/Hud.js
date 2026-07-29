@@ -801,7 +801,7 @@ function paintIcon(kind, S) {
 // ---------------------------------------------------------------------------
 
 const _v3 = new THREE.Vector3();
-const _proj = { x: 0, y: 0, ok: false };
+const _proj = { x: 0, y: 0, z: 0, nx: 0, ny: 0, ok: false };
 
 export class Hud {
   constructor(game) {
@@ -949,12 +949,30 @@ export class Hud {
     // Collar trim.
     g.strokeStyle = trim; g.lineWidth = S * 0.035;
     g.beginPath(); g.moveTo(S * 0.28, S * 0.74); g.quadraticCurveTo(S * 0.5, S * 0.66, S * 0.72, S * 0.74); g.stroke();
-    // Neck + head.
+    // Neck + a deliberately angular, readable face. At the HUD's final 66 px
+    // size, a plain ellipse reads as a placeholder; the jaw planes and
+    // asymmetric key light preserve a human silhouette after downsampling.
     g.fillStyle = skin;
-    g.fillRect(S * 0.42, S * 0.52, S * 0.16, S * 0.14);
-    g.beginPath(); g.ellipse(S * 0.5, S * 0.40, S * 0.155, S * 0.185, 0, 0, 6.2832); g.fill();
-    g.fillStyle = 'rgba(0,0,0,0.22)';
-    g.beginPath(); g.ellipse(S * 0.5, S * 0.44, S * 0.155, S * 0.14, 0, 0, 3.14159); g.fill();
+    g.fillRect(S * 0.42, S * 0.51, S * 0.16, S * 0.16);
+    g.beginPath();
+    g.moveTo(S * 0.37, S * 0.31);
+    g.quadraticCurveTo(S * 0.39, S * 0.20, S * 0.50, S * 0.20);
+    g.quadraticCurveTo(S * 0.63, S * 0.21, S * 0.65, S * 0.34);
+    g.lineTo(S * 0.61, S * 0.51);
+    g.lineTo(S * 0.54, S * 0.59);
+    g.lineTo(S * 0.46, S * 0.59);
+    g.lineTo(S * 0.39, S * 0.51);
+    g.closePath(); g.fill();
+    // Ears, cheek shade and temple light.
+    g.beginPath(); g.ellipse(S * 0.365, S * 0.405, S * 0.025, S * 0.055, -0.08, 0, 6.2832); g.fill();
+    g.beginPath(); g.ellipse(S * 0.645, S * 0.405, S * 0.025, S * 0.055, 0.08, 0, 6.2832); g.fill();
+    g.fillStyle = 'rgba(88,35,20,0.20)';
+    g.beginPath();
+    g.moveTo(S * 0.53, S * 0.24); g.lineTo(S * 0.64, S * 0.34);
+    g.lineTo(S * 0.60, S * 0.51); g.lineTo(S * 0.53, S * 0.58);
+    g.closePath(); g.fill();
+    g.fillStyle = 'rgba(255,232,196,0.20)';
+    g.beginPath(); g.ellipse(S * 0.445, S * 0.34, S * 0.055, S * 0.12, 0.12, 0, 6.2832); g.fill();
     // Hair.
     g.fillStyle = hair;
     g.beginPath();
@@ -964,10 +982,30 @@ export class Hud {
     g.quadraticCurveTo(S * 0.60, S * 0.30, S * 0.5, S * 0.30);
     g.quadraticCurveTo(S * 0.40, S * 0.30, S * 0.34, S * 0.42);
     g.closePath(); g.fill();
-    // Eyes.
-    g.fillStyle = '#120c08';
-    g.beginPath(); g.ellipse(S * 0.44, S * 0.41, S * 0.022, S * 0.014, 0, 0, 6.2832); g.fill();
-    g.beginPath(); g.ellipse(S * 0.56, S * 0.41, S * 0.022, S * 0.014, 0, 0, 6.2832); g.fill();
+    // Brow, eyes, nose and mouth — high-contrast strokes survive at 1×.
+    g.strokeStyle = hair; g.lineWidth = S * 0.018; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(S * 0.405, S * 0.375); g.lineTo(S * 0.47, S * 0.36); g.stroke();
+    g.beginPath(); g.moveTo(S * 0.535, S * 0.36); g.lineTo(S * 0.595, S * 0.375); g.stroke();
+    g.fillStyle = 'rgba(255,245,224,0.82)';
+    g.beginPath(); g.ellipse(S * 0.44, S * 0.405, S * 0.037, S * 0.018, -0.06, 0, 6.2832); g.fill();
+    g.beginPath(); g.ellipse(S * 0.56, S * 0.405, S * 0.037, S * 0.018, 0.06, 0, 6.2832); g.fill();
+    g.fillStyle = klass === 'mage' ? '#315c75' : klass === 'taoist' ? '#365a3e' : '#382516';
+    g.beginPath(); g.arc(S * 0.445, S * 0.405, S * 0.014, 0, 6.2832); g.fill();
+    g.beginPath(); g.arc(S * 0.555, S * 0.405, S * 0.014, 0, 6.2832); g.fill();
+    g.fillStyle = '#090706';
+    g.beginPath(); g.arc(S * 0.445, S * 0.405, S * 0.007, 0, 6.2832); g.fill();
+    g.beginPath(); g.arc(S * 0.555, S * 0.405, S * 0.007, 0, 6.2832); g.fill();
+    g.strokeStyle = 'rgba(86,40,26,0.58)'; g.lineWidth = S * 0.012;
+    g.beginPath(); g.moveTo(S * 0.50, S * 0.405); g.lineTo(S * 0.485, S * 0.475);
+    g.lineTo(S * 0.515, S * 0.475); g.stroke();
+    g.strokeStyle = 'rgba(72,28,24,0.76)'; g.lineWidth = S * 0.014;
+    g.beginPath(); g.moveTo(S * 0.455, S * 0.525);
+    g.quadraticCurveTo(S * 0.50, S * 0.54, S * 0.548, S * 0.515); g.stroke();
+    if (klass === 'warrior') {
+      g.strokeStyle = 'rgba(55,27,18,0.58)'; g.lineWidth = S * 0.018;
+      g.beginPath(); g.moveTo(S * 0.445, S * 0.55);
+      g.quadraticCurveTo(S * 0.50, S * 0.585, S * 0.555, S * 0.55); g.stroke();
+    }
     // Class glyph, carved into the lower-right.
     g.fillStyle = 'rgba(0,0,0,0.55)';
     g.font = `700 ${Math.round(S * 0.26)}px "Songti SC","SimSun",serif`;
@@ -1122,7 +1160,10 @@ export class Hud {
       const bar = el('div', 'mir-plate-bar', inner);
       const fill = el('i', '', bar);
       n.style.display = 'none';
-      this._plates.push({ n, inner, nm, bar, fill, ent: null, lastHp: -1, lastName: '', shown: false });
+      this._plates.push({
+        n, inner, nm, bar, fill, ent: null, lastHp: -1, lastName: '',
+        shown: false, baseVisible: false, alpha: -1,
+      });
     }
 
     this._labels = [];
@@ -1130,7 +1171,7 @@ export class Hud {
       const n = el('div', 'mir-lootlbl', this.elWorld);
       const inner = el('div', 'mir-lootlbl-in', n);
       n.style.display = 'none';
-      this._labels.push({ n, inner, entry: null, txt: '' });
+      this._labels.push({ n, inner, entry: null, txt: '', alpha: -1 });
     }
 
     this._plateScratch = [];
@@ -1263,7 +1304,10 @@ export class Hud {
       this.toast(`获得【${item.name}】${qty > 1 ? ' ×' + qty : ''}`, 'good');
     });
 
-    this._onResize = () => { this._w = window.innerWidth; this._h = window.innerHeight; };
+    this._onResize = () => {
+      this._w = window.innerWidth; this._h = window.innerHeight;
+      this._syncChromeOcclusion();
+    };
     window.addEventListener('resize', this._onResize);
 
     this._onUp = (e) => this._dragEnd(e);
@@ -1277,8 +1321,11 @@ export class Hud {
 
   /** Forget every entity/loot reference held by the pooled world elements. */
   _clearWorldPools() {
-    for (const pl of this._plates) { pl.ent = null; pl.lastHp = -1; this._hidePlate(pl); }
-    for (const lb of this._labels) { lb.entry = null; lb.n.style.display = 'none'; }
+    for (const pl of this._plates) {
+      pl.ent = null; pl.lastHp = -1; pl.baseVisible = false; pl.alpha = -1;
+      this._hidePlate(pl);
+    }
+    for (const lb of this._labels) { lb.entry = null; lb.alpha = -1; lb.n.style.display = 'none'; }
     for (const d of this._dmg) { d.active = false; d.n.style.display = 'none'; }
     this._plateScratch.length = 0;
     this.hovered = null;
@@ -1331,10 +1378,85 @@ export class Hud {
 
   _project(x, y, z) {
     _v3.set(x, y, z).project(this.ctx.engine.camera);
-    _proj.ok = _v3.z < 1;
+    _proj.nx = _v3.x;
+    _proj.ny = _v3.y;
+    _proj.z = _v3.z;
+    // Reject anchors behind the near plane and well outside the viewport.
+    // The small 4% overscan avoids a one-frame pop at an edge while still
+    // preventing labels from being painted onto HUD chrome off-camera.
+    _proj.ok = _v3.z > -1 && _v3.z < 1 && Math.abs(_v3.x) < 1.04 && Math.abs(_v3.y) < 1.04;
     _proj.x = (_v3.x * 0.5 + 0.5) * this._w;
     _proj.y = (-_v3.y * 0.5 + 0.5) * this._h;
     return _proj;
+  }
+
+  /** Entity hierarchy + navigation visibility. Re-evaluated by the 8 Hz census. */
+  _entityBaseVisible(e) {
+    if (!e || !e.root || e.root.visible === false) return false;
+    let o = e.root.parent;
+    while (o) {
+      if (o.visible === false) return false;
+      if (o === this.game.world?.group) break;
+      o = o.parent;
+    }
+    const w = this.game.world, p = this.game.player;
+    if (!w || !p || e === p || !w.nav) return true;
+    return w.nav.lineOfWalk(p.position.x, p.position.z, e.position.x, e.position.z);
+  }
+
+  /** Ground loot obeys the same wall/navigation visibility rule as entities. */
+  _lootBaseVisible(l) {
+    const w = this.game.world, p = this.game.player;
+    if (!l || !l.position || l.mesh?.visible === false || !w || !p) return false;
+    return !w.nav || w.nav.lineOfWalk(p.position.x, p.position.z, l.position.x, l.position.z);
+  }
+
+  /**
+   * Continuous visibility for a projected anchor.
+   *
+   * Props exposes the roof fade records that it already updates for the main
+   * camera.  Reusing the same bounds/alpha makes labels disappear under an
+   * opaque roof and return at the exact rate that the roof reveals an interior,
+   * without a second raycaster or any per-frame allocation.
+   */
+  _anchorVisibility(x, y, z, pr) {
+    if (!pr.ok || pr.x < 4 || pr.y < 4 || pr.x > this._w - 4 || pr.y > this._h - 4) return 0;
+    const roofs = this.game.world?.props?._roofOccluders;
+    const camera = this.ctx.engine.camera;
+    if (!roofs || !roofs.length || !camera?.position) return 1;
+
+    const ax = camera.position.x, ay = camera.position.y, az = camera.position.z;
+    const vx = x - ax, vy = y - ay, vz = z - az;
+    const len2 = vx * vx + vy * vy + vz * vz;
+    if (len2 < 1e-5) return 1;
+
+    let visibility = 1;
+    for (let i = 0; i < roofs.length; i++) {
+      const r = roofs[i];
+      if (!r || r.mesh?.visible === false || r.parent?.visible === false) continue;
+      const p = r.parent.position;
+      const yaw = r.parent.rotation.y;
+      const ca = Math.cos(yaw), sa = Math.sin(yaw);
+      const bx = p.x + r.localX * ca + r.localZ * sa;
+      const by = p.y + r.localY;
+      const bz = p.z - r.localX * sa + r.localZ * ca;
+      const t = ((bx - ax) * vx + (by - ay) * vy + (bz - az) * vz) / len2;
+      if (t <= 0.025 || t >= 1.08) continue;
+      const px = ax + vx * t, py = ay + vy * t, pz = az + vz * t;
+      const dx = bx - px, dy = by - py, dz = bz - pz;
+      const radius = Math.max(1.2, r.radius || 1.2);
+      const d2 = dx * dx + dy * dy + dz * dz;
+      const outer = radius * 1.08;
+      if (d2 >= outer * outer) continue;
+
+      const dist = Math.sqrt(d2);
+      const edge = clamp01((outer - dist) / Math.max(0.001, radius * 0.38));
+      const roofAlpha = clamp01(((r.alpha ?? 1) - 0.08) / 0.84);
+      const v = 1 - edge * roofAlpha;
+      if (v < visibility) visibility = v;
+      if (visibility < 0.035) return 0;
+    }
+    return visibility;
   }
 
   _updateDamage(dt) {
@@ -1345,6 +1467,8 @@ export class Hud {
       if (t >= 1) { e.active = false; e.n.style.display = 'none'; continue; }
       const p = this._project(e.wx, e.wy, e.wz);
       if (!p.ok) { e.n.style.display = 'none'; continue; }
+      const worldVis = this._anchorVisibility(e.wx, e.wy, e.wz, p);
+      if (worldVis <= 0.02) { e.n.style.display = 'none'; continue; }
       if (e.n.style.display === 'none') e.n.style.display = '';
       const rise = 54 * (1 - (1 - t) * (1 - t));
       let jx = 0, jy = 0;
@@ -1354,7 +1478,8 @@ export class Hud {
         jy = Math.cos(e.seed + e.life * 37) * s * 0.7;
       }
       e.n.style.transform = `translate3d(${(p.x + jx).toFixed(1)}px,${(p.y - rise + jy).toFixed(1)}px,0)`;
-      e.n.style.opacity = t > 0.68 ? String(((1 - t) / 0.32).toFixed(2)) : '1';
+      const lifeAlpha = t > 0.68 ? (1 - t) / 0.32 : 1;
+      e.n.style.opacity = String((lifeAlpha * worldVis).toFixed(2));
     }
   }
 
@@ -1381,7 +1506,9 @@ export class Hud {
     }
     list.sort(this._byDist);
     for (let i = 0; i < this._plates.length; i++) {
-      this._plates[i].ent = i < list.length ? list[i] : null;
+      const pl = this._plates[i];
+      pl.ent = i < list.length ? list[i] : null;
+      pl.baseVisible = !!pl.ent && this._entityBaseVisible(pl.ent);
     }
   }
 
@@ -1390,11 +1517,16 @@ export class Hud {
     const target = p ? p.orderTarget : null;
     for (const pl of this._plates) {
       const e = pl.ent;
-      if (!e || e.dead) { this._hidePlate(pl); continue; }
-      const pr = this._project(e.position.x, e.position.y + (e.height || 1.7) + 0.28, e.position.z);
+      if (!e || e.dead || !pl.baseVisible) { this._hidePlate(pl); continue; }
+      const anchorY = e.position.y + (e.height || 1.7) + 0.28;
+      const pr = this._project(e.position.x, anchorY, e.position.z);
       if (!pr.ok) { this._hidePlate(pl); continue; }
+      const alpha = this._anchorVisibility(e.position.x, anchorY, e.position.z, pr);
+      if (alpha <= 0.055) { this._hidePlate(pl); continue; }
       if (!pl.shown) { pl.shown = true; pl.n.style.display = ''; }
       pl.n.style.transform = `translate3d(${pr.x.toFixed(1)}px,${pr.y.toFixed(1)}px,0)`;
+      const aq = Math.round(alpha * 20) / 20;
+      if (aq !== pl.alpha) { pl.alpha = aq; pl.n.style.opacity = String(aq); }
 
       const label = e.faction === 'npc'
         ? `${e.name}${e.title ? ' · ' + e.title : ''}`
@@ -1423,8 +1555,12 @@ export class Hud {
         if (i >= this._labels.length) break;
         const dx = l.position.x - p.position.x, dz = l.position.z - p.position.z;
         if (dx * dx + dz * dz > 196) continue;
-        const pr = this._project(l.position.x, l.position.y + 0.75, l.position.z);
+        if (!this._lootBaseVisible(l)) continue;
+        const anchorY = l.position.y + 0.75;
+        const pr = this._project(l.position.x, anchorY, l.position.z);
         if (!pr.ok) continue;
+        const alpha = this._anchorVisibility(l.position.x, anchorY, l.position.z, pr);
+        if (alpha <= 0.055) continue;
         const lb = this._labels[i++];
         const txt = l.item.id === 'gold' ? `${l.item.qty} 金币` : (l.item.qty > 1 ? `${l.item.name} ×${l.item.qty}` : l.item.name);
         if (lb.txt !== txt) { lb.inner.textContent = txt; lb.txt = txt; }
@@ -1433,6 +1569,8 @@ export class Hud {
         if (lb.inner.className !== cls) lb.inner.className = cls;
         if (lb.n.style.display === 'none') lb.n.style.display = '';
         lb.n.style.transform = `translate3d(${pr.x.toFixed(1)}px,${pr.y.toFixed(1)}px,0)`;
+        const aq = Math.round(alpha * 20) / 20;
+        if (aq !== lb.alpha) { lb.alpha = aq; lb.n.style.opacity = String(aq); }
       }
     }
     for (; i < this._labels.length; i++) {
@@ -1522,6 +1660,8 @@ export class Hud {
       if (txt !== h.txt) { h.cdt.textContent = txt; h.txt = txt; }
       const poor = s && p.mp < s.mp;
       h.b.classList.toggle('nomp', !!poor);
+      h.b.classList.toggle('cooling', deg > 0);
+      h.b.classList.toggle('ready', deg === 0 && !poor);
     }
   }
 
@@ -1799,6 +1939,7 @@ export class Hud {
       root.style.top = Math.max(0, Math.min(this._h - 40, oy + e.clientY - sy)) + 'px';
       root.style.right = 'auto'; root.style.bottom = 'auto';
       root.style.transform = 'none';
+      this._syncChromeOcclusion();
     };
     const up = () => {
       if (!dragging) return;
@@ -1835,6 +1976,33 @@ export class Hud {
     for (const [k, v] of Object.entries(css)) s[k] = v;
   }
 
+  /**
+   * A draggable window must never become a second opaque layer on top of the
+   * always-on HUD. When their actual border boxes intersect, the underlying
+   * chrome withdraws; closing or moving the panel restores it immediately.
+   * This uses real layout rectangles, so it remains correct at every viewport
+   * size and after the user has dragged a window away from its default anchor.
+   */
+  _syncChromeOcclusion() {
+    const open = [];
+    for (const rec of this._panels.values()) {
+      if (rec.open && rec.root.style.display !== 'none') open.push(rec.root.getBoundingClientRect());
+    }
+    const chrome = [this.elVitals, this.elMinimap, this.elChatBox, this.elCmdBar];
+    for (const node of chrome) {
+      if (!node) continue;
+      const a = node.getBoundingClientRect();
+      let covered = false;
+      for (let i = 0; i < open.length; i++) {
+        const b = open[i];
+        if (a.left < b.right + 3 && a.right > b.left - 3 && a.top < b.bottom + 3 && a.bottom > b.top - 3) {
+          covered = true; break;
+        }
+      }
+      node.classList.toggle('mir-obscured', covered);
+    }
+  }
+
   _ensure(name) {
     let rec = this._panels.get(name);
     if (rec) return rec;
@@ -1863,6 +2031,7 @@ export class Hud {
     if (i >= 0) this._stack.splice(i, 1);
     this._stack.push(name);
     this._refresh(name);
+    this._syncChromeOcclusion();
     bus.emit('ui:panel', { name, open: true });
     bus.emit('audio:sfx', { id: 'ui.click' });
   }
@@ -1875,6 +2044,7 @@ export class Hud {
     const i = this._stack.indexOf(name);
     if (i >= 0) this._stack.splice(i, 1);
     this._hideTip();
+    this._syncChromeOcclusion();
     bus.emit('ui:panel', { name, open: false });
   }
 

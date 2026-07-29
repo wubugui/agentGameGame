@@ -57,8 +57,18 @@ export class Inventory {
     return this.slots.reduce((w, s) => w + (s ? s.weight * s.qty : 0), 0);
   }
 
+  canCarry(item) {
+    if (!item) return false;
+    return this.weight + item.weight * item.qty <= this.player.weightMax + 1e-6;
+  }
+
   add(item) {
     if (!item) return false;
+    if (!this.canCarry(item)) {
+      bus.emit('chat', { text: '负重已满，无法携带更多物品', channel: 'system' });
+      bus.emit('audio:sfx', { id: 'ui.error' });
+      return false;
+    }
     if (item.stackable) {
       const s = this.slots.find((x) => x && x.id === item.id);
       if (s) { s.qty += item.qty; bus.emit('inventory:changed', {}); return true; }
@@ -99,11 +109,19 @@ export class Inventory {
 
     const slot = item.slot;
     const prev = this.player.equipment[slot];
+    const projectedWeight = this.weight - item.weight * item.qty
+      + (prev ? prev.weight * prev.qty : 0);
+    if (projectedWeight > this.player.weightMax + 1e-6) {
+      bus.emit('chat', { text: '替换后的装备会使你超重', channel: 'system' });
+      bus.emit('audio:sfx', { id: 'ui.error' });
+      return false;
+    }
     this.remove(uid);
     this.player.equipment[slot] = item;
     if (prev) this.add(prev);
 
     this.player.recompute();
+    this.player.refreshAppearance?.();
     bus.emit('inventory:changed', {});
     bus.emit('equipment:changed', { slot, item });
     bus.emit('audio:sfx', { id: 'ui.click' });
@@ -114,9 +132,17 @@ export class Inventory {
     const item = this.player.equipment[slot];
     if (!item) return false;
     if (this.slots.indexOf(null) < 0) { bus.emit('chat', { text: '背包已满', channel: 'system' }); return false; }
+    if (!this.canCarry(item)) {
+      bus.emit('chat', { text: '负重已满，无法卸下装备', channel: 'system' });
+      return false;
+    }
     this.player.equipment[slot] = null;
-    this.add(item);
+    if (!this.add(item)) {
+      this.player.equipment[slot] = item;
+      return false;
+    }
     this.player.recompute();
+    this.player.refreshAppearance?.();
     bus.emit('equipment:changed', { slot, item: null });
     return true;
   }
@@ -126,6 +152,12 @@ export class Inventory {
     if (!item) return false;
     if (item.type === 'potion') {
       const p = this.player;
+      const needsHp = item.stats.healHp && p.hp < p.hpMax;
+      const needsMp = item.stats.healMp && p.mp < p.mpMax;
+      if (!needsHp && !needsMp) {
+        bus.emit('chat', { text: '当前无需使用这瓶药水', channel: 'system' });
+        return false;
+      }
       if (item.stats.healHp) p.heal(item.stats.healHp);
       if (item.stats.healMp) p.mp = Math.min(p.mpMax, p.mp + item.stats.healMp);
       this.remove(uid, 1);
@@ -137,7 +169,9 @@ export class Inventory {
     if (item.type === 'book') {
       const learned = this.player.learnSkill(item.stats.teaches);
       if (learned) { this.remove(uid, 1); return true; }
-      bus.emit('chat', { text: '你已经会这个技能了', channel: 'system' });
+      if (this.player.skills.has(item.stats.teaches)) {
+        bus.emit('chat', { text: '你已经会这个技能了', channel: 'system' });
+      }
       return false;
     }
     return false;

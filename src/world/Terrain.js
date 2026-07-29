@@ -96,19 +96,6 @@ function smoothstep(e0, e1, x) {
   return t * t * (3 - 2 * t);
 }
 
-/** Squared distance from (px,pz) to segment (ax,az)-(bx,bz), plus the param t. */
-const _seg = { d: 0, t: 0 };
-function distToSegment(px, pz, ax, az, bx, bz) {
-  const dx = bx - ax, dz = bz - az;
-  const len2 = dx * dx + dz * dz;
-  let t = len2 > 1e-9 ? ((px - ax) * dx + (pz - az) * dz) / len2 : 0;
-  t = t < 0 ? 0 : t > 1 ? 1 : t;
-  const cx = ax + dx * t, cz = az + dz * t;
-  _seg.t = t;
-  _seg.d = Math.hypot(px - cx, pz - cz);
-  return _seg.d;
-}
-
 /* ========================================================================== *
  * 1. Biome tables
  * ========================================================================== */
@@ -131,6 +118,7 @@ const BIOMES = {
     patchFreq: 0.052,
     water: { shallow: 0x3d7a63, deep: 0x0a2429, absorb: 2.6, foam: 0.55 },
     roughBias: 1.0,
+    macroTint: [-0.055, 0.045, -0.065],
   },
   desert: {
     base: 'sand', path: 'dirt', slope: 'rock', accent: 'gravel',
@@ -142,6 +130,7 @@ const BIOMES = {
     patchFreq: 0.040,
     water: { shallow: 0x4d8f86, deep: 0x123a3f, absorb: 2.0, foam: 0.4 },
     roughBias: 1.05,
+    macroTint: [0.075, 0.018, -0.055],
   },
   temple: {
     base: 'temple.floor', path: 'stone.floor', slope: 'cobble', accent: 'blood.floor',
@@ -153,6 +142,7 @@ const BIOMES = {
     patchFreq: 0.070,
     water: { shallow: 0x36555f, deep: 0x0a1a20, absorb: 1.6, foam: 0.35 },
     roughBias: 0.95,
+    macroTint: [-0.025, -0.018, 0.038],
   },
   cave: {
     base: 'cave.floor', path: 'gravel', slope: 'rock', accent: 'mud',
@@ -164,6 +154,7 @@ const BIOMES = {
     patchFreq: 0.085,
     water: { shallow: 0x2a4a55, deep: 0x08161c, absorb: 1.5, foam: 0.3 },
     roughBias: 1.0,
+    macroTint: [-0.035, -0.018, 0.055],
   },
   hell: {
     base: 'rock', path: 'gravel', slope: 'cliff', accent: 'blood.floor',
@@ -175,6 +166,7 @@ const BIOMES = {
     patchFreq: 0.075,
     water: { shallow: 0xff7a24, deep: 0x8c1c05, absorb: 1.1, foam: 0.9 },
     roughBias: 1.05,
+    macroTint: [0.095, -0.055, -0.075],
   },
 };
 
@@ -250,6 +242,7 @@ export class Terrain {
     this._buildAo();
     this._buildMaterial();
     this._buildChunks();
+    this._buildBoundaryApron();
     this._buildWater();
 
     this._offWet = bus.on('weather:wetness', (v) => {
@@ -391,14 +384,23 @@ export class Terrain {
     const paved = new Float32Array(sw * sh);
     const dirt = new Float32Array(sw * sh);
     const any = new Float32Array(sw * sh);
+    // Sparse gravel/rut accents are baked separately from the road body. This
+    // keeps a dirt road from becoming one featureless eight-tile ribbon.
+    const detail = new Float32Array(sw * sh);
     const inv = 1 / sr;
 
     for (const r of roads) {
       const target = (pavedBest && PAVED.has(r.surface)) ? paved : dirt;
-      const halfW = Math.max(0.6, (r.width || 4) * 0.5);
+      const isDirt = !PAVED.has(r.surface);
+      // Authored widths include a gameplay clearance margin. The visible track
+      // is slightly narrower, with a soft irregular verge around it.
+      const halfW = Math.max(0.6, (r.width || 4) * 0.42);
       for (let k = 1; k < r.pts.length; k++) {
         const ax = r.pts[k - 1][0], az = r.pts[k - 1][1];
         const bx = r.pts[k][0], bz = r.pts[k][1];
+        const sx = bx - ax, sz = bz - az;
+        const segLen2 = sx * sx + sz * sz;
+        const segLen = Math.sqrt(segLen2) || 1;
         const pad = halfW + 2.5;
         const i0 = Math.max(0, Math.floor((Math.min(ax, bx) - pad) * sr));
         const i1 = Math.min(sw - 1, Math.ceil((Math.max(ax, bx) + pad) * sr));
@@ -408,14 +410,39 @@ export class Terrain {
           const wz = (j + 0.5) * inv;
           for (let i = i0; i <= i1; i++) {
             const wx = (i + 0.5) * inv;
-            let d = distToSegment(wx, wz, ax, az, bx, bz);
+            const relX = wx - ax, relZ = wz - az;
+            const along = segLen2 > 1e-8 ? clamp((relX * sx + relZ * sz) / segLen2, 0, 1) : 0;
+            const nearX = ax + sx * along, nearZ = az + sz * along;
+            const ddx = wx - nearX, ddz = wz - nearZ;
+            const side = (relX * -sz + relZ * sx) / segLen;
+            let d = Math.sqrt(ddx * ddx + ddz * ddz);
             // wobble the verge so the track isn't a ruler-straight ribbon
-            d += (vnoise(wx * 0.42, wz * 0.42, this.seed + 991) - 0.5) * 1.5;
-            const v = 1 - smoothstep(halfW - 1.1, halfW + 0.5, d);
+            const wobble = (vnoise(wx * 0.42, wz * 0.42, this.seed + 991) - 0.5) * 1.35;
+            d += wobble;
+            const v = 1 - smoothstep(halfW - 0.6, halfW + 0.8, d);
             if (v <= 0) continue;
             const idx = j * sw + i;
             if (v > target[idx]) target[idx] = v;
             if (v > any[idx]) any[idx] = v;
+
+            if (isDirt) {
+              const sideW = side + wobble * 0.65;
+              const rutOffset = Math.max(0.62, halfW * 0.37);
+              const rutDist = Math.min(Math.abs(sideW - rutOffset), Math.abs(sideW + rutOffset));
+              const rutBreak = smoothstep(
+                0.30, 0.76,
+                vnoise(wx * 0.48 + along * 0.17, wz * 0.48, this.seed + 1531)
+              );
+              const rut = (1 - smoothstep(0.10, 0.34, rutDist)) * rutBreak * v;
+              const verge = smoothstep(halfW - 0.88, halfW - 0.12, d)
+                * (1 - smoothstep(halfW + 0.12, halfW + 0.78, d));
+              const stones = smoothstep(
+                0.71, 0.91,
+                vnoise(wx * 1.28, wz * 1.28, this.seed + 2089)
+              ) * v;
+              const dv = clamp01(rut * 0.82 + verge * 0.34 + stones * 0.22);
+              if (dv > detail[idx]) detail[idx] = dv;
+            }
           }
         }
       }
@@ -424,6 +451,7 @@ export class Terrain {
     this._roadPaved = pavedBest ? paved : null;
     this._roadDirt = dirt;
     this._roadAny = any;
+    this._roadDetail = detail;
     // When there is no paved family, all roads live in the dirt field but the
     // dirt field IS layer 1, so re-point it.
     this._roadLayer1 = pavedBest ? paved : dirt;
@@ -719,6 +747,7 @@ export class Terrain {
         const idx = j * sw + i;
         const r1 = this._roadLayer1 ? this._roadLayer1[idx] : 0;
         const r3 = this._roadLayer3 ? this._roadLayer3[idx] : 0;
+        const rDetail = this._roadDetail ? this._roadDetail[idx] : 0;
         const rAny = Math.max(r1, r3);
         if (rAny > 0.001) {
           w[1] += r1 * 7.0;
@@ -728,6 +757,9 @@ export class Terrain {
           w[2] *= suppress;
           if (patch !== 1 && patch !== 3) w[patch] *= suppress;
         }
+        // On meadow dirt roads layer 3 is gravel; on mixed paved maps it is
+        // the dirt family. Either produces subdued cart ruts and broken verges.
+        if (rDetail > 0.001) w[3] += rDetail * 2.35;
 
         let sum = w[0] + w[1] + w[2] + w[3];
         if (sum < 1e-5) { w[0] = 1; sum = 1; }
@@ -755,6 +787,8 @@ export class Terrain {
     this._roadDirt = null;
     this._roadLayer1 = null;
     this._roadLayer3 = null;
+    this._roadDetail = null;
+    this._roadAny = null;
   }
 
   /* --------------------------------------------------------------- ao bake */
@@ -971,6 +1005,9 @@ export class Terrain {
       uDetailAmount: { value: this.quality === 'low' ? 0.5 : 0.85 },
       uBlendSharp: { value: 0.55 },
       uBlendDepth: { value: 0.22 },
+      uMacroTint: { value: new THREE.Vector3(b.macroTint[0], b.macroTint[1], b.macroTint[2]) },
+      uRainTime: { value: 0 },
+      uPuddleStrength: { value: this.quality === 'low' ? 0.55 : 1.0 },
       uWetness: { value: 0 },
     };
 
@@ -1016,6 +1053,9 @@ uniform vec2 uDetailFade;
 uniform float uDetailAmount;
 uniform float uBlendSharp;
 uniform float uBlendDepth;
+uniform vec3 uMacroTint;
+uniform float uRainTime;
+uniform float uPuddleStrength;
 uniform float uWetness;
 varying vec3 vTerrainWorld;
 varying vec3 vTerrainNrm;`)
@@ -1060,15 +1100,53 @@ varying vec3 vTerrainNrm;`)
     vec3 tDetN = texture2D( tDetailNrm, tXZ * uDetailScale ).xyz * 2.0 - 1.0;
     tNrmTS.xy += tDetN.xy * tDetAmt * 0.75;
   #endif
+  float tMacro = 0.5;
   #ifdef TERRAIN_MACRO
-    float tMacro = texture2D( tDetailAlb, tXZ * uMacroScale ).g;
-    tAlbedo *= mix( 0.84, 1.15, tMacro );
+    vec2 tMacroUv = tXZ * uMacroScale;
+    float tMacroA = texture2D( tDetailAlb, tMacroUv ).g;
+    // A rotated, incommensurate second octave breaks the recognisable giant
+    // motif that a single low-frequency repeat leaves across open fields.
+    float tMacroB = texture2D(
+      tDetailAlb,
+      vec2( -tMacroUv.y, tMacroUv.x ) * 0.73 + vec2( 0.37, 0.19 )
+    ).r;
+    tMacro = mix( tMacroA, tMacroB, 0.42 );
+    tAlbedo *= mix( 0.86, 1.13, tMacro );
+    tAlbedo *= max( vec3( 0.72 ), vec3( 1.0 ) + uMacroTint * ( tMacro * 2.0 - 1.0 ) );
   #endif
 
-  // rain darkens and polishes the ground
-  tAlbedo *= mix( 1.0, 0.66, uWetness );
-  tRough = mix( tRough, 0.14, uWetness * 0.8 );
-  tNrmTS.xy *= mix( 1.0, 0.45, uWetness );
+  // Rain lays a thin film everywhere, but true mirror-like puddles only gather
+  // in flat, dark micro-depressions and packed road ruts. Uniformly pushing the
+  // whole map to roughness 0.14 reads like varnish, not wet earth.
+  float tFlat = smoothstep( 0.76, 0.985, clamp( vTerrainNrm.y, 0.0, 1.0 ) );
+  float tRoad = clamp( tW.y + tW.w, 0.0, 1.0 );
+  // Reuse the independent close + macro samples as a broad, non-repeating
+  // modulation on tracks. Direction-aware gravel/ruts are already baked into
+  // layer 3; this keeps the dirt between them from reading as a flat brown mat.
+  float tRoadVar = clamp( tDetLum * 0.68 + tMacro * 0.32, 0.0, 1.0 );
+  tAlbedo *= mix( vec3( 1.0 ), vec3( mix( 0.84, 1.12, tRoadVar ) ), tRoad * 0.42 );
+  tRough = clamp( tRough + ( 0.5 - tRoadVar ) * tRoad * 0.16, 0.05, 1.0 );
+  float tLowSpot = smoothstep( 0.48, 0.78, 1.0 - tDetLum );
+  float tPuddle = clamp(
+    ( tLowSpot * 0.78 + tRoad * 0.24 + ( 1.0 - tMacro ) * 0.12 )
+      * tFlat * uPuddleStrength,
+    0.0, 1.0
+  );
+  float tFilm = uWetness * ( 0.30 + tPuddle * 0.70 );
+  tAlbedo *= mix( 1.0, mix( 0.72, 0.60, tPuddle ), tFilm );
+  tRough = mix( tRough, mix( 0.19, 0.055, tPuddle ), tFilm * 0.90 );
+  tNrmTS.xy *= mix( 1.0, mix( 0.68, 0.25, tPuddle ), tFilm );
+
+  // Two coherent rain-wave directions are enough to keep puddles alive without
+  // another texture lookup. The branch is uniform over a draw, so dry weather
+  // pays no trigonometry cost on real hardware.
+  if ( uWetness > 0.01 ) {
+    vec2 tRainWave = vec2(
+      sin( dot( tXZ, vec2( 5.7, 8.9 ) ) + uRainTime * 8.3 ),
+      sin( dot( tXZ, vec2( -7.1, 4.6 ) ) - uRainTime * 7.1 )
+    );
+    tNrmTS.xy += tRainWave * ( tPuddle * uWetness * 0.055 );
+  }
 
   diffuseColor.rgb *= tAlbedo;
 `)
@@ -1132,6 +1210,115 @@ varying vec3 vTerrainNrm;`)
         this._geoms.push(geo);
       }
     }
+  }
+
+  /**
+   * Extend the visible ground beyond the playable rectangle. The isometric
+   * camera can see past a map edge when an entry is close to the boundary;
+   * without this lightweight skirt the scene background appeared as a bright
+   * white triangle. These strips share the terrain shader, but are never
+   * pickable or walkable.
+   */
+  _buildBoundaryApron() {
+    const margin = 42;
+    const macro = this.biome.scale[0];
+    const geos = [];
+
+    const finish = (geo, name) => {
+      geo.computeBoundingBox();
+      geo.computeBoundingSphere();
+      const mesh = new THREE.Mesh(geo, this.material);
+      mesh.name = name;
+      mesh.receiveShadow = false;
+      mesh.castShadow = false;
+      mesh.matrixAutoUpdate = false;
+      mesh.updateMatrix();
+      this.group.add(mesh);
+      this._geoms.push(geo);
+    };
+
+    const horizontal = (innerZ, outerZ, name) => {
+      const step = 2;
+      const n = Math.ceil((this.W + margin * 2) / step) + 1;
+      const pos = new Float32Array(n * 2 * 3);
+      const nor = new Float32Array(n * 2 * 3);
+      const uv = new Float32Array(n * 2 * 2);
+      const uv1 = new Float32Array(n * 2 * 2);
+      for (let i = 0; i < n; i++) {
+        const x = -margin + (this.W + margin * 2) * (i / (n - 1));
+        const edgeX = clamp(x, 0, this.W);
+        const edgeY = this.heightAt(edgeX, innerZ);
+        const z0 = Math.min(innerZ, outerZ), z1 = Math.max(innerZ, outerZ);
+        const y0 = z0 === innerZ ? edgeY : edgeY - 0.45;
+        const y1 = z1 === innerZ ? edgeY : edgeY - 0.45;
+        for (let row = 0; row < 2; row++) {
+          const k = (row * n + i);
+          const z = row === 0 ? z0 : z1;
+          const y = row === 0 ? y0 : y1;
+          pos[k * 3] = x; pos[k * 3 + 1] = y; pos[k * 3 + 2] = z;
+          nor[k * 3] = 0; nor[k * 3 + 1] = 1; nor[k * 3 + 2] = 0;
+          uv[k * 2] = x * macro; uv[k * 2 + 1] = z * macro;
+          uv1[k * 2] = clamp01(x / this.W); uv1[k * 2 + 1] = clamp01(z / this.H);
+        }
+      }
+      const idx = new Uint32Array((n - 1) * 6);
+      let p = 0;
+      for (let i = 0; i < n - 1; i++) {
+        const a = i, b = i + 1, c = n + i, d = c + 1;
+        idx[p++] = a; idx[p++] = c; idx[p++] = b;
+        idx[p++] = b; idx[p++] = c; idx[p++] = d;
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+      geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+      geo.setAttribute('uv1', new THREE.BufferAttribute(uv1, 2));
+      geo.setIndex(new THREE.BufferAttribute(idx, 1));
+      finish(geo, name);
+    };
+
+    const vertical = (innerX, outerX, name) => {
+      const step = 2;
+      const n = Math.ceil(this.H / step) + 1;
+      const pos = new Float32Array(n * 2 * 3);
+      const nor = new Float32Array(n * 2 * 3);
+      const uv = new Float32Array(n * 2 * 2);
+      const uv1 = new Float32Array(n * 2 * 2);
+      const x0 = Math.min(innerX, outerX), x1 = Math.max(innerX, outerX);
+      for (let i = 0; i < n; i++) {
+        const z = this.H * (i / (n - 1));
+        const edgeY = this.heightAt(innerX, z);
+        const y0 = x0 === innerX ? edgeY : edgeY - 0.45;
+        const y1 = x1 === innerX ? edgeY : edgeY - 0.45;
+        const base = i * 2;
+        pos[base * 3] = x0; pos[base * 3 + 1] = y0; pos[base * 3 + 2] = z;
+        pos[(base + 1) * 3] = x1; pos[(base + 1) * 3 + 1] = y1; pos[(base + 1) * 3 + 2] = z;
+        nor[base * 3 + 1] = 1; nor[(base + 1) * 3 + 1] = 1;
+        uv[base * 2] = x0 * macro; uv[base * 2 + 1] = z * macro;
+        uv[(base + 1) * 2] = x1 * macro; uv[(base + 1) * 2 + 1] = z * macro;
+        uv1[base * 2] = clamp01(x0 / this.W); uv1[base * 2 + 1] = z / this.H;
+        uv1[(base + 1) * 2] = clamp01(x1 / this.W); uv1[(base + 1) * 2 + 1] = z / this.H;
+      }
+      const idx = new Uint32Array((n - 1) * 6);
+      let p = 0;
+      for (let i = 0; i < n - 1; i++) {
+        const a = i * 2, b = a + 1, c = a + 2, d = c + 1;
+        idx[p++] = a; idx[p++] = c; idx[p++] = b;
+        idx[p++] = b; idx[p++] = c; idx[p++] = d;
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+      geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+      geo.setAttribute('uv1', new THREE.BufferAttribute(uv1, 2));
+      geo.setIndex(new THREE.BufferAttribute(idx, 1));
+      finish(geo, name);
+    };
+
+    horizontal(0, -margin, 'terrain.apron.north');
+    horizontal(this.H, this.H + margin, 'terrain.apron.south');
+    vertical(0, -margin, 'terrain.apron.west');
+    vertical(this.W, this.W + margin, 'terrain.apron.east');
   }
 
   _buildChunkGeometry(tx0, tz0, tw, th) {
@@ -1501,6 +1688,7 @@ varying vec4 vWaterRefl;`)
   update(dt, camera) {
     if (this._disposed) return;
     this._time += dt;
+    this.uniforms.uRainTime.value = this._time;
     this.uniforms.uWetness.value += (this._wetness - this.uniforms.uWetness.value) * Math.min(1, dt * 1.8);
 
     if (!this._waterMeshes.length) return;

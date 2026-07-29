@@ -1,8 +1,8 @@
 {
   "generated": "tools/blender/build.py",
   "count": 39,
-  "totalTris": 96698,
-  "totalBytes": 6649508,
+  "totalTris": 144338,
+  "totalBytes": 9642304,
   "overBudget": [],
   "assets": {
     "wpn_wooden_sword": {
@@ -184,50 +184,50 @@
     "char_warrior_m": {
       "name": "char_warrior_m",
       "category": "character",
-      "tris": 4906,
-      "budget": 6000,
+      "tris": 12822,
+      "budget": 20000,
       "overBudget": false,
-      "bytes": 420508
+      "bytes": 989800
     },
     "char_warrior_f": {
       "name": "char_warrior_f",
       "category": "character",
-      "tris": 4632,
-      "budget": 6000,
+      "tris": 12596,
+      "budget": 20000,
       "overBudget": false,
-      "bytes": 397268
+      "bytes": 981920
     },
     "char_mage_m": {
       "name": "char_mage_m",
       "category": "character",
-      "tris": 4770,
-      "budget": 6000,
+      "tris": 13058,
+      "budget": 20000,
       "overBudget": false,
-      "bytes": 313072
+      "bytes": 811112
     },
     "char_mage_f": {
       "name": "char_mage_f",
       "category": "character",
-      "tris": 4778,
-      "budget": 6000,
+      "tris": 13048,
+      "budget": 20000,
       "overBudget": false,
-      "bytes": 312224
+      "bytes": 784156
     },
     "char_taoist_m": {
       "name": "char_taoist_m",
       "category": "character",
-      "tris": 4638,
-      "budget": 6000,
+      "tris": 12234,
+      "budget": 20000,
       "overBudget": false,
-      "bytes": 318220
+      "bytes": 746236
     },
     "char_taoist_f": {
       "name": "char_taoist_f",
       "category": "character",
-      "tris": 4526,
-      "budget": 6000,
+      "tris": 12132,
+      "budget": 20000,
       "overBudget": false,
-      "bytes": 312444
+      "bytes": 753308
     },
     "npc_blacksmith": {
       "name": "npc_blacksmith",

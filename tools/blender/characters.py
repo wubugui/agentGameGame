@@ -31,10 +31,11 @@ from lib import mesh as M, rig as R, mat as MAT   # noqa: E402
 
 TAU = math.pi * 2
 
-SEG_TORSO = 14
-SEG_HEAD = 16
-SEG_LIMB = 9
-SEG_ROBE = 18
+SEG_TORSO = 24
+SEG_HEAD = 32
+SEG_HAIR = 24
+SEG_LIMB = 16
+SEG_ROBE = 32
 
 
 # ----------------------------------------------------------------- primitives
@@ -137,6 +138,28 @@ def sweep(name, path, rw, rh, n=4, up=(0, 0, 1), p=1.0, smooth=False):
     return loft_capped(name, rings, cap_start=True, cap_end=True, smooth=smooth)
 
 
+def ribbon_prism(name, centres, widths, thickness=0.008, smooth=False):
+    """
+    A low-cost raised ribbon following an X/Y/Z path.
+
+    The front face is offset toward +Y, so the helper is ideal for readable
+    garment borders, breastplate ribs and robe stoles.  Four vertices per
+    cross-section keep the detail far cheaper than beveled curves after glTF
+    triangulation.
+    """
+    rings = []
+    for i, centre in enumerate(centres):
+        x, y, z = centre
+        w = widths[i] if isinstance(widths, (list, tuple)) else widths
+        rings.append([
+            (x - w, y, z),
+            (x + w, y, z),
+            (x + w, y + thickness, z),
+            (x - w, y + thickness, z),
+        ])
+    return loft_capped(name, rings, cap_start=True, cap_end=True, smooth=smooth)
+
+
 def oriented_lathe(name, profile, origin, direction, segments=10, smooth=True,
                    close_bottom=True, close_top=True):
     ob = M.lathe(name, profile, segments=segments, smooth=smooth,
@@ -171,6 +194,7 @@ BASE = dict(
     arm=(0.062, 0.047, 0.036),
     delt=0.078,
     leg=(0.118, 0.086, 0.048),
+    leg_mat=None,
     stance=0.0,
     lean=0.0,
     head=None,
@@ -179,6 +203,7 @@ BASE = dict(
     boots=None,
     shell=None,
     robe=None,
+    robe_trim=None,
     sleeve=None,
     belt=None,
     sash=None,
@@ -194,6 +219,8 @@ BASE = dict(
     satchel=None,
     spear=False,
     trim=None,
+    signature=None,
+    face=None,
 )
 
 
@@ -255,17 +282,32 @@ def p_neck(sp):
 
 HEAD_PROFILE = [
     # (z, rx, ry_front, ry_back)
-    (1.583, 0.046, 0.050, 0.058),
-    (1.606, 0.054, 0.064, 0.070),
-    (1.632, 0.064, 0.081, 0.079),
-    (1.662, 0.077, 0.088, 0.087),
-    (1.694, 0.086, 0.090, 0.094),
-    (1.723, 0.087, 0.088, 0.099),
-    (1.749, 0.086, 0.091, 0.100),
-    (1.775, 0.083, 0.086, 0.098),
-    (1.802, 0.073, 0.075, 0.087),
-    (1.823, 0.053, 0.054, 0.062),
-    (1.836, 0.026, 0.027, 0.031),
+    # The first four rings are the neck. Keeping them in this same loft means
+    # neck, jaw, lips, nose and eye sockets are one continuous manifold instead
+    # of a stack of intersecting toy-like primitives.
+    (1.500, 0.066, 0.066, 0.073),
+    (1.535, 0.059, 0.059, 0.066),
+    (1.566, 0.053, 0.054, 0.061),
+    (1.590, 0.050, 0.054, 0.060),
+    (1.608, 0.055, 0.066, 0.070),
+    (1.626, 0.062, 0.078, 0.077),
+    (1.642, 0.069, 0.084, 0.082),
+    (1.658, 0.075, 0.088, 0.086),
+    (1.670, 0.079, 0.090, 0.089),
+    (1.680, 0.082, 0.091, 0.091),
+    (1.692, 0.085, 0.092, 0.094),
+    (1.704, 0.087, 0.092, 0.096),
+    (1.716, 0.088, 0.091, 0.098),
+    (1.728, 0.088, 0.091, 0.099),
+    (1.740, 0.087, 0.092, 0.100),
+    (1.752, 0.086, 0.092, 0.100),
+    (1.766, 0.085, 0.090, 0.099),
+    (1.782, 0.081, 0.085, 0.096),
+    (1.798, 0.075, 0.078, 0.090),
+    (1.812, 0.066, 0.068, 0.080),
+    (1.824, 0.052, 0.054, 0.063),
+    (1.833, 0.034, 0.035, 0.041),
+    (1.838, 0.016, 0.017, 0.020),
 ]
 
 
@@ -277,46 +319,75 @@ def _head_prof(sp):
     narrow = h.get("narrow", 1.0)
     out = []
     for z, rx, ryf, ryb in HEAD_PROFILE:
-        out.append((1.583 + (z - 1.583) * sc,
+        out.append((1.590 + (z - 1.590) * sc,
                     rx * wide * narrow, ryf * wide, ryb * wide))
     return out
 
 
 def _sculpt_head(ob, brow=1.0, cheek=1.0, jaw=1.0):
     """
-    Gaussian-blended facial landmarks. Cheap, and it is the difference between
-    a head and an egg: brow ridge, recessed sockets, cheekbones, chin.
+    Gaussian-blended facial landmarks directly in the continuous head surface.
+    The denser latitude rings give the bridge, alae, philtrum and paired lips
+    enough support to read in a close-up without a pasted-on nose primitive.
     """
     for v in ob.data.vertices:
         x, y, z = v.co
-        if y <= -0.01:
+        if y <= 0.012:
             continue
         ax = abs(x)
+
+        # Brow ridge and eye sockets share the same skin surface.
         fz = math.exp(-((z - 1.751) / 0.015) ** 2)
         fx = math.exp(-((ax - 0.028) / 0.046) ** 2)
-        v.co.y += 0.013 * brow * fz * fx
+        v.co.y += 0.010 * brow * fz * fx
 
-        sz = math.exp(-((z - 1.726) / 0.013) ** 2)
+        sz = math.exp(-((z - 1.727) / 0.013) ** 2)
         sx = math.exp(-((ax - 0.036) / 0.021) ** 2)
-        v.co.y -= 0.012 * sz * sx
+        v.co.y -= 0.010 * sz * sx
+
+        # Nasal root flows out of the brow, widens into the tip and alae, then
+        # returns into the philtrum. These vertices are part of the skull loft.
+        bridge_z = math.exp(-((z - 1.724) / 0.031) ** 2)
+        bridge_x = math.exp(-(ax / 0.013) ** 2)
+        tip_z = math.exp(-((z - 1.697) / 0.014) ** 2)
+        tip_x = math.exp(-(ax / 0.017) ** 2)
+        ala_z = math.exp(-((z - 1.693) / 0.010) ** 2)
+        ala_x = math.exp(-((ax - 0.015) / 0.008) ** 2)
+        v.co.y += 0.017 * bridge_z * bridge_x
+        v.co.y += 0.022 * tip_z * tip_x
+        v.co.y += 0.010 * ala_z * ala_x
+
+        # A tiny inward turn below each wing makes the nostril plane readable
+        # through shading while avoiding black applied-on dots.
+        nostril_z = math.exp(-((z - 1.686) / 0.006) ** 2)
+        nostril_x = math.exp(-((ax - 0.014) / 0.006) ** 2)
+        v.co.y -= 0.004 * nostril_z * nostril_x
 
         cz = math.exp(-((z - 1.697) / 0.019) ** 2)
         cx = math.exp(-((ax - 0.060) / 0.028) ** 2)
-        v.co.y += 0.009 * cheek * cz * cx
-        v.co.x += 0.006 * cheek * cz * cx * (1.0 if x >= 0 else -1.0)
+        v.co.y += 0.008 * cheek * cz * cx
+        v.co.x += 0.005 * cheek * cz * cx * (1.0 if x >= 0 else -1.0)
 
         jz = math.exp(-((z - 1.637) / 0.017) ** 2)
         jx = math.exp(-(ax / 0.048) ** 2)
         v.co.y += 0.011 * jaw * jz * jx
 
-        # mouth crease
-        mz = math.exp(-((z - 1.672) / 0.008) ** 2)
-        mx = math.exp(-(ax / 0.030) ** 2)
-        v.co.y -= 0.004 * mz * mx
+        # Paired lips, mouth crease and philtrum. The flesh-coloured accent
+        # added later is deliberately shallow; these volumes do the real work.
+        lip_x = math.exp(-(ax / 0.030) ** 4)
+        upper = math.exp(-((z - 1.676) / 0.0055) ** 2)
+        lower = math.exp(-((z - 1.666) / 0.0065) ** 2)
+        crease = math.exp(-((z - 1.671) / 0.0032) ** 2)
+        philtrum = math.exp(-((z - 1.684) / 0.008) ** 2) * math.exp(-(ax / 0.008) ** 2)
+        v.co.y += 0.0045 * upper * lip_x
+        v.co.y += 0.0055 * lower * lip_x
+        v.co.y -= 0.0030 * crease * lip_x
+        v.co.y -= 0.0025 * philtrum
 
 
 def p_head(sp):
     h = sp.get("head") or {}
+    face = sp.get("face") or {}
     parts = []
     rows = [oval(z, rx, ryf, ryb, SEG_HEAD, 0.95) for z, rx, ryf, ryb in _head_prof(sp)]
     skull = loft_capped("head", rows, cap_start=True, cap_end=True, smooth=True)
@@ -325,30 +396,47 @@ def p_head(sp):
 
     k = h.get("wide", 1.09) * h.get("scale", 1.0)   # facial features track the skull
 
-    # nose — a small lofted wedge riding on the sculpted bridge
-    nose_rows = [
-        oval(1.694, 0.021, 0.020, 0.006, 8, 0.8, cy=0.090 * k),
-        oval(1.706, 0.022, 0.021, 0.008, 8, 0.8, cy=0.100 * k),
-        oval(1.720, 0.018, 0.018, 0.008, 8, 0.8, cy=0.098 * k),
-        oval(1.736, 0.014, 0.014, 0.008, 8, 0.8, cy=0.091 * k),
-        oval(1.752, 0.011, 0.011, 0.008, 8, 0.8, cy=0.084 * k),
-    ]
-    nose = loft_capped("nose", nose_rows, cap_start=True, cap_end=True, smooth=True)
-    parts.append(fin(nose, sp["skin"]))
-
-    # brow bar gives the eye line a shadow at distance
-    browbar = sweep("brow", [(-0.076 * k, 0.062 * k, 1.746), (-0.036 * k, 0.088 * k, 1.754),
-                             (0.0, 0.092 * k, 1.752), (0.036 * k, 0.088 * k, 1.754),
-                             (0.076 * k, 0.062 * k, 1.746)], 0.009, 0.008, n=4)
-    parts.append(fin(browbar, sp["skin"]))
-
+    eye_scale = face.get("eye", 1.0)
+    brow_scale = face.get("brow", 1.0)
     for s in (1, -1):
-        eye = M.sphere(f"eye{s}", 0.015, location=(s * 0.038 * k, 0.080 * k, 1.727),
-                       segments=7, rings=5, scale=(0.95, 0.55, 0.62))
-        parts.append(fin(eye, "chitin"))
+        ex = s * 0.038 * k
+        ey = 0.091 * k
+        # Flattened lenses sit almost flush with the skull.  They preserve a
+        # clean dark-light-dark eye read without looking like glued-on marbles.
+        eye = M.sphere(f"eye_white{s}", 0.0145 * eye_scale,
+                       location=(ex, ey, 1.727),
+                       segments=16, rings=9, scale=(1.14, 0.18, 0.48))
+        parts.append(fin(eye, "bone"))
+        iris = oriented_lathe(
+            f"iris{s}",
+            [(0.0, -0.0015), (0.0055 * eye_scale, -0.0005),
+             (0.0063 * eye_scale, 0.0010), (0.0042 * eye_scale, 0.0025),
+             (0.0, 0.0032)],
+            (ex, ey + 0.004 * eye_scale, 1.727), (0, 1, 0),
+            segments=12, smooth=True,
+        )
+        parts.append(fin(iris, "chitin"))
+        brow = sweep(
+            f"eyebrow{s}",
+            [(ex - 0.019 * brow_scale, ey + 0.003, 1.750),
+             (ex - s * 0.003, ey + 0.005, 1.755),
+             (ex + 0.019 * brow_scale, ey + 0.003, 1.752)],
+            0.0024, 0.0024 * brow_scale, n=4,
+        )
+        parts.append(fin(brow, face.get("brow_mat", "chitin")))
         ear = M.sphere(f"ear{s}", 0.023, location=(s * 0.090 * k, -0.008, 1.712),
-                       segments=7, rings=5, scale=(0.30, 0.72, 1.15))
+                       segments=12, rings=8, scale=(0.30, 0.72, 1.15))
         parts.append(fin(ear, sp["skin"]))
+
+    lip = face.get("lip", 1.0)
+    mouth_y = 0.096 * k
+    mouth = sweep(
+        "mouth",
+        [(-0.025 * lip, mouth_y, 1.675), (0.0, mouth_y + 0.003, 1.673),
+         (0.025 * lip, mouth_y, 1.675)],
+        0.0016, 0.0022, n=6, smooth=True,
+    )
+    parts.append(fin(mouth, "flesh"))
     return parts
 
 
@@ -365,46 +453,64 @@ def p_hair(sp):
     line = hcfg.get("hairline", 1.772)
     prof = _head_prof(sp)
     shell = []
-    for z, rx, ryf, ryb in prof[3:]:
+    skull_prof = [(z, rx, ryf, ryb) for z, rx, ryf, ryb in prof if z >= 1.642]
+    for z, rx, ryf, ryb in skull_prof:
         pad = 1.075
         if z < line:
             f = 0.14 + 0.30 * max(0.0, (z - 1.66)) / 0.12
-            shell.append(oval(z, rx * 0.90, ryf * f, ryb * pad, 14, 0.95))
+            shell.append(oval(z, rx * 0.90, ryf * f, ryb * pad, SEG_HAIR, 0.95))
         else:
-            shell.append(oval(z, rx * pad, ryf * pad, ryb * pad, 14, 0.95))
+            shell.append(oval(z, rx * pad, ryf * pad, ryb * pad, SEG_HAIR, 0.95))
     if style in ("long", "loose"):
-        rx0, _f0, ryb0 = prof[3][1], prof[3][2], prof[3][3]
+        rx0, _f0, ryb0 = skull_prof[0][1], skull_prof[0][2], skull_prof[0][3]
         drop = []
         for i in range(5):
             t = i / 4.0
             z = 1.66 - t * 0.24
             drop.append(oval(z, rx0 * (0.94 + 0.36 * t), 0.012,
-                             ryb0 * (1.06 + 0.30 * t), 14, 0.9, cy=-0.006 * t))
+                             ryb0 * (1.06 + 0.30 * t), SEG_HAIR, 0.9, cy=-0.006 * t))
         shell = drop[::-1] + shell
     ob = loft_capped("hair", shell, cap_start=True, cap_end=True, smooth=True)
     M.displace_noise(ob, strength=0.004, scale=22.0, seed=5)
     parts.append(fin(ob, hm))
+    hairline = sweep(
+        "hairline",
+        [(-0.072, 0.071, line), (0.0, 0.084, line + 0.006),
+         (0.072, 0.071, line)],
+        0.0024, 0.0030, n=4,
+    )
+    parts.append(fin(hairline, hm))
+    if hcfg.get("temples"):
+        for s in (1, -1):
+            temple = sweep(
+                f"temple_lock{s}",
+                [(s * 0.073, 0.054, 1.766),
+                 (s * 0.079, 0.063, 1.690),
+                 (s * 0.074, 0.055, 1.620)],
+                0.0035, [0.008, 0.010, 0.006], n=4,
+            )
+            parts.append(fin(temple, hm))
 
     if style in ("topknot", "elder"):
         band = loft_capped("hairband", [
-            oval(1.826, 0.036, 0.036, 0.040, 10, 0.9),
-            oval(1.846, 0.033, 0.033, 0.036, 10, 0.9),
+            oval(1.826, 0.036, 0.036, 0.040, 16, 0.9),
+            oval(1.846, 0.033, 0.033, 0.036, 16, 0.9),
         ], smooth=False)
         parts.append(fin(band, hcfg.get("band", "leather")))
         knot = M.lathe("topknot", [(0.024, 1.842), (0.030, 1.862), (0.041, 1.884),
                                    (0.038, 1.906), (0.022, 1.920), (0.0, 1.928)],
-                       segments=10)
+                       segments=16)
         parts.append(fin(knot, hm))
     elif style == "bun":
         bun = M.sphere("bun", 0.052, location=(0.0, -0.088, 1.796),
-                       segments=10, rings=7, scale=(1.0, 0.86, 0.92))
+                       segments=16, rings=10, scale=(1.0, 0.86, 0.92))
         parts.append(fin(bun, hm))
         pin = sweep("hairpin", [(-0.060, -0.090, 1.812), (0.060, -0.086, 1.802)],
                     0.006, 0.006, n=4)
         parts.append(fin(pin, hcfg.get("pin", "bronze")))
     elif style == "bun_high":
         bun = M.sphere("bun", 0.050, location=(0.0, -0.030, 1.870),
-                       segments=10, rings=7, scale=(1.0, 0.92, 0.86))
+                       segments=16, rings=10, scale=(1.0, 0.92, 0.86))
         parts.append(fin(bun, hm))
         for s in (1, -1):
             lock = sweep(f"lock{s}", [(s * 0.070, -0.020, 1.760),
@@ -465,7 +571,7 @@ def p_arms(sp):
     parts = []
     for s in (1, -1):
         delt = M.sphere(f"delt{s}", sp["delt"], location=(s * 0.176, 0.0, 1.474),
-                        segments=10, rings=7, scale=(1.05, 0.92, 1.10))
+                        segments=16, rings=10, scale=(1.05, 0.92, 1.10))
         parts.append(fin(delt, sp["skin"]))
         up = M.limb(f"upperarm{s}", (s * 0.205, 0.0, 1.478), (s * 0.212, 0.006, 1.196),
                     ra, rb, segments=SEG_LIMB,
@@ -482,15 +588,15 @@ def p_arms(sp):
 def p_hand(sp, s):
     cx, cy = s * 0.213, 0.020
     rows = [
-        oval(0.858, 0.024, 0.020, 0.018, 8, 0.75, cx=cx, cy=cy),
-        oval(0.876, 0.036, 0.030, 0.026, 8, 0.75, cx=cx, cy=cy),
-        oval(0.906, 0.041, 0.034, 0.030, 8, 0.75, cx=cx, cy=cy),
-        oval(0.940, 0.039, 0.033, 0.029, 8, 0.75, cx=cx, cy=cy),
-        oval(0.968, 0.033, 0.027, 0.025, 8, 0.75, cx=cx, cy=cy),
+        oval(0.858, 0.024, 0.020, 0.018, 12, 0.75, cx=cx, cy=cy),
+        oval(0.876, 0.036, 0.030, 0.026, 12, 0.75, cx=cx, cy=cy),
+        oval(0.906, 0.041, 0.034, 0.030, 12, 0.75, cx=cx, cy=cy),
+        oval(0.940, 0.039, 0.033, 0.029, 12, 0.75, cx=cx, cy=cy),
+        oval(0.968, 0.033, 0.027, 0.025, 12, 0.75, cx=cx, cy=cy),
     ]
     mitt = loft_capped(f"hand{s}", rows, cap_start=True, cap_end=True, smooth=True)
     thumb = M.limb(f"thumb{s}", (cx - s * 0.024, cy + 0.010, 0.944),
-                   (cx - s * 0.040, cy + 0.032, 0.898), 0.017, 0.011, segments=6)
+                   (cx - s * 0.040, cy + 0.032, 0.898), 0.017, 0.011, segments=10)
     return [fin(mitt, sp["skin"]), fin(thumb, sp["skin"])]
 
 
@@ -526,7 +632,7 @@ def p_foot(s, scale=1.0, lift=0.0, mat="skin.tan", name="foot"):
     for y, rx, rz, cz in spec:
         rows.append(ring_uv((cx, y * scale, cz * scale + lift),
                             (0, 0, 1), (1, 0, 0),
-                            rz * scale, rx * scale, n=10, p=0.68))
+                            rz * scale, rx * scale, n=16, p=0.68))
     ob = loft_capped(f"{name}{s}", rows, cap_start=True, cap_end=True, smooth=True)
     for v in ob.data.vertices:
         if v.co.z < 0.006 + lift:
@@ -537,6 +643,7 @@ def p_foot(s, scale=1.0, lift=0.0, mat="skin.tan", name="foot"):
 def p_legs(sp):
     th, ca, an = sp["leg"]
     spread = sp["stance"]
+    leg_mat = sp.get("leg_mat") or sp["skin"]
     parts = []
     for s in (1, -1):
         x = s * (0.098 + spread)
@@ -544,12 +651,12 @@ def p_legs(sp):
                        th, ca, segments=SEG_LIMB,
                        taper_curve=[th * 1.02, th * 1.00, th * 0.92, th * 0.83,
                                     ca * 1.02, ca * 0.94])
-        parts.append(fin(thigh, sp["skin"]))
+        parts.append(fin(thigh, leg_mat))
         calf = M.limb(f"calf{s}", (x + s * 0.002, 0.006, 0.556), (x + s * 0.002, 0.022, 0.108),
                       ca, an, segments=SEG_LIMB,
                       taper_curve=[ca * 0.94, ca * 1.10, ca * 1.02, ca * 0.82,
                                    an * 1.22, an * 1.04, an])
-        parts.append(fin(calf, sp["skin"]))
+        parts.append(fin(calf, leg_mat))
     return parts
 
 
@@ -573,7 +680,14 @@ def p_boots(sp):
             r = _calf_r(z) + pad
             if i >= len(zs) - 2:
                 r += b.get("cuff", 0.020) * (1.0 if i == len(zs) - 1 else 0.45)
-            rows.append(oval(z, r, r * 0.98, r * 1.02, 10, 0.86, cx=x, cy=0.014))
+            if plate:
+                # Greaves are laterally tapered and flatter in front than a
+                # bare calf, avoiding the "two giant cylinders" silhouette.
+                rows.append(oval(z, r * 0.90, r * 0.78, r * 0.84,
+                                 16, 0.82, cx=x, cy=0.012))
+            else:
+                rows.append(oval(z, r, r * 0.98, r * 1.02,
+                                 16, 0.86, cx=x, cy=0.014))
         shaft = loft_capped(f"boot{s}", rows, cap_start=False, cap_end=True,
                             smooth=not plate)
         parts.append(fin(shaft, bm))
@@ -581,12 +695,22 @@ def p_boots(sp):
         if plate:
             shin = sweep(f"shinplate{s}", [
                 (x, 0.058, 0.150), (x, 0.078, 0.260), (x, 0.086, 0.380),
-                (x, 0.082, top - 0.030)], 0.052, 0.014, n=4)
+                (x, 0.082, top - 0.030)], [0.038, 0.048, 0.052, 0.045],
+                0.014, n=8, smooth=True)
             parts.append(fin(shin, b.get("plate_mat", bm)))
+            for i, z in enumerate((0.205, 0.335, min(top - 0.060, 0.500))):
+                rr = _calf_r(z) + pad * 0.72
+                band = loft_capped(f"greave_band{s}_{i}", [
+                    oval(z - 0.012, rr * 0.93, rr * 0.82, rr * 0.88,
+                         16, 0.82, cx=x, cy=0.012),
+                    oval(z + 0.012, rr * 0.97, rr * 0.86, rr * 0.92,
+                         16, 0.82, cx=x, cy=0.012),
+                ], smooth=True)
+                parts.append(fin(band, b.get("plate_mat", bm)))
             cap = oriented_lathe(f"toecap{s}", [(0.030, 0.0), (0.052, 0.020),
                                                 (0.058, 0.048), (0.040, 0.070),
                                                 (0.0, 0.080)],
-                                 (x, 0.086, 0.038), (0, 1, 0.30), segments=10, smooth=False)
+                                 (x, 0.086, 0.038), (0, 1, 0.30), segments=16, smooth=True)
             parts.append(fin(cap, b.get("plate_mat", bm)))
     return parts
 
@@ -612,6 +736,9 @@ def p_shell(sp, rings, cfg, name="shell"):
                      cap_end=cfg.get("cap", True), smooth=cfg.get("smooth", True))
     if cfg.get("noise"):
         M.displace_noise(ob, strength=cfg["noise"], scale=14.0, seed=cfg.get("seed", 3))
+    if cfg.get("bevel"):
+        M.add_bevel(ob, width=cfg["bevel"], segments=cfg.get("bevel_segments", 2),
+                    angle=math.radians(cfg.get("bevel_angle", 28.0)))
     return fin(ob, cfg["mat"])
 
 
@@ -646,7 +773,47 @@ def p_robe(sp):
     rows.reverse()   # ascend in Z so the side normals face out
     ob = loft_capped("robe", rows, cap_start=False, cap_end=True, smooth=True)
     M.displace_noise(ob, strength=cfg.get("noise", 0.006), scale=10.0, seed=7)
+    if cfg.get("thick"):
+        M.add_solidify(ob, thickness=cfg["thick"], offset=-0.5)
     return [fin(ob, mm)]
+
+
+def _robe_ring(cfg, z, outset=0.0):
+    """Match the robe's folded surface for a raised seam/hem band."""
+    zt, zb = cfg.get("z_top", 1.10), cfg.get("z_bot", 0.06)
+    t = max(0.0, min(1.0, (zt - z) / max(zt - zb, 1e-5)))
+    e = t * t * (3.0 - 2.0 * t)
+    rt, rb = cfg.get("rt", 0.175), cfg.get("rb", 0.300)
+    r = rt + (rb - rt) * (0.22 * t + 0.78 * e)
+    amp = cfg.get("amp", 0.020) * (0.18 + 0.82 * t)
+    folds = cfg.get("folds", 7)
+    n = cfg.get("n", SEG_ROBE)
+    seed = cfg.get("seed", 3.0)
+    ph = seed + 0.55 * t
+    ry = cfg.get("squash", 0.90)
+    out = []
+    for s in range(n):
+        ang = TAU * s / n
+        rr = (r + outset + amp * math.cos(folds * ang + ph)
+              + amp * 0.35 * math.sin(3.0 * ang + seed * 2.3))
+        out.append((math.cos(ang) * rr, math.sin(ang) * rr * ry, z))
+    return out
+
+
+def p_robe_trim(sp):
+    cfg = sp.get("robe_trim")
+    robe = sp.get("robe")
+    if not cfg or not robe:
+        return []
+    centre = robe.get("z_bot", 0.06) + cfg.get("height", 0.060)
+    width = cfg.get("w", 0.018)
+    outset = cfg.get("outset", 0.008)
+    rows = [
+        _robe_ring(robe, centre - width * 0.5, outset),
+        _robe_ring(robe, centre + width * 0.5, outset),
+    ]
+    band = loft_capped("robe_hem_trim", rows, smooth=False)
+    return [fin(band, cfg.get("mat", "gold"))]
 
 
 def p_sleeves(sp):
@@ -678,6 +845,8 @@ def p_sleeves(sp):
             rows.append(pts)
         rows.reverse()
         ob = loft_capped(f"sleeve{s}", rows, cap_start=False, cap_end=True, smooth=True)
+        if cfg.get("thick"):
+            M.add_solidify(ob, thickness=cfg["thick"], offset=-0.5)
         parts.append(fin(ob, mm))
         if cfg.get("cuff"):
             cuff = loft_capped(f"cuff{s}", [
@@ -888,14 +1057,27 @@ def p_pauldrons(sp):
                 (r * 1.00, out * 0.70), (r * 0.86, out * 0.92), (r * 0.50, out * 1.02),
                 (0.0, out * 1.06)]
         dome = oriented_lathe(f"pauldron{s}", prof, (s * 0.150, 0.0, 1.470),
-                              (s * 0.94, 0.0, 0.34), segments=cfg.get("seg", 11),
+                              (s * 0.94, 0.0, 0.34), segments=cfg.get("seg", 16),
                               smooth=cfg.get("smooth", False))
         parts.append(fin(dome, mm))
+        if cfg.get("rim"):
+            # A contrasting raised lip prevents the shoulder dome from reading
+            # as one undifferentiated silver blob under the isometric key light.
+            rim = oriented_lathe(
+                f"pauldron_rim{s}",
+                [(r * 0.66, out * 0.70), (r * 0.90, out * 0.74),
+                 (r * 1.03, out * 0.78), (r * 0.94, out * 0.85),
+                 (r * 0.70, out * 0.84)],
+                (s * 0.150, 0.0, 1.470), (s * 0.94, 0.0, 0.34),
+                segments=cfg.get("seg", 16), smooth=False,
+                close_bottom=False, close_top=False,
+            )
+            parts.append(fin(rim, cfg["rim"]))
         if cfg.get("layers", 1) >= 2:
             rows = []
             for i, (z, k) in enumerate(((1.394, 1.00), (1.348, 1.10), (1.306, 1.06))):
                 rr = (0.070 + 0.020 * i) * k
-                rows.append(oval(z, rr, rr * 0.96, rr * 1.02, 10, 0.9,
+                rows.append(oval(z, rr, rr * 0.96, rr * 1.02, 16, 0.9,
                                  cx=s * (0.208 + 0.006 * i), cy=0.004))
             rows.reverse()
             skirt = loft_capped(f"pauldron2_{s}", rows, cap_start=False,
@@ -923,9 +1105,13 @@ def p_bracers(sp):
             r = (rc + (rb - rc) * (z - 0.968) / 0.234) + 0.018
             if i == 3:
                 r += 0.012
-            rows.append(oval(z, r, r * 0.98, r * 1.02, 10, 0.85,
+            rows.append(oval(z, r, r * 0.98, r * 1.02, 16, 0.85,
                              cx=s * 0.213, cy=0.018 - 0.010 * i))
         parts.append(fin(loft_capped(f"bracer{s}", rows, smooth=False), mm))
+        elbow = M.sphere(f"elbow_guard{s}", 0.050,
+                         location=(s * 0.212, -0.012, 1.190),
+                         segments=14, rings=8, scale=(0.72, 0.38, 0.92))
+        parts.append(fin(elbow, cfg.get("elbow_mat", mm)))
     return parts
 
 
@@ -942,14 +1128,14 @@ def p_cap(sp):
             oval(1.926, 0.034, 0.038, 0.038, 8, 0.55),
         ]
         parts.append(fin(loft_capped("daocap", rows, cap_start=True, cap_end=True,
-                                     smooth=False), "chitin"))
+                                     smooth=False), sp.get("cap_mat", "chitin")))
         pin = sweep("daopin", [(-0.078, 0.006, 1.882), (0.078, 0.006, 1.882)],
                     0.007, 0.007, n=6, smooth=True)
-        parts.append(fin(pin, "gold"))
+        parts.append(fin(pin, sp.get("cap_pin", "gold")))
         band = loft_capped("daoband", [
             oval(1.826, 0.088, 0.092, 0.098, 12, 0.9),
             oval(1.846, 0.086, 0.090, 0.096, 12, 0.9)], smooth=False)
-        parts.append(fin(band, "silk"))
+        parts.append(fin(band, sp.get("cap_band", "silk")))
     elif kind == "scholar":
         rows = [
             oval(1.800, 0.092, 0.096, 0.102, 12, 0.8),
@@ -1019,6 +1205,145 @@ def p_cap(sp):
                                          (s * 0.094, -0.004, 1.664)],
                         [0.012, 0.014, 0.012], 0.008, n=4)
             parts.append(fin(tas, "gold"))
+    return parts
+
+
+def _front_surface(sp, rings, z, clearance=0.010):
+    """Approximate the visible +Y garment surface at a height."""
+    robe = sp.get("robe")
+    if robe:
+        zt = robe.get("z_top", 1.10)
+        zb = robe.get("z_bot", 0.06)
+        if zb <= z <= zt:
+            t = max(0.0, min(1.0, (zt - z) / max(zt - zb, 1e-5)))
+            e = t * t * (3.0 - 2.0 * t)
+            r = robe.get("rt", 0.175) + (robe.get("rb", 0.300) - robe.get("rt", 0.175)) * (
+                0.22 * t + 0.78 * e
+            )
+            amp = abs(robe.get("amp", 0.020))
+            return (r + amp * (0.30 + 0.90 * t)) * robe.get("squash", 0.90) + clearance
+
+    _rx, ryf, _ryb = _tr_at(rings, max(z, 0.88))
+    outer = 0.0
+    for key in ("shell", "shell2"):
+        cfg = sp.get(key)
+        if cfg and cfg["z0"] <= z <= cfg["z1"]:
+            outer = max(outer, cfg.get("pad", 0.020))
+    return ryf + outer + clearance
+
+
+def _front_badge(name, location, frame_mat, gem_mat="crystal", radius=0.047):
+    """Layered medallion used as a large-distance class read."""
+    x, y, z = location
+    frame = oriented_lathe(
+        f"{name}_frame",
+        [(0.0, -0.004), (radius * 0.76, -0.002), (radius, 0.001),
+         (radius * 0.92, 0.006), (0.0, 0.009)],
+        (x, y, z), (0, 1, 0), segments=16, smooth=True,
+    )
+    gem = M.sphere(
+        f"{name}_gem", radius * 0.58, location=(x, y + 0.014, z),
+        segments=14, rings=8, scale=(0.76, 0.34, 1.0),
+    )
+    return [fin(frame, frame_mat), fin(gem, gem_mat)]
+
+
+def p_signature(sp, rings):
+    """
+    Bold, class-specific front layers.
+
+    These details are deliberately broader than historical miniature
+    decoration: at the actual game camera a four-millimetre rivet disappears,
+    while a raised chest keel or bright stole survives and identifies the
+    profession immediately.
+    """
+    cfg = sp.get("signature")
+    if not cfg:
+        return []
+    style = cfg.get("style")
+    parts = []
+
+    if style == "plate":
+        zs = [1.465, 1.405, 1.305, 1.205, 1.112]
+        centres = [(0.0, _front_surface(sp, rings, z, 0.012), z) for z in zs]
+        keel = ribbon_prism(
+            "breastplate_keel", centres,
+            [0.040, 0.060, 0.074, 0.064, 0.042], thickness=0.012,
+        )
+        parts.append(fin(keel, cfg.get("mat", "iron")))
+
+        trim_mat = cfg.get("trim", "bronze")
+        for s in (1, -1):
+            ribs = [
+                (s * 0.040, _front_surface(sp, rings, 1.438, 0.025), 1.438),
+                (s * 0.105, _front_surface(sp, rings, 1.365, 0.025), 1.365),
+                (s * 0.128, _front_surface(sp, rings, 1.270, 0.024), 1.270),
+                (s * 0.096, _front_surface(sp, rings, 1.190, 0.023), 1.190),
+            ]
+            parts.append(fin(ribbon_prism(
+                f"breastplate_rib{s}", ribs,
+                [0.010, 0.013, 0.012, 0.009], thickness=0.009,
+            ), trim_mat))
+
+        by = _front_surface(sp, rings, 1.335, 0.036)
+        crest = M.box(
+            "warrior_crest", (0.064, 0.018, 0.064),
+            location=(0.0, by, 1.335), rotation=(0.0, math.radians(45.0), 0.0),
+            bevel=0.006, segments=1,
+        )
+        parts.append(fin(crest, cfg.get("crest", "gold"), smooth=False))
+
+    elif style == "arcane":
+        zs = [1.385, 1.180, 0.900, 0.590, 0.290, 0.090]
+        ys = [_front_surface(sp, rings, z, 0.012) for z in zs]
+        widths = [0.034, 0.040, 0.050, 0.060, 0.070, 0.082]
+        stole = ribbon_prism(
+            "arcane_stole", [(0.0, y, z) for y, z in zip(ys, zs)],
+            widths, thickness=0.009, smooth=True,
+        )
+        parts.append(fin(stole, cfg.get("mat", "gold")))
+        for s in (1, -1):
+            edge = ribbon_prism(
+                f"arcane_edge{s}",
+                [(s * (w - 0.006), y + 0.010, z)
+                 for w, y, z in zip(widths, ys, zs)],
+                0.006, thickness=0.006, smooth=True,
+            )
+            parts.append(fin(edge, cfg.get("edge", "rune")))
+        parts += _front_badge(
+            "arcane_brooch",
+            (0.0, _front_surface(sp, rings, 1.430, 0.030), 1.430),
+            cfg.get("frame", "gold"), cfg.get("gem", "crystal"), radius=0.052,
+        )
+
+    elif style == "tao":
+        zs = [1.330, 1.170, 0.930, 0.690, 0.455]
+        ys = [_front_surface(sp, rings, z, 0.013) for z in zs]
+        widths = [0.032, 0.038, 0.046, 0.052, 0.058]
+        backing = ribbon_prism(
+            "tao_seal_backing",
+            [(0.0, y, z) for y, z in zip(ys, zs)],
+            [w + 0.025 for w in widths], thickness=0.008, smooth=True,
+        )
+        parts.append(fin(backing, cfg.get("backing", "clothBlue")))
+        seal = ribbon_prism(
+            "tao_seal_panel", [(0.0, y + 0.009, z) for y, z in zip(ys, zs)],
+            widths, thickness=0.008, smooth=True,
+        )
+        parts.append(fin(seal, cfg.get("mat", "bone")))
+        for s in (1, -1):
+            edge = ribbon_prism(
+                f"tao_seal_edge{s}",
+                [(s * (w - 0.005), y + 0.018, z)
+                 for w, y, z in zip(widths, ys, zs)],
+                0.005, thickness=0.006, smooth=True,
+            )
+            parts.append(fin(edge, cfg.get("edge", "bronze")))
+        parts += _front_badge(
+            "tao_brooch",
+            (0.0, _front_surface(sp, rings, 1.385, 0.028), 1.385),
+            cfg.get("frame", "bronze"), cfg.get("gem", "rune"), radius=0.043,
+        )
     return parts
 
 
@@ -1200,7 +1525,7 @@ def _assemble(**over):
     torso, rings = p_torso(sp)
     fin(torso, sp.get("body_mat", sp["skin"]))
     parts = [torso]
-    parts.append(fin(p_neck(sp), sp["skin"]))
+    # p_head owns the neck rings, so neck-to-jaw remains one continuous mesh.
     parts += p_head(sp)
     parts += p_hair(sp)
     parts += p_beard(sp)
@@ -1213,6 +1538,7 @@ def _assemble(**over):
         if cfg:
             parts.append(p_shell(sp, rings, cfg, name=cfg_name))
     parts += p_robe(sp)
+    parts += p_robe_trim(sp)
     parts += p_tabard(sp, rings)
     parts += p_sleeves(sp)
     parts += p_lapel(sp, rings)
@@ -1225,6 +1551,7 @@ def _assemble(**over):
     parts += p_apron(sp, rings)
     parts += p_satchel(sp, rings)
     parts += p_cap(sp)
+    parts += p_signature(sp, rings)
 
     for t in (sp.get("trim") or []):
         z = t["z"]
@@ -1290,18 +1617,27 @@ def char_warrior_m():
     _assemble(
         name="char_warrior_m", skin="skin.tan", scale=1.01,
         **_warrior_common(),
+        leg_mat="clothRed",
         head=dict(jaw=1.35, brow=1.35, cheek=1.1),
-        hair=dict(style="topknot", mat="chitin", band="clothRed"),
-        beard=dict(style="goatee", mat="chitin"),
-        shell=dict(z0=1.075, z1=1.520, pad=0.024, mat="iron", smooth=False, steps=8),
-        shell2=dict(z0=1.290, z1=1.470, pad=0.040, mat="steel", smooth=False, steps=4),
-        pauldron=dict(mat="steel", r=0.155, out=0.118, layers=2, spike="bronze"),
+        face=dict(eye=0.98, brow=1.14, lip=0.94, brow_mat="furBrown"),
+        hair=dict(style="topknot", mat="furBrown", band="clothRed"),
+        beard=dict(style="goatee", mat="furBrown"),
+        shell=dict(z0=1.075, z1=1.520, pad=0.024, mat="iron", smooth=False,
+                   steps=10, bevel=0.0045, bevel_segments=2),
+        shell2=dict(z0=1.290, z1=1.470, pad=0.040, mat="steel", smooth=False,
+                    steps=6, bevel=0.0055, bevel_segments=3),
+        tabard=dict(mat="clothRed", z0=1.435, z1=0.835),
+        sleeve=dict(rt=0.092, rb=0.068, z_bot=1.185, mat="clothRed",
+                    steps=7, n=16, folds=3, thick=0.006),
+        pauldron=dict(mat="steel", r=0.155, out=0.118, layers=2, spike="bronze",
+                      rim="bronze", seg=18),
         belt=dict(z=1.085, w=0.062, mat="leather", pad=0.030, buckle="gold"),
         tassets=dict(mat="leather", n=9, z0=1.040, drop=0.300),
-        bracers=dict(mat="iron"),
-        boots=dict(top=0.580, mat="iron", pad=0.028, cuff=0.030, plate=True,
+        bracers=dict(mat="iron", elbow_mat="steel"),
+        boots=dict(top=0.680, mat="iron", pad=0.028, cuff=0.018, plate=True,
                    plate_mat="steel"),
         trim=[dict(z=1.500, mat="bronze", pad=0.030, w=0.012)],
+        signature=dict(style="plate", mat="iron", trim="bronze", crest="gold"),
     )
 
 
@@ -1311,17 +1647,25 @@ def char_warrior_f():
         sh_w=0.192, sh_d=0.112, wa_w=0.122, wa_d=0.092, hi_w=0.158, hi_d=0.118,
         bust=0.026, neck_r=0.052, arm=(0.058, 0.045, 0.034), delt=0.074,
         leg=(0.112, 0.084, 0.046), stance=0.006, lean=0.020, torso_p=0.86,
+        leg_mat="clothRed",
         head=dict(jaw=0.80, brow=0.70, cheek=1.25, narrow=0.94, scale=0.97),
-        hair=dict(style="bun_high", mat="chitin", pin="gold"),
-        shell=dict(z0=1.080, z1=1.500, pad=0.022, mat="steel", smooth=False, steps=8),
-        shell2=dict(z0=1.300, z1=1.460, pad=0.034, mat="steel", smooth=False, steps=4),
-        pauldron=dict(mat="steel", r=0.126, out=0.098, layers=1),
+        face=dict(eye=1.10, brow=0.90, lip=1.08, brow_mat="furBrown"),
+        hair=dict(style="bun_high", mat="furBrown", pin="gold", temples=True),
+        shell=dict(z0=1.080, z1=1.500, pad=0.022, mat="steel", smooth=False,
+                   steps=10, bevel=0.004, bevel_segments=2),
+        shell2=dict(z0=1.300, z1=1.460, pad=0.034, mat="steel", smooth=False,
+                    steps=6, bevel=0.005, bevel_segments=3),
+        tabard=dict(mat="clothRed", z0=1.405, z1=0.825),
+        sleeve=dict(rt=0.078, rb=0.058, z_bot=1.185, mat="clothRed",
+                    steps=7, n=16, folds=3, thick=0.006),
+        pauldron=dict(mat="steel", r=0.126, out=0.098, layers=1, rim="gold", seg=18),
         belt=dict(z=1.078, w=0.052, mat="leather", pad=0.026, buckle="gold"),
         tassets=dict(mat="clothRed", n=7, z0=1.030, drop=0.340),
-        bracers=dict(mat="steel"),
-        boots=dict(top=0.520, mat="steel", pad=0.022, cuff=0.026, plate=True,
+        bracers=dict(mat="steel", elbow_mat="steel"),
+        boots=dict(top=0.620, mat="steel", pad=0.022, cuff=0.016, plate=True,
                    plate_mat="steel"),
         trim=[dict(z=1.470, mat="gold", pad=0.028, w=0.010)],
+        signature=dict(style="plate", mat="iron", trim="gold", crest="gold"),
     )
 
 
@@ -1332,17 +1676,24 @@ def char_mage_m():
         neck_r=0.050, arm=(0.052, 0.041, 0.032), delt=0.064,
         leg=(0.100, 0.076, 0.044), torso_p=0.90,
         head=dict(jaw=0.85, brow=1.15, cheek=1.25, narrow=0.93, scale=0.99),
-        hair=dict(style="topknot", mat="chitin", band="gold"),
-        beard=dict(style="goatee", mat="chitin"),
-        shell=dict(z0=1.060, z1=1.520, pad=0.024, mat="clothBlue", steps=8, noise=0.005),
+        face=dict(eye=1.02, brow=1.04, lip=0.98, brow_mat="furGrey"),
+        hair=dict(style="topknot", mat="furGrey", band="gold"),
+        beard=dict(style="goatee", mat="furGrey"),
+        shell=dict(z0=1.060, z1=1.520, pad=0.024, mat="clothBlue",
+                   steps=10, noise=0.004),
         robe=dict(z_top=1.130, z_bot=0.032, rt=0.180, rb=0.318, folds=7, amp=0.026,
-                  mat="clothBlue", steps=11, n=20, seed=2.1),
-        sleeve=dict(rt=0.084, rb=0.178, z_bot=0.930, mat="clothBlue", steps=8,
-                    n=13, folds=5, cuff="silk"),
+                  mat="clothBlue", steps=14, n=32, seed=2.1, thick=0.008),
+        robe_trim=dict(mat="gold", height=0.062, w=0.018, outset=0.008),
+        sleeve=dict(rt=0.098, rb=0.178, z_bot=0.930, mat="clothBlue", steps=10,
+                    n=20, folds=5, cuff="silk", thick=0.007),
+        pauldron=dict(mat="clothWhite", r=0.086, out=0.052, layers=1,
+                      seg=16, smooth=True, rim="gold"),
         collar=dict(mat="silk", z0=1.430, z1=1.700, flare=0.050, thick=0.016),
-        belt=dict(z=1.108, w=0.038, mat="gold", pad=0.026),
+        belt=dict(z=1.108, w=0.046, mat="gold", pad=0.026, buckle="crystal"),
         boots=dict(top=0.180, mat="leather", pad=0.014, cuff=0.010),
         trim=[dict(z=1.300, mat="gold", pad=0.030, w=0.010)],
+        signature=dict(style="arcane", mat="clothWhite", edge="gold",
+                       frame="gold", gem="crystal"),
     )
 
 
@@ -1353,16 +1704,23 @@ def char_mage_f():
         bust=0.026, neck_r=0.044, arm=(0.048, 0.038, 0.030), delt=0.058,
         leg=(0.100, 0.076, 0.043), torso_p=0.92,
         head=dict(jaw=0.72, brow=0.60, cheek=1.30, narrow=0.92, scale=0.96),
-        hair=dict(style="long", mat="chitin"),
-        shell=dict(z0=1.040, z1=1.510, pad=0.022, mat="clothBlue", steps=8, noise=0.005),
+        face=dict(eye=1.12, brow=0.86, lip=1.12, brow_mat="furGrey"),
+        hair=dict(style="long", mat="furGrey", temples=True),
+        shell=dict(z0=1.040, z1=1.510, pad=0.022, mat="clothBlue",
+                   steps=10, noise=0.004),
         robe=dict(z_top=1.110, z_bot=0.026, rt=0.168, rb=0.336, folds=9, amp=0.024,
-                  mat="clothBlue", steps=12, n=22, seed=4.4, squash=0.88),
-        sleeve=dict(rt=0.074, rb=0.166, z_bot=0.920, mat="clothBlue", steps=8,
-                    n=13, folds=6, cuff="silk"),
+                  mat="clothBlue", steps=14, n=32, seed=4.4, squash=0.88, thick=0.008),
+        robe_trim=dict(mat="gold", height=0.060, w=0.018, outset=0.008),
+        sleeve=dict(rt=0.092, rb=0.166, z_bot=0.920, mat="clothBlue", steps=10,
+                    n=20, folds=6, cuff="silk", thick=0.007),
+        pauldron=dict(mat="clothWhite", r=0.080, out=0.048, layers=1,
+                      seg=16, smooth=True, rim="gold"),
         collar=dict(mat="silk", z0=1.400, z1=1.672, flare=0.044, thick=0.014),
-        belt=dict(z=1.086, w=0.032, mat="gold", pad=0.024),
+        belt=dict(z=1.086, w=0.042, mat="gold", pad=0.024, buckle="crystal"),
         boots=dict(top=0.160, mat="leather", pad=0.012, cuff=0.008),
         trim=[dict(z=1.280, mat="silk", pad=0.028, w=0.012)],
+        signature=dict(style="arcane", mat="clothWhite", edge="gold",
+                       frame="gold", gem="crystal"),
     )
 
 
@@ -1373,17 +1731,24 @@ def char_taoist_m():
         neck_r=0.056, arm=(0.058, 0.045, 0.035), delt=0.072,
         leg=(0.110, 0.082, 0.047), torso_p=0.86,
         head=dict(jaw=1.05, brow=1.05, cheek=1.05),
-        hair=dict(style="topknot", mat="chitin", band="silk"),
-        beard=dict(style="goatee", mat="chitin"),
-        shell=dict(z0=1.050, z1=1.510, pad=0.024, mat="clothWhite", steps=8, noise=0.005),
+        face=dict(eye=1.00, brow=0.98, lip=1.00, brow_mat="furBrown"),
+        hair=dict(style="topknot", mat="furBrown", band="silk"),
+        beard=dict(style="goatee", mat="furBrown"),
+        shell=dict(z0=1.050, z1=1.510, pad=0.024, mat="clothWhite",
+                   steps=10, noise=0.004),
+        shell2=dict(z0=1.185, z1=1.445, pad=0.032, mat="clothBlue",
+                    steps=7, noise=0.003),
         robe=dict(z_top=1.100, z_bot=0.078, rt=0.172, rb=0.262, folds=6, amp=0.019,
-                  mat="clothWhite", steps=10, n=18, seed=1.4),
-        sleeve=dict(rt=0.080, rb=0.122, z_bot=0.946, mat="clothWhite", steps=7,
-                    n=12, folds=4),
-        lapel=dict(mat="clothWhite", trim="silk", z_top=1.500, z_bot=1.060),
-        sash=dict(z=1.096, w=0.084, mat="silk", tails=True),
-        cap="daoist",
+                  mat="clothWhite", steps=13, n=30, seed=1.4, thick=0.007),
+        robe_trim=dict(mat="bronze", height=0.058, w=0.016, outset=0.008),
+        sleeve=dict(rt=0.102, rb=0.122, z_bot=0.946, mat="clothWhite", steps=9,
+                    n=18, folds=4, cuff="bronze", thick=0.006),
+        lapel=dict(mat="clothWhite", trim="bronze", z_top=1.500, z_bot=1.060),
+        sash=dict(z=1.096, w=0.084, mat="clothRed", tails=True),
+        cap="daoist", cap_pin="bronze", cap_band="clothRed",
         boots=dict(top=0.220, mat="leather", pad=0.014, cuff=0.012),
+        signature=dict(style="tao", backing="clothBlue", mat="clothWhite", edge="bronze",
+                       frame="bronze", gem="rune"),
     )
 
 
@@ -1394,15 +1759,22 @@ def char_taoist_f():
         bust=0.024, neck_r=0.046, arm=(0.050, 0.040, 0.031), delt=0.060,
         leg=(0.104, 0.078, 0.044), torso_p=0.90,
         head=dict(jaw=0.74, brow=0.65, cheek=1.28, narrow=0.93, scale=0.96),
-        hair=dict(style="bun", mat="chitin", pin="gold"),
-        shell=dict(z0=1.030, z1=1.500, pad=0.022, mat="clothWhite", steps=8, noise=0.005),
+        face=dict(eye=1.09, brow=0.86, lip=1.10, brow_mat="furBrown"),
+        hair=dict(style="bun", mat="furBrown", pin="gold", temples=True),
+        shell=dict(z0=1.030, z1=1.500, pad=0.022, mat="clothWhite",
+                   steps=10, noise=0.004),
+        shell2=dict(z0=1.170, z1=1.425, pad=0.030, mat="clothBlue",
+                    steps=7, noise=0.003),
         robe=dict(z_top=1.080, z_bot=0.064, rt=0.164, rb=0.276, folds=8, amp=0.020,
-                  mat="clothWhite", steps=11, n=20, seed=5.2, squash=0.89),
-        sleeve=dict(rt=0.072, rb=0.116, z_bot=0.936, mat="clothWhite", steps=7,
-                    n=12, folds=5),
-        lapel=dict(mat="clothWhite", trim="silk", z_top=1.470, z_bot=1.040),
-        sash=dict(z=1.070, w=0.070, mat="silk", tails=True),
+                  mat="clothWhite", steps=13, n=30, seed=5.2, squash=0.89, thick=0.007),
+        robe_trim=dict(mat="bronze", height=0.056, w=0.016, outset=0.008),
+        sleeve=dict(rt=0.092, rb=0.116, z_bot=0.936, mat="clothWhite", steps=9,
+                    n=18, folds=5, cuff="bronze", thick=0.006),
+        lapel=dict(mat="clothWhite", trim="bronze", z_top=1.470, z_bot=1.040),
+        sash=dict(z=1.070, w=0.070, mat="clothRed", tails=True),
         boots=dict(top=0.180, mat="leather", pad=0.012, cuff=0.010),
+        signature=dict(style="tao", backing="clothBlue", mat="clothWhite", edge="bronze",
+                       frame="bronze", gem="rune"),
     )
 
 

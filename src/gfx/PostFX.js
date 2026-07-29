@@ -17,7 +17,7 @@
  * animates exposure keeps working.
  *
  * Chain
- *   ultra/high : Render -> GTAO(subtle) -> Bloom -> Grade -> SMAA -> Output
+ *   ultra/high : Render -> Bloom -> Grade -> SMAA -> Output
  *   med        : Render ->                 Bloom -> Grade -> SMAA -> Output
  *   low        : Render ->                 Bloom -> Grade -> Output -> FXAA
  * (SMAA wants linear input so it sits before OutputPass; FXAA wants sRGB so it
@@ -29,7 +29,6 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { FXAAPass } from 'three/addons/postprocessing/FXAAPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
@@ -63,7 +62,7 @@ function grade(exposure, contrast, sat, vig, grain, ca, lift, gamma, gain) {
  * not as "filtered".
  */
 const GRADES = {
-  normal: grade(1.00, 1.020, 1.060, 0.34, 0.030, 0.0016,
+  normal: grade(0.98, 1.045, 1.075, 0.32, 0.026, 0.0014,
     [0.000, 0.000, 0.000], [1.000, 1.000, 1.000], [1.030, 1.000, 0.972]),
   night: grade(0.94, 1.050, 0.840, 0.46, 0.055, 0.0022,
     [0.006, 0.010, 0.020], [1.020, 1.000, 0.960], [0.920, 0.970, 1.100]),
@@ -250,6 +249,13 @@ export class PostFX {
     this.preset = engine.preset || {};
     this._disposed = false;
 
+    // Keep the complete Ultra frame (world colour + shadows + animated
+    // reflection + post stack) within WebGL's reliable attachment budget.
+    // Supersampling above 1.5x is visually redundant once SMAA is active.
+    if (quality === 'ultra' && this.renderer.getPixelRatio() > 1.5) {
+      this.renderer.setPixelRatio(1.5);
+    }
+
     // We own tone mapping from here on. Remember what Engine wanted so a later
     // dispose() (map teardown, quality rebuild) leaves the renderer as found.
     this._savedToneMapping = this.renderer.toneMapping;
@@ -259,7 +265,15 @@ export class PostFX {
     const h = Math.max(1, window.innerHeight);
     this._w = w;
     this._h = h;
-    this._pixelRatio = this.renderer.getPixelRatio();
+    // Ultra renders the world at 2x, but running every half-float post target
+    // (plus five bloom mips) at 2x crosses ANGLE's practical texture-memory
+    // budget in the full-density scene. The failure presents as a poisoned
+    // sampler binding on every later draw. 1.5x keeps geometry/shadows Ultra
+    // while the post chain remains comfortably above display resolution.
+    this._pixelRatio = Math.min(
+      this.renderer.getPixelRatio(),
+      this.quality === 'ultra' ? 1.5 : this.renderer.getPixelRatio()
+    );
 
     // ---- state driven by gameplay ----------------------------------------
     this._time = 0;
@@ -291,7 +305,6 @@ export class PostFX {
     const q = this.quality;
     const hi = (q === 'high' || q === 'ultra');
     const ultra = (q === 'ultra');
-    const wantAO = hi && this.preset.ssao !== false;
     const wantBloom = this.preset.bloom !== false;
 
     this.composer = new EffectComposer(this.renderer);
@@ -303,41 +316,23 @@ export class PostFX {
     this.renderPass = new RenderPass(this.scene, this.camera);
     this._add(this.renderPass);
 
-    // ---- ambient occlusion (subtle: contact shading, never a grey wash) ----
+    // ---- contact shading --------------------------------------------------
+    // GTAOPass's depth-stencil target is rejected by WebGL's sampler
+    // validation on Chromium/ANGLE for this Three revision.  Once one draw is
+    // rejected, the invalid texture unit poisons every later instanced draw in
+    // the frame.  Real directional shadows and the pooled contact blobs now own
+    // this layer; keeping a broken screen-space pass for a subtle darkening is
+    // not an acceptable trade.
     this.aoPass = null;
-    if (wantAO) {
-      try {
-        this.aoPass = new GTAOPass(this.scene, this.camera, this._w, this._h);
-        this.aoPass.output = GTAOPass.OUTPUT.Default;
-        this.aoPass.blendIntensity = ultra ? 0.55 : 0.45;
-        this.aoPass.updateGtaoMaterial({
-          radius: 0.45,
-          distanceExponent: 1.4,
-          thickness: 0.6,
-          scale: 0.72,
-          samples: ultra ? 16 : 8,
-          distanceFallOff: 1.0,
-          screenSpaceRadius: false,
-        });
-        this.aoPass.updatePdMaterial({
-          lumaPhi: 8, depthPhi: 2.2, normalPhi: 3.2,
-          radius: ultra ? 8 : 5, rings: 2, samples: ultra ? 16 : 8,
-        });
-        this._add(this.aoPass);
-      } catch (e) {
-        console.warn('[PostFX] GTAO unavailable, continuing without AO', e);
-        this.aoPass = null;
-      }
-    }
 
     // ---- bloom: torches, lava, runes and eyes only ------------------------
     this.bloomPass = null;
     if (wantBloom) {
-      const strength = ultra ? 0.52 : hi ? 0.44 : q === 'med' ? 0.38 : 0.32;
+      const strength = ultra ? 0.44 : hi ? 0.38 : q === 'med' ? 0.34 : 0.28;
       // radius kept tight: a wide kernel turns every magic shell into a solid
       // ball of light and hazes the whole frame
       this.bloomPass = new UnrealBloomPass(
-        new THREE.Vector2(this._w, this._h), strength, 0.42, 0.85
+        new THREE.Vector2(this._w, this._h), strength, 0.34, hi ? 1.08 : 0.98
       );
       this._add(this.bloomPass);
     }
@@ -391,7 +386,8 @@ export class PostFX {
     const H = Math.max(1, Math.floor(h || window.innerHeight));
     this._w = W; this._h = H;
 
-    const pr = this.renderer.getPixelRatio();
+    const rendererPr = this.renderer.getPixelRatio();
+    const pr = Math.min(rendererPr, this.quality === 'ultra' ? 1.5 : rendererPr);
     if (pr !== this._pixelRatio) {
       this._pixelRatio = pr;
       this.composer.setPixelRatio(pr);   // this re-runs setSize internally

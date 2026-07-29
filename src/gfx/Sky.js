@@ -797,7 +797,9 @@ export class Sky {
 
   _buildLights() {
     const preset = this.engine.preset || {};
-    const mapSize = preset.shadowMap || 2048;
+    const mapSize = this.quality === 'ultra'
+      ? Math.min(2048, preset.shadowMap || 2048)
+      : (preset.shadowMap || 2048);
     this._shadowSize = mapSize;
 
     this.sun = new THREE.DirectionalLight(0xfff3e2, 3.0);
@@ -826,14 +828,29 @@ export class Sky {
     this.hemi.name = 'hemi';
     this.group.add(this.hemi);
 
+    // A restrained opposite-side fill keeps silhouettes readable while the
+    // lower hemisphere intensity lets the sun remain an unmistakable key.
+    // Only the upper tiers pay for the extra directional-light shader slot.
+    this.fill = null;
+    this.fillTarget = null;
+    if (this.quality === 'high' || this.quality === 'ultra') {
+      this.fill = new THREE.DirectionalLight(0x91b7df, 0.12);
+      this.fill.name = 'skyFill';
+      this.fill.castShadow = false;
+      this.fillTarget = new THREE.Object3D();
+      this.fill.target = this.fillTarget;
+      this.group.add(this.fill);
+      this.group.add(this.fillTarget);
+    }
+
     this._shadowRadius = 0;
   }
 
   _configureShadow(shadow, mapSize) {
     shadow.mapSize.set(mapSize, mapSize);
-    shadow.bias = -0.00045;
-    shadow.normalBias = 0.035;
-    shadow.radius = 2.2;
+    shadow.bias = -0.00032;
+    shadow.normalBias = this.quality === 'ultra' ? 0.018 : 0.024;
+    shadow.radius = this.quality === 'ultra' ? 1.35 : 1.7;
     const cam = shadow.camera;
     cam.near = 1;
     cam.far = 220;
@@ -1002,7 +1019,16 @@ export class Sky {
     this.hemi.color.copy(_c1).lerp(_c2, dayF);
     _c1.setHex(0x11182a); _c2.setHex(0x6b5a3e);
     this.hemi.groundColor.copy(_c1).lerp(_c2, dayF);
-    this.hemi.intensity = lerp(0.86, 0.92, dayF) * p.hemi;
+    // Night gets a broad blue readability floor; daylight deliberately gets
+    // less fill so wall reveals, eaves and characters retain contact depth.
+    this.hemi.intensity = lerp(0.76, 0.60, dayF) * p.hemi;
+
+    if (this.fill) {
+      _c1.setHex(0x769bd1); _c2.setHex(0xb9d4ed);
+      this.fill.color.copy(_c1).lerp(_c2, dayF);
+      this.fill.intensity = lerp(0.11, 0.17, dayF) * p.hemi
+        * (1 - p.override * 0.65);
+    }
 
     // hell/cave override the ambient hue outright
     if (p.override > 0.001) {
@@ -1157,7 +1183,9 @@ export class Sky {
     const shadowsOn = preset.shadows !== false;
 
     // quality may have been cycled at runtime
-    const want = preset.shadowMap || 2048;
+    const want = this.quality === 'ultra'
+      ? Math.min(2048, preset.shadowMap || 2048)
+      : (preset.shadowMap || 2048);
     if (want !== this._shadowSize) {
       this._shadowSize = want;
       if (this.sun.shadow.map) { this.sun.shadow.map.dispose(); this.sun.shadow.map = null; }
@@ -1194,6 +1222,15 @@ export class Sky {
     if (!moonLit) {
       this.moonTarget.position.copy(focus);
       this.moon.position.copy(focus).addScaledVector(this._moonDir, 120);
+    }
+    if (this.fill) {
+      this.fillTarget.position.copy(focus);
+      // Lift the opposite azimuth above the horizon: it reads as sky bounce,
+      // never as a second sun and never produces another shadow.
+      _v2.set(-this._sunDir.x, 0.72, -this._sunDir.z);
+      if (_v2.lengthSq() < 1e-5) _v2.set(-0.6, 0.72, 0.4);
+      _v2.normalize();
+      this.fill.position.copy(focus).addScaledVector(_v2, 95);
     }
   }
 

@@ -31,12 +31,25 @@
 <div id="charsel" class="charsel hidden">
   <div class="cs-panel">
     <div class="cs-head">选择你的职业</div>
-    <div class="cs-classes" id="csClasses"></div>
-    <div class="cs-namerow">
-      <label>角色名</label><input id="csName" maxlength="7" value="无名少侠" />
+    <div class="cs-layout">
+      <div class="cs-showcase" id="csShowcase" data-klass="warrior">
+        <canvas id="csPreview" aria-label="当前职业三维预览"></canvas>
+        <div class="cs-stage-crest" aria-hidden="true"></div>
+        <div class="cs-stage-caption">
+          <span id="csPreviewGlyph">战</span>
+          <div><b id="csPreviewName">战士</b><em id="csPreviewEn">WARRIOR</em></div>
+        </div>
+        <div class="cs-stage-hint">拖动旋转 · 选择职业查看战斗姿态</div>
+      </div>
+      <div class="cs-controls">
+        <div class="cs-classes" id="csClasses"></div>
+        <div class="cs-namerow">
+          <label for="csName">角色名</label><input id="csName" maxlength="7" value="无名少侠" />
+        </div>
+        <div class="cs-desc" id="csDesc"></div>
+        <button class="cs-go" id="csGo">进 入 玛 法 大 陆</button>
+      </div>
     </div>
-    <div class="cs-desc" id="csDesc"></div>
-    <button class="cs-go" id="csGo">进 入 玛 法 大 陆</button>
   </div>
 </div>
 
