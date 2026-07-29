@@ -10,6 +10,7 @@ import { Sky } from '../gfx/Sky.js';
 import { Weather } from '../gfx/Weather.js';
 import { FxSystem } from '../gfx/Particles.js';
 import { Audio } from '../audio/Audio.js';
+import { assets } from '../core/Assets.js';
 import { World } from '../world/World.js';
 import { Player } from '../entities/Player.js';
 import { Inventory, makeItem } from './Inventory.js';
@@ -37,6 +38,8 @@ export class Game {
       quality: this.quality,
       time: 0,
       pickables: null,
+      /** Blender-modeled GLB assets, preloaded by main.js before we get here. */
+      assets,
       forge: null, materials: null, fx: null, audio: null,
     };
 

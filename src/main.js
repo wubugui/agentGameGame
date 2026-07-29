@@ -1,6 +1,7 @@
 import { Game } from './game/Game.js';
 import { CLASSES } from './game/Content.js';
 import { autoQuality } from './game/Config.js';
+import { assets } from './core/Assets.js';
 
 const boot = (p, msg) => window.__boot?.(p, msg);
 
@@ -50,7 +51,14 @@ async function main() {
   const choice = await chooseCharacter();
 
   el('boot').classList.remove('hidden');
-  await tick(0.35, '正在雕刻地形…');
+
+  // Modeled assets are loaded up front so entity constructors — which run
+  // mid-frame during spawns and cannot await — can clone them synchronously.
+  await assets.preload((n, total, name) => {
+    boot(0.25 + 0.4 * (n / total), `正在载入模型 ${n}/${total} · ${name}`);
+  });
+
+  await tick(0.68, '正在雕刻地形…');
 
   const canvas = el('stage');
   const quality = new URLSearchParams(location.search).get('q') || autoQuality();
