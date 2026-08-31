@@ -5,11 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build --emptyOutDir",
     "preview": "vite preview"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",
+    "pixi.js": "^8.20.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
