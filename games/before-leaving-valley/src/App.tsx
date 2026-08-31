@@ -3,12 +3,9 @@ import {
   BatteryMedium,
   Camera,
   Check,
-  ChevronRight,
-  Footprints,
   Image as ImageIcon,
   Map,
   MessageCircle,
-  Mountain,
   RotateCcw,
   Smartphone,
   Volume2,
@@ -28,34 +25,43 @@ const INFO: Record<JourneyScene, { time: string; place: string; battery: number 
   viewpoint: { time: "15:21", place: "无名观景台 · 1,680 m", battery: 69 },
 };
 
-const SCENE_COPY: Record<JourneyScene, string[]> = {
-  arrival: ["车门在身后合上时，我才意识到——整辆车只有我一个人下了。", "不过天气比预报里好。来都来了，就往上走一点点。"],
-  trail: ["路比地图上的细线陡得多，但每一次回头，山谷都会再打开一点。", "前面有两条路，都像是能走。"],
-  viewpoint: ["风忽然从山脊另一边吹过来，整片山谷就在那一刻亮了。", "原来不是所有风景，都需要先知道名字。"],
-};
+const STONES = [
+  { x: 68, y: 70 },
+  { x: 61, y: 61 },
+  { x: 67, y: 51 },
+  { x: 73, y: 41 },
+];
 
 export default function App() {
   const [phase, setPhase] = useState<Phase>("title");
   const [scene, setScene] = useState<JourneyScene>("arrival");
-  const [line, setLine] = useState(0);
+  const [canvasReady, setCanvasReady] = useState(false);
   const [bagTaken, setBagTaken] = useState(false);
-  const [walking, setWalking] = useState(false);
-  const [walkProgress, setWalkProgress] = useState(0);
+  const [bagPos, setBagPos] = useState({ x: 84, y: 74 });
+  const [bagDragging, setBagDragging] = useState(false);
+  const [arrivalProgress, setArrivalProgress] = useState(0);
+  const [trailProgress, setTrailProgress] = useState(0);
   const [route, setRoute] = useState<Route>(null);
-  const [trailStep, setTrailStep] = useState(0);
+  const [streamStep, setStreamStep] = useState(0);
+  const [moving, setMoving] = useState(false);
+  const [look, setLook] = useState({ x: 50, y: 50 });
+  const [thought, setThought] = useState("");
+  const [feedback, setFeedback] = useState("");
   const [phoneOpen, setPhoneOpen] = useState(false);
   const [phoneTab, setPhoneTab] = useState<PhoneTab>("home");
   const [photoTaken, setPhotoTaken] = useState(false);
   const [soundOn, setSoundOn] = useState(true);
-  const [toast, setToast] = useState("");
-  const [canvasReady, setCanvasReady] = useState(false);
   const audioRef = useRef<AudioContext | null>(null);
-  const footstepMark = useRef(0);
+  const pressedRef = useRef(new Set<string>());
+  const worldHeldRef = useRef(false);
+  const lastFrameRef = useRef(0);
+  const bagStartRef = useRef({ x: 0, y: 0 });
+  const transitionRef = useRef(false);
   const onCanvasReady = useCallback(() => setCanvasReady(true), []);
 
-  const notify = useCallback((message: string) => {
-    setToast(message);
-    window.setTimeout(() => setToast(""), 1700);
+  const flash = useCallback((message: string) => {
+    setFeedback(message);
+    window.setTimeout(() => setFeedback(""), 1500);
   }, []);
 
   const startAudio = useCallback(() => {
@@ -76,8 +82,8 @@ export default function App() {
     wind.buffer = buffer;
     wind.loop = true;
     filter.type = "lowpass";
-    filter.frequency.value = 680;
-    gain.gain.value = 0.08;
+    filter.frequency.value = 720;
+    gain.gain.value = 0.075;
     wind.connect(filter).connect(gain).connect(ctx.destination);
     wind.start();
     audioRef.current = ctx;
@@ -89,9 +95,9 @@ export default function App() {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = "triangle";
-    osc.frequency.setValueAtTime(84 + Math.random() * 25, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(42, ctx.currentTime + 0.12);
-    gain.gain.setValueAtTime(0.035, ctx.currentTime);
+    osc.frequency.setValueAtTime(76 + Math.random() * 28, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(40, ctx.currentTime + 0.13);
+    gain.gain.setValueAtTime(0.032, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.14);
     osc.connect(gain).connect(ctx.destination);
     osc.start();
@@ -106,34 +112,41 @@ export default function App() {
   }, [soundOn]);
 
   useEffect(() => {
-    if (!walking || phase !== "arrival") return;
-    const timer = window.setInterval(() => setWalkProgress((value) => Math.min(100, value + 2.25)), 80);
-    return () => window.clearInterval(timer);
-  }, [walking, phase]);
-
-  useEffect(() => {
-    if (walkProgress - footstepMark.current >= 12) {
-      footstepMark.current = walkProgress;
-      stepSound();
+    const timers: number[] = [];
+    setThought("");
+    if (phase === "arrival") {
+      timers.push(window.setTimeout(() => setThought("车门合上时，我才发现——整辆车只有我一个人下了。"), 650));
+      timers.push(window.setTimeout(() => setThought("不过天气比预报里好。来都来了，就往上走一点点。"), 4300));
     }
-    if (walkProgress < 100 || phase !== "arrival") return;
-    setWalking(false);
-    const timer = window.setTimeout(() => {
-      setScene("trail");
-      setPhase("trail");
-      setLine(0);
-    }, 850);
-    return () => window.clearTimeout(timer);
-  }, [walkProgress, phase, stepSound]);
+    if (phase === "trail") {
+      timers.push(window.setTimeout(() => setThought("地图上只有一条细线，眼前却有两条路。"), 600));
+      timers.push(window.setTimeout(() => setThought("不用猜哪条正确。选一条，自己走过去。"), 3900));
+    }
+    if (phase === "viewpoint") {
+      timers.push(window.setTimeout(() => setThought("风从山脊另一边吹过来，整片山谷忽然亮了。"), 700));
+      timers.push(window.setTimeout(() => setThought("原来不是所有风景，都需要先知道名字。"), 4300));
+    }
+    return () => timers.forEach(window.clearTimeout);
+  }, [phase]);
 
   useEffect(() => {
     const keyDown = (event: KeyboardEvent) => {
-      if (event.key.toLowerCase() === "p" && phase !== "title" && phase !== "complete") setPhoneOpen((value) => !value);
-      if (event.key.toLowerCase() === "w" && bagTaken && phase === "arrival" && !phoneOpen) setWalking(true);
+      const key = event.key.toLowerCase();
+      pressedRef.current.add(key);
+      if (key === "p" && phase !== "title" && phase !== "complete") {
+        setPhoneOpen((value) => !value);
+        setPhoneTab("home");
+      }
       if (event.key === "Escape") setPhoneOpen(false);
+      if (event.code === "Space" && phase === "trail" && route === "stream") {
+        event.preventDefault();
+        advanceStone();
+      }
+      if (key === "w" && ((phase === "arrival" && bagTaken) || (phase === "trail" && route === "open"))) setMoving(true);
     };
     const keyUp = (event: KeyboardEvent) => {
-      if (event.key.toLowerCase() === "w") setWalking(false);
+      pressedRef.current.delete(event.key.toLowerCase());
+      if (event.key.toLowerCase() === "w") setMoving(worldHeldRef.current);
     };
     window.addEventListener("keydown", keyDown);
     window.addEventListener("keyup", keyUp);
@@ -141,54 +154,161 @@ export default function App() {
       window.removeEventListener("keydown", keyDown);
       window.removeEventListener("keyup", keyUp);
     };
-  }, [bagTaken, phase, phoneOpen]);
+  });
+
+  useEffect(() => {
+    let frame = 0;
+    const tick = (now: number) => {
+      const dt = Math.min(0.04, (now - (lastFrameRef.current || now)) / 1000);
+      lastFrameRef.current = now;
+      const active = !phoneOpen && (worldHeldRef.current || pressedRef.current.has("w"));
+      if (active && phase === "arrival" && bagTaken) setArrivalProgress((value) => Math.min(1, value + dt * 0.19));
+      if (active && phase === "trail" && route === "open") setTrailProgress((value) => Math.min(1, value + dt * 0.17));
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [phase, bagTaken, route, phoneOpen]);
+
+  useEffect(() => {
+    if (arrivalProgress < 1 || transitionRef.current) return;
+    transitionRef.current = true;
+    setMoving(false);
+    const timer = window.setTimeout(() => {
+      setScene("trail");
+      setPhase("trail");
+      transitionRef.current = false;
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [arrivalProgress]);
+
+  useEffect(() => {
+    if (trailProgress < 1 || transitionRef.current) return;
+    transitionRef.current = true;
+    setMoving(false);
+    const timer = window.setTimeout(() => {
+      setScene("viewpoint");
+      setPhase("viewpoint");
+      transitionRef.current = false;
+    }, 750);
+    return () => window.clearTimeout(timer);
+  }, [trailProgress]);
+
+  useEffect(() => {
+    if (!photoTaken || phoneOpen || phase !== "viewpoint") return;
+    const timer = window.setTimeout(() => setPhase("complete"), 3600);
+    return () => window.clearTimeout(timer);
+  }, [photoTaken, phoneOpen, phase]);
 
   const begin = () => {
     if (soundOn) startAudio();
-    setPhase("arrival");
     setScene("arrival");
+    setPhase("arrival");
   };
 
-  const chooseRoute = (choice: Exclude<Route, null>) => {
-    setRoute(choice);
-    setTrailStep(0);
-    notify(choice === "stream" ? "溪水很浅，但石头有些滑" : "坡缓一些，只是会绕远一点");
+  const coords = (event: React.PointerEvent<HTMLElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    return { x: (event.clientX - rect.left) / rect.width, y: (event.clientY - rect.top) / rect.height };
   };
 
-  const advanceTrail = () => {
-    stepSound();
-    if (trailStep < 3) {
-      setTrailStep((value) => value + 1);
-      return;
+  const worldDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (phoneOpen) return;
+    const p = coords(event);
+    event.currentTarget.setPointerCapture(event.pointerId);
+    if (phase === "arrival") {
+      if (!bagTaken) {
+        flash("背包还在候车亭里");
+        return;
+      }
+      if (p.x > 0.37 && p.x < 0.74 && p.y > 0.34) {
+        worldHeldRef.current = true;
+        setMoving(true);
+      } else flash(p.x < 0.38 ? "公路往山下绕去了" : "那边没有路");
     }
-    setWalking(true);
-    window.setTimeout(() => {
-      setWalking(false);
-      setScene("viewpoint");
-      setPhase("viewpoint");
-      setLine(0);
-    }, 1100);
+    if (phase === "trail") {
+      if (route === null && p.x < 0.53 && p.y > 0.34) {
+        setRoute("open");
+        worldHeldRef.current = true;
+        setMoving(true);
+        setThought("我选了左边。路远一点，但能一直看见山。 ");
+      } else if (route === "open" && p.x < 0.58 && p.y > 0.3) {
+        worldHeldRef.current = true;
+        setMoving(true);
+      } else if (route === null) flash("溪水里的石头可以踩");
+    }
   };
+
+  const worldMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const p = coords(event);
+    setLook({ x: p.x * 100, y: p.y * 100 });
+  };
+
+  const worldUp = () => {
+    worldHeldRef.current = false;
+    if (!pressedRef.current.has("w")) setMoving(false);
+  };
+
+  const bagDown = (event: React.PointerEvent<HTMLImageElement>) => {
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    bagStartRef.current = { x: event.clientX, y: event.clientY };
+    setBagDragging(true);
+  };
+
+  const bagMove = (event: React.PointerEvent<HTMLImageElement>) => {
+    if (!bagDragging) return;
+    setBagPos({ x: event.clientX / window.innerWidth * 100, y: event.clientY / window.innerHeight * 100 });
+  };
+
+  const bagUp = (event: React.PointerEvent<HTMLImageElement>) => {
+    const pulledDown = event.clientY - bagStartRef.current.y > 85 || event.clientY / window.innerHeight > 0.82;
+    setBagDragging(false);
+    if (pulledDown) {
+      setBagTaken(true);
+      setThought("水、薄外套、充电宝。都在。走吧。");
+      stepSound();
+    } else setBagPos({ x: 84, y: 74 });
+  };
+
+  function advanceStone() {
+    if (transitionRef.current) return;
+    if (route === null) {
+      setRoute("stream");
+      setThought("石头只露出一点。看准下一块，再落脚。");
+    }
+    stepSound();
+    setMoving(true);
+    window.setTimeout(() => setMoving(false), 230);
+    setStreamStep((value) => {
+      const next = value + 1;
+      setTrailProgress(Math.min(1, next / STONES.length));
+      return next;
+    });
+  }
 
   const takePhoto = () => {
-    setPhotoTaken(true);
-    notify("已存入「这次真的有出门」");
-    window.setTimeout(() => setPhoneTab("gallery"), 450);
+    flash("咔嚓");
+    if (scene === "viewpoint") {
+      setPhotoTaken(true);
+      window.setTimeout(() => setPhoneTab("gallery"), 420);
+    }
   };
 
   const reset = () => {
     setPhase("title");
     setScene("arrival");
-    setLine(0);
     setBagTaken(false);
-    setWalking(false);
-    setWalkProgress(0);
-    footstepMark.current = 0;
+    setBagPos({ x: 84, y: 74 });
+    setArrivalProgress(0);
+    setTrailProgress(0);
     setRoute(null);
-    setTrailStep(0);
+    setStreamStep(0);
+    setMoving(false);
     setPhoneOpen(false);
     setPhoneTab("home");
     setPhotoTaken(false);
+    setThought("");
+    transitionRef.current = false;
   };
 
   if (phase === "title") return (
@@ -196,107 +316,82 @@ export default function App() {
       <PixiJourney scene="arrival" walking={false} onReady={onCanvasReady} />
       <div className="cinema-grade" />
       <div className={`title-card ${canvasReady ? "is-ready" : ""}`}>
-        <p className="eyebrow">离开山谷以前 · 可玩切片 01</p>
+        <p className="eyebrow">离开山谷以前 · 第一段</p>
         <h1>走到风景那里</h1>
         <p className="title-subtitle">只是临时下车，只是想往上走一点。<br />这时候，她还不知道今天会发生什么。</p>
-        <button className="primary-button" onClick={begin}>拿上背包，下车 <ChevronRight size={18} /></button>
-        <p className="title-hint">电脑浏览器 · 耳机推荐 · W / 鼠标长按行走 · P 打开手机</p>
+        <button className="primary-button" onClick={begin}>下车</button>
+        <p className="title-hint">鼠标观察与操作 · 按住 W 前进 · P 打开手机 · 建议佩戴耳机</p>
       </div>
     </main>
   );
 
   if (phase === "complete") return (
     <main className="game-shell complete-screen">
-      <PixiJourney scene="viewpoint" walking={false} />
+      <PixiJourney scene="viewpoint" walking={false} progress={1} />
       <div className="cinema-grade" />
       <div className="complete-card">
-        <span className="completion-mark"><Check size={24} /></span>
+        <span className="completion-mark"><Check size={23} /></span>
         <p className="eyebrow">STAGE 01 · 抵达</p>
         <h2>今天最好的决定，<br />是多走了那一点点。</h2>
-        <p>她只完成了一次普通的小冒险。<br />故事真正的意外，还在山路的另一边。</p>
-        <div className="complete-actions">
-          <button className="primary-button" onClick={reset}><RotateCcw size={17} /> 再走一次</button>
-          <button className="ghost-button" onClick={() => { setPhase("viewpoint"); setPhoneOpen(true); setPhoneTab("gallery"); }}>查看照片</button>
-        </div>
+        <p>风还在山谷里。手机里，多了一张刚刚拍下的照片。</p>
+        <button className="primary-button" onClick={reset}><RotateCcw size={16} /> 再走一次</button>
       </div>
     </main>
   );
 
   const info = INFO[scene];
-  const copy = SCENE_COPY[scene];
+  const progress = phase === "arrival" ? arrivalProgress : phase === "trail" ? trailProgress : 0;
+  const stone = STONES[Math.min(streamStep, STONES.length - 1)];
 
   return (
-    <main className={`game-shell scene-${scene}`}>
-      <PixiJourney scene={scene} walking={walking} />
+    <main className={`game-shell scene-${scene} ${moving ? "is-moving" : ""}`}>
+      <PixiJourney scene={scene} walking={moving} progress={progress} />
       <div className="cinema-grade" />
       <div className="film-grain" />
 
-      <header className="hud">
-        <div className="location-chip"><Mountain size={14} /><span>{info.place}</span><span className="hud-time">{info.time}</span></div>
-        <div className="hud-actions">
-          <button className="round-button" onClick={() => setSoundOn((value) => !value)} aria-label="切换声音">{soundOn ? <Volume2 size={18} /> : <VolumeX size={18} />}</button>
-          <button className="phone-trigger" onClick={() => { setPhoneTab("home"); setPhoneOpen(true); }}><Smartphone size={17} /><span>P</span></button>
-        </div>
-      </header>
+      <div className="scene-caption"><span>{info.time}</span>{info.place}</div>
+      <div className="utility-controls">
+        <button onClick={() => setSoundOn((value) => !value)} aria-label="切换声音">{soundOn ? <Volume2 size={17} /> : <VolumeX size={17} />}</button>
+        <button onClick={() => { setPhoneTab("home"); setPhoneOpen(true); }} aria-label="打开手机"><Smartphone size={17} /><kbd>P</kbd></button>
+      </div>
 
-      {phase === "arrival" && (
-        <div className="interaction arrival-interaction">
-          {!bagTaken ? (
-            <button className="world-hotspot bag-hotspot" onClick={() => { setBagTaken(true); notify("水、薄外套、充电宝……都带了"); }}>
-              <span className="pulse-ring" /><span className="hotspot-copy">拿上背包</span>
-            </button>
-          ) : (
-            <div className="walk-control">
-              <div className="walk-copy"><Footprints size={17} /><span>{walkProgress < 100 ? "沿着旧路上山" : "前方传来溪水声……"}</span></div>
-              <button
-                className="hold-button"
-                style={{ "--progress": `${walkProgress}%` } as React.CSSProperties}
-                onPointerDown={() => setWalking(true)}
-                onPointerUp={() => setWalking(false)}
-                onPointerLeave={() => setWalking(false)}
-              >
-                <span>{walkProgress < 100 ? "长按行走" : "正在抵达"}</span><small>或按住 W</small>
-              </button>
-            </div>
-          )}
-        </div>
+      <div className="world-input" onPointerDown={worldDown} onPointerMove={worldMove} onPointerUp={worldUp} onPointerCancel={worldUp}>
+        <span className="gaze-dot" style={{ left: `${look.x}%`, top: `${look.y}%` }} />
+      </div>
+
+      {phase === "arrival" && !bagTaken && (
+        <img
+          className={`backpack-object ${bagDragging ? "dragging" : ""}`}
+          src={`${import.meta.env.BASE_URL}art/stage1-backpack.webp`}
+          alt="候车亭座椅上的背包"
+          draggable={false}
+          style={{ left: `${bagPos.x}%`, top: `${bagPos.y}%` }}
+          onPointerDown={bagDown}
+          onPointerMove={bagMove}
+          onPointerUp={bagUp}
+          onPointerCancel={bagUp}
+        />
       )}
 
-      {phase === "trail" && (
-        <div className="interaction trail-interaction">
-          {!route ? (
-            <div className="route-choice">
-              <p>溪边出现了一个不在地图上的岔口</p>
-              <button onClick={() => chooseRoute("open")}><span>左侧</span><strong>沿开阔牧道</strong><small>路缓，绕得远</small></button>
-              <button onClick={() => chooseRoute("stream")}><span>右侧</span><strong>踏石过溪</strong><small>更近，需要看准脚下</small></button>
-            </div>
-          ) : (
-            <>
-              <div className="route-status">{route === "stream" ? "踏石过溪" : "沿牧道上行"}<span>{Math.min(trailStep + 1, 4)} / 4</span></div>
-              <button className={`foothold foothold-${Math.min(trailStep + 1, 4)}`} onClick={advanceTrail} aria-label={route === "stream" ? "踩向下一块石头" : "向前迈步"}>
-                <span /><small>{trailStep < 3 ? (route === "stream" ? "下一块石头" : "继续向上") : "越过最后一段"}</small>
-              </button>
-            </>
-          )}
-        </div>
+      {phase === "trail" && route !== "open" && streamStep < STONES.length && (
+        <div className="stone-target" style={{ left: `${stone.x}%`, top: `${stone.y}%` }} onPointerDown={(event) => { event.stopPropagation(); advanceStone(); }} role="button" aria-label="踩向下一块石头"><span /></div>
       )}
 
-      {phase === "viewpoint" && (
-        <div className="interaction viewpoint-interaction">
-          {!photoTaken ? (
-            <button className="camera-prompt" onClick={() => { setPhoneTab("camera"); setPhoneOpen(true); }}><Camera size={20} /><span>把这一刻拍下来</span></button>
-          ) : (
-            <button className="finish-prompt" onClick={() => setPhase("complete")}><span>在风里多坐一会儿</span><ChevronRight size={18} /></button>
-          )}
-        </div>
-      )}
+      {thought && <div className="thought-line">{thought}</div>}
+      {feedback && <div className="world-feedback">{feedback}</div>}
 
-      {!phoneOpen && line < copy.length && (
-        <button className="narration" onClick={() => setLine((value) => value + 1)}><span>{copy[line]}</span><ChevronRight size={16} /></button>
-      )}
+      <div className="action-whisper">
+        {phase === "arrival" && !bagTaken && "抓住背包，拖向画面下方"}
+        {phase === "arrival" && bagTaken && arrivalProgress === 0 && "按住 W，或直接按住山路前进"}
+        {phase === "arrival" && bagTaken && arrivalProgress > 0 && arrivalProgress < 1 && "松开会停下 · 鼠标仍可观察周围"}
+        {phase === "trail" && route === null && "左侧山路可以直接走 · 右侧石头可以逐块踩"}
+        {phase === "trail" && route === "open" && "继续按住 W，或按住左侧山路"}
+        {phase === "trail" && route === "stream" && streamStep < STONES.length && "看准发亮的石面，直接踩上去 · 空格亦可"}
+        {phase === "viewpoint" && !photoTaken && "按 P 拿出手机，亲自拍下它"}
+        {phase === "viewpoint" && photoTaken && "收起手机。听一会儿风。"}
+      </div>
 
       {phoneOpen && <Phone tab={phoneTab} setTab={setPhoneTab} close={() => setPhoneOpen(false)} info={info} scene={scene} photoTaken={photoTaken} takePhoto={takePhoto} />}
-      {toast && <div className="toast">{toast}</div>}
     </main>
   );
 }
@@ -334,46 +429,19 @@ function Phone({ tab, setTab, close, info, scene, photoTaken, takePhoto }: {
           )}
           {tab === "chat" && (
             <PhonePage title="小鱼" back={() => setTab("home")}>
-              <div className="chat-thread">
-                <span className="chat-time">13:58</span>
-                <p className="incoming">你真下车了？那站看起来什么都没有诶</p>
-                <p className="outgoing">嗯！就走一小段～</p>
-                <p className="outgoing">看到好看的给你拍 📷</p>
-                <p className="incoming">行，晚上别错过末班车。还有，充电宝带了吗</p>
-                <p className="outgoing">带了带了，像带小孩一样操心我</p>
-                <span className="read-mark">已读</span>
-              </div>
+              <div className="chat-thread"><span className="chat-time">13:58</span><p className="incoming">你真下车了？那站看起来什么都没有诶</p><p className="outgoing">嗯！就走一小段～</p><p className="outgoing">看到好看的给你拍 📷</p><p className="incoming">晚上别错过末班车。还有，充电宝带了吗</p><p className="outgoing">带了带了，像带小孩一样操心我</p><span className="read-mark">已读</span></div>
             </PhonePage>
           )}
           {tab === "map" && (
             <PhonePage title="离线地图" back={() => setTab("home")}>
-              <div className="map-canvas">
-                <svg viewBox="0 0 290 460" aria-label="山谷步道地图">
-                  <path d="M18 405 C68 380 51 322 108 290 C166 258 126 184 200 145 C241 123 224 70 270 38" />
-                  <path d="M20 90 C86 115 72 204 136 229 C211 259 197 340 275 385" />
-                  <path className="route" d="M50 406 C87 368 76 330 108 290 C139 253 144 204 200 145" />
-                  <circle className="origin" cx="50" cy="406" r="6" />
-                  <circle className="you" cx={scene === "arrival" ? 60 : scene === "trail" ? 122 : 200} cy={scene === "arrival" ? 394 : scene === "trail" ? 270 : 145} r="8" />
-                </svg>
-                <span className="map-label origin-label">下车点</span>
-                <span className="map-label you-label">你在这里</span>
-                <div className="map-card"><strong>{info.place}</strong><span>末班车 19:10 · 已下载离线区域</span></div>
-              </div>
+              <div className="map-canvas"><svg viewBox="0 0 290 460" aria-label="山谷步道地图"><path d="M18 405 C68 380 51 322 108 290 C166 258 126 184 200 145 C241 123 224 70 270 38" /><path d="M20 90 C86 115 72 204 136 229 C211 259 197 340 275 385" /><path className="route" d="M50 406 C87 368 76 330 108 290 C139 253 144 204 200 145" /><circle className="origin" cx="50" cy="406" r="6" /><circle className="you" cx={scene === "arrival" ? 60 : scene === "trail" ? 122 : 200} cy={scene === "arrival" ? 394 : scene === "trail" ? 270 : 145} r="8" /></svg><span className="map-label origin-label">下车点</span><span className="map-label you-label">你在这里</span><div className="map-card"><strong>{info.place}</strong><span>末班车 19:10 · 已下载离线区域</span></div></div>
             </PhonePage>
           )}
           {tab === "camera" && (
-            <div className={`camera-app camera-${scene}`}>
-              <div className="camera-top"><button onClick={() => setTab("home")}><ArrowLeft size={18} /></button><span>实况</span></div>
-              <div className="focus-box" />
-              <div className="camera-bottom"><span>照片</span><button className="shutter" onClick={takePhoto} aria-label="拍照" /></div>
-            </div>
+            <div className={`camera-app camera-${scene}`}><div className="camera-top"><button onClick={() => setTab("home")}><ArrowLeft size={18} /></button><span>实况</span></div><div className="focus-box" /><div className="camera-bottom"><span>照片</span><button className="shutter" onClick={takePhoto} aria-label="拍照" /></div></div>
           )}
           {tab === "gallery" && (
-            <PhonePage title="这次真的有出门" back={() => setTab("home")}>
-              <div className="gallery-body">
-                {photoTaken ? <><div className="saved-photo"><span>今天 · {info.time}</span></div><p>1 张照片</p></> : <div className="empty-gallery"><ImageIcon size={34} /><span>第一张照片，还在路上</span></div>}
-              </div>
-            </PhonePage>
+            <PhonePage title="这次真的有出门" back={() => setTab("home")}><div className="gallery-body">{photoTaken ? <><div className="saved-photo"><span>今天 · {info.time}</span></div><p>1 张照片</p></> : <div className="empty-gallery"><ImageIcon size={34} /><span>第一张照片，还在路上</span></div>}</div></PhonePage>
           )}
         </div>
         <div className="phone-homebar" />
