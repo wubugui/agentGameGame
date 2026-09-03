@@ -29,7 +29,9 @@ import {
   type PhoneState,
 } from "./phoneModel";
 
-export type PhoneTab = "home" | "messages" | "conversation" | "map" | "camera" | "gallery";
+export type PhoneTab = "home" | "messages" | "conversation" | "map" | "camera" | "gallery" | "call";
+
+export type CallState = { lines: readonly string[]; step: number; done: boolean; hangUp: () => void };
 
 type Aim = { x: number; y: number };
 
@@ -51,6 +53,7 @@ type Props = {
   requestReply: (contactId: ContactId, kind: "text" | "photo") => void;
   onGalleryViewed?: () => void;
   letterTranslated: boolean;
+  call?: CallState;
 };
 
 const CONTACT_ORDER: ContactId[] = ["xiaoyu", "mama", "asha"];
@@ -73,6 +76,7 @@ export default function Phone({
   requestReply,
   onGalleryViewed,
   letterTranslated,
+  call,
 }: Props) {
   const [activeContact, setActiveContact] = useState<ContactId>("xiaoyu");
   const [draft, setDraft] = useState("");
@@ -87,8 +91,14 @@ export default function Phone({
   const totalUnread = Object.values(phone.unread).reduce((sum, count) => sum + count, 0);
   const cameraAsset = `${import.meta.env.BASE_URL}${sceneAsset(scene)}`;
   const sceneIndex = journeySceneIndex(scene);
-  const ascentProgress = Math.min(1, (sceneIndex + progress) / 5);
-  const returnProgress = sceneIndex <= 6 ? ascentProgress : sceneIndex <= 11 ? Math.max(0, 1 - (sceneIndex - 6 + progress) / 5) : scene === "searchRoad" ? .28 + progress * .18 : 0;
+  const summitIndex = journeySceneIndex("viewpoint");
+  const descentEnd = journeySceneIndex("roadside");
+  const ascentProgress = Math.min(1, Math.max(0, (sceneIndex - 1 + progress) / (summitIndex - 1)));
+  const returnProgress = sceneIndex <= journeySceneIndex("letterBox")
+    ? ascentProgress
+    : sceneIndex <= descentEnd
+      ? Math.max(0, 1 - (sceneIndex - journeySceneIndex("letterBox") + progress) / (descentEnd - journeySceneIndex("letterBox")))
+      : scene === "searchRoad" ? .28 + progress * .18 : 0;
   const mapX = 55 + returnProgress * 225;
   const mapY = 409 - returnProgress * 325;
 
@@ -182,6 +192,17 @@ export default function Phone({
                   <PhoneApp icon={<ImageIcon />} label="相册" tone="sand" onClick={() => setTab("gallery")} />
                 </div>
                 <p className="wallpaper-signature">知夏 · 把偶然也拍下来</p>
+              </div>
+            )}
+
+            {tab === "call" && (
+              <div className="call-screen" role="dialog" aria-label="求助电话">
+                <div className="call-number">112</div>
+                <div className="call-status">{call ? (call.done ? "通话结束" : call.step === 0 ? "拨号中" : "通话中") : "已挂断"}</div>
+                <div className="call-lines">
+                  {call && call.lines.slice(0, call.step + 1).map((line, index) => <p key={index} className={index === 2 ? "mine" : ""}>{line}</p>)}
+                </div>
+                <button className="call-hangup" onClick={() => call?.hangUp()} disabled={!call || !call.done} aria-label="挂断"><X size={26} /></button>
               </div>
             )}
 

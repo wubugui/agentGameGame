@@ -1,13 +1,14 @@
 // Smoke test: paste into the browser console on the title screen. Plays the whole game with synthetic events
 // and records a timeline in window.__log. Works even when the tab is hidden (rAF and layout are stubbed).
 if (!Element.prototype.__gbcr) { Element.prototype.__gbcr = Element.prototype.getBoundingClientRect; Element.prototype.getBoundingClientRect = function () { const r = this.__gbcr(); if (r.width === 0 && this.classList && this.classList.contains('world-input')) return { left: 0, top: 0, width: 1280, height: 720, right: 1280, bottom: 720, x: 0, y: 0 }; return r; }; }
-window.requestAnimationFrame = (cb) => setTimeout(() => cb(performance.now()), 16); window.cancelAnimationFrame = (id) => clearTimeout(id);
+// Hidden tabs throttle timers, so the walk animation is skipped: every frame reports a far-future time and the walk completes in one step.
+window.requestAnimationFrame = (cb) => setTimeout(() => cb(performance.now() + 60000), 16); window.cancelAnimationFrame = (id) => clearTimeout(id);
 window.__log = [];
 const log = (m) => { window.__log.push(`${((performance.now() - window.__t0) / 1000).toFixed(1)}s ${m}`); };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const $ = (sel) => document.querySelector(sel);
 const shell = () => $(".game-shell");
-const sceneOf = () => { const m = (shell()?.className || "").match(/scene-([A-Za-z]+)/); return m ? m[1] : (shell()?.className.includes("title-screen") ? "title" : shell()?.className.includes("complete-screen") ? "complete" : "?"); };
+const sceneOf = () => { const m = (shell()?.className || "").match(/scene-([A-Za-z0-9]+)/); return m ? m[1] : (shell()?.className.includes("title-screen") ? "title" : shell()?.className.includes("complete-screen") ? "complete" : "?"); };
 const moving = () => shell()?.classList.contains("is-moving");
 async function waitFor(fn, label, timeout = 30000) {
   const start = performance.now();
@@ -43,6 +44,10 @@ async function repeat(sel, n, label, gap = 300) { for (let i = 0; i < n; i++) { 
   window.__t0 = performance.now();
   try {
     if (sceneOf() === "title") { await press(".title-actions .primary-button", "下车"); }
+    await untilScene("school");
+    await press(".map-prop", "map");
+    await sleep(800);
+    await walkTo(0.82, 0.55, "out of the door");
     await untilScene("arrival");
     // drag the backpack down
     await waitFor(() => $(".backpack-object"), "backpack");
@@ -58,10 +63,16 @@ async function repeat(sel, n, label, gap = 300) { for (let i = 0; i < n; i++) { 
     await walkTo(0.3, 0.6, "left path");
     await untilScene("chainTraverse");
     await repeat(".chain-target", 4, "chain", 200);
+    await untilScene("chainUpper");
+    await repeat(".chain-target", 4, "upper", 200);
     await untilScene("rubbleSlope");
     await repeat(".rubble-target", 4, "rubble", 200);
     await untilScene("viewpoint");
     await walkTo(0.5, 0.5, "viewpoint");
+    await untilScene("summitRest");
+    await press(".chocolate-prop", "chocolate");
+    await sleep(600);
+    await walkTo(0.6, 0.6, "to the mailbox");
     await untilScene("letterBox");
     await press(".letter-prop", "letter prop");
     await waitFor(() => $(".letter-view"), "letter view");
@@ -73,14 +84,24 @@ async function repeat(sel, n, label, gap = 300) { for (let i = 0; i < n; i++) { 
     await sleep(1500);
     await walkTo(0.5, 0.7, "descend");
     await untilScene("nightSlope");
+    await press(".call-action", "call");
+    await waitFor(() => $(".call-hangup") && !$(".call-hangup").disabled, "call finished", 30000);
+    await press(".call-hangup", "hang up");
+    await sleep(500);
     await press(".light-controls button", "fill light");
     await repeat(".night-target", 4, "night slope", 200);
     await untilScene("deepForest");
     await repeat(".night-target", 4, "deep forest", 200);
+    await untilScene("marker656");
+    await repeat(".night-target", 3, "marker", 200);
+    await untilScene("roadBank");
+    await repeat(".night-target", 4, "bank", 200);
     await untilScene("roadside");
     await press(".rescue-action", "wave");
     await untilScene("carInterior");
-    await repeat(".conversation-action", 3, "talk", 400);
+    await repeat(".conversation-action", 6, "talk", 400);
+    await untilScene("police");
+    await repeat(".conversation-action", 3, "police", 400);
     await untilScene("searchRoad");
     await repeat(".search-target", 3, "search", 400);
     await press(".phone-return-action", "phone returned");

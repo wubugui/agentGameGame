@@ -5,13 +5,20 @@ import type { PhoneState } from "./phoneModel";
 export type SavedRoute = "open" | "stream" | null;
 
 export type JourneyInteractionState = {
+  routeDrawn: boolean;
   chainStep: number;
+  chainUpperStep: number;
   rubbleStep: number;
+  chocolateEaten: boolean;
   letterRead: boolean;
+  callDone: boolean;
   nightStep: number;
+  markerStep: number;
+  bankStep: number;
   phoneLost: boolean;
   rescuersMet: boolean;
   rescueStep: number;
+  policeStep: number;
   searchStep: number;
   phoneReturned: boolean;
   endingGallerySeen: boolean;
@@ -36,8 +43,9 @@ export type JourneySave = {
   phone: PhoneState;
 };
 
-// v2: the script, dates and album were rewritten on 2026-09-04; older saves are dropped.
-const SAVE_KEY = "before-leaving-valley.journey.v2";
+// v3: six scenes were added on 2026-09-04 (school, upper ferrata, summit rest,
+// trail marker, road bank, police); older saves point at a different journey.
+const SAVE_KEY = "before-leaving-valley.journey.v3";
 
 // Photo snapshots are ~40–80 KB data URLs each; keep localStorage well below
 // its quota by persisting only the newest ones (older photos fall back to
@@ -52,13 +60,20 @@ function trimSnapshots(phone: PhoneState, keep: number): PhoneState {
 }
 
 export const INITIAL_INTERACTIONS: JourneyInteractionState = {
+  routeDrawn: false,
   chainStep: 0,
+  chainUpperStep: 0,
   rubbleStep: 0,
+  chocolateEaten: false,
   letterRead: false,
+  callDone: false,
   nightStep: 0,
+  markerStep: 0,
+  bankStep: 0,
   phoneLost: false,
   rescuersMet: false,
   rescueStep: 0,
+  policeStep: 0,
   searchStep: 0,
   phoneReturned: false,
   endingGallerySeen: false,

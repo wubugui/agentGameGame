@@ -33,3 +33,16 @@ ffmpeg -y -i keyed.png -c:v libwebp -quality 92 public/art/name-v1.webp
 ## 自动通关冒烟测试
 
 把 `tools/autoplay.js` 整段粘进浏览器控制台（停在标题页），它会用合成事件从下车一路点到完成页，时间线写在 `window.__log`。2026-09-04 的结果：全程无卡点，纯操作路径 98 秒。
+
+更稳的做法是用无头 Chrome 跑（不受浏览器面板隐藏时的定时器限制）：
+
+```bash
+npm run dev -- --port 5174   # 另开一个终端
+node tools/smoke.mjs         # 输出时间线，最后打印 SMOKE PASS / FAIL，并列出控制台错误
+```
+
+单场景无头截图（真实 1280×720 布局，不受面板影响）：
+
+```bash
+node tools/shot.mjs school out.png "document.querySelector('.map-prop').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}))" 4000
+```
