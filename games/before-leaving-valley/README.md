@@ -17,3 +17,7 @@ npm run dev
 ```
 
 美术场景由 GPT Image 为本原型定制生成。
+
+## 音乐
+
+- “Clear Air” · “Simple Duet” · “Promises to Keep” — Kevin MacLeod ([incompetech.com](https://incompetech.com))，[CC BY 4.0](http://creativecommons.org/licenses/by/4.0/) 授权。

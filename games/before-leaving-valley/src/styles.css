@@ -32,6 +32,7 @@ button:focus-visible,input:focus-visible { outline:2px solid #f5d8a3; outline-of
 .secondary-button:hover { border-color:rgba(255,255,255,.48); background:rgba(255,255,255,.1); }
 .save-hint { margin:16px 0 -7px; color:rgba(255,255,255,.68); font:10px ui-sans-serif,system-ui,sans-serif; letter-spacing:.06em; }
 .title-hint { margin:25px 0 0; color:rgba(255,255,255,.52); font:11px ui-sans-serif,system-ui,sans-serif; letter-spacing:.09em; }
+.music-credit { margin:10px 0 0; color:rgba(255,255,255,.34); font:9.5px ui-sans-serif,system-ui,sans-serif; letter-spacing:.05em; }
 
 .scene-caption { position:absolute; z-index:14; top:27px; left:clamp(20px,4vw,54px); color:rgba(255,255,255,.72); text-shadow:0 2px 16px rgba(0,0,0,.65); font:11px ui-sans-serif,system-ui,sans-serif; letter-spacing:.1em; pointer-events:none; }
 .scene-caption span { margin-right:12px; color:#ebd19e; }

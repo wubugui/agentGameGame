@@ -14,6 +14,17 @@ const BREATH_PROFILE: Record<BreathState, { frequency: number; amplitude: number
   recovery: { frequency: 0.4, amplitude: 4.3, sway: 0.00165 },
 };
 
+// Adaptive first-person look. The 16:9 boards have no native margin on a
+// 16:9 screen, so the camera zooms in with gaze magnitude to open panning
+// room: centered gaze shows almost the whole board, edge gaze zooms ~30% and
+// pans up to PAN_MAX per side without ever revealing an image edge.
+const LOOK_ZOOM_MIN = 1.06;
+const LOOK_ZOOM_RANGE = 0.3;
+const LOOK_ZOOM_EXP = 1.25;
+const PAN_SAFETY = 0.03;
+const PAN_MAX_X = 0.16;
+const PAN_MAX_Y = 0.11;
+
 type Props = {
   scene: JourneyScene;
   walking: boolean;
@@ -98,8 +109,9 @@ export default function PixiJourney({ scene, walking, progress = 0, look, walkFo
       const fit = () => {
         const width = app.screen.width;
         const height = app.screen.height;
-        // The 15% overscan is the safe crop used by limited head turns,
-        // breathing and walking without ever revealing an image edge.
+        // The 15% overscan is the reference framing the DOM hotspot layer is
+        // glued to (see the ticker); it also keeps breathing and step sway
+        // from ever revealing an image edge.
         sceneSprites.forEach(fitSprite);
         haze.clear().rect(0, 0, width, height).fill({ color: 0x071115, alpha: 0.045 });
       };
@@ -132,7 +144,7 @@ export default function PixiJourney({ scene, walking, progress = 0, look, walkFo
         const requestedLook = walkingRef.current && destinationLook
           ? { x: destinationLook.x * 0.78 + pointerLook.x * 0.22, y: destinationLook.y * 0.72 + pointerLook.y * 0.28 }
           : pointerLook;
-        const response = 1 - Math.exp(-deltaSeconds * (walkingRef.current ? 3.2 : 5.2));
+        const response = 1 - Math.exp(-deltaSeconds * (walkingRef.current ? 3.6 : 6.4));
         smoothedLook.x += (clamp(requestedLook.x, -1, 1) - smoothedLook.x) * response;
         smoothedLook.y += (clamp(requestedLook.y, -1, 1) - smoothedLook.y) * response;
 
@@ -142,8 +154,12 @@ export default function PixiJourney({ scene, walking, progress = 0, look, walkFo
         const breathY = inhaleCurve * profile.amplitude;
         const breathRoll = Math.sin(breathPhase + 0.8) * profile.sway;
         const stepPhase = elapsed * Math.PI * 2 * 1.72;
-        const stepY = walkingRef.current ? Math.sin(stepPhase) * 3.4 + Math.abs(Math.sin(stepPhase * 0.5)) * 1.6 : 0;
-        const stepX = walkingRef.current ? Math.sin(stepPhase * 0.5) * 1.25 : 0;
+        const stepY = walkingRef.current ? Math.sin(stepPhase) * 5.2 + Math.abs(Math.sin(stepPhase * 0.5)) * 1.8 : 0;
+        const stepX = walkingRef.current ? Math.sin(stepPhase * 0.5) * 1.8 : 0;
+
+        const lookMagnitude = Math.min(1, Math.max(Math.abs(smoothedLook.x), Math.abs(smoothedLook.y)));
+        const lookZoom = LOOK_ZOOM_MIN + LOOK_ZOOM_RANGE * Math.pow(lookMagnitude, LOOK_ZOOM_EXP);
+        const cameraEase = 1 - Math.exp(-deltaSeconds * (walkingRef.current ? 3.6 : 6.4));
 
         sceneContainers.forEach((container, index) => {
           const targetAlpha = index === targetIndex ? 1 : 0;
@@ -154,13 +170,24 @@ export default function PixiJourney({ scene, walking, progress = 0, look, walkFo
         sceneSprites.forEach((sprite, index) => {
           const active = index === targetIndex;
           const travel = active ? progressRef.current : 0;
-          const viewX = -smoothedLook.x * app.screen.width * 0.047;
-          const viewY = -smoothedLook.y * app.screen.height * 0.032;
+          // Relative to the 1.15 reference framing; <1 at rest shows more of
+          // the board, >1 while looking around or approaching a destination.
+          const desiredScale = (baseScales[index] ?? sprite.scale.x) * (lookZoom / 1.15) * (1 + travel * 0.14);
+          const textureWidth = sprite.texture.width;
+          const textureHeight = sprite.texture.height;
+          let panLimitX = 0.09;
+          let panLimitY = 0.055;
+          if (textureWidth > 1 && textureHeight > 1) {
+            const marginX = (desiredScale * textureWidth - app.screen.width) / 2 / app.screen.width;
+            const marginY = (desiredScale * textureHeight - app.screen.height) / 2 / app.screen.height;
+            panLimitX = clamp(marginX - PAN_SAFETY, 0, PAN_MAX_X);
+            panLimitY = clamp(marginY - PAN_SAFETY, 0, PAN_MAX_Y);
+          }
+          const viewX = -smoothedLook.x * app.screen.width * panLimitX;
+          const viewY = -smoothedLook.y * app.screen.height * panLimitY;
           const desiredX = app.screen.width / 2 + viewX + (active ? stepX : 0);
-          const desiredY = app.screen.height / 2 + viewY + breathY + (active ? stepY + travel * 18 : 0);
-          const desiredScale = (baseScales[index] ?? sprite.scale.x) * (1 + travel * 0.1);
-          const desiredRotation = -smoothedLook.x * 0.0012 + breathRoll + (walkingRef.current ? Math.sin(stepPhase * 0.5) * 0.0008 : 0);
-          const cameraEase = 1 - Math.exp(-deltaSeconds * 4.6);
+          const desiredY = app.screen.height / 2 + viewY + breathY + (active ? stepY + travel * 24 : 0);
+          const desiredRotation = -smoothedLook.x * 0.0035 + breathRoll + (walkingRef.current ? Math.sin(stepPhase * 0.5) * 0.0014 : 0);
           sprite.x += (desiredX - sprite.x) * cameraEase;
           sprite.y += (desiredY - sprite.y) * cameraEase;
           sprite.rotation += (desiredRotation - sprite.rotation) * cameraEase;

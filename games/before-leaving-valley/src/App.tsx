@@ -97,8 +97,7 @@ const PHONE_BEATS: Partial<Record<Phase, { id: string; contactId: ContactId; tex
   nightSlope: { id: "night-mama", contactId: "mama", text: "天气软件说谷里已经全黑了。先站稳，能开灯就开灯，别边走边回我。" },
 };
 
-const PHONE_REPLIES: Record<ContactId, Record<"text" | "photo", Partial<Record<JourneyScene, string>>>> = {
-  xiaoyu: {
+const PHONE_REPLIES: Record<ContactId, Record<"text" | "photo", Partial<Record<JourneyScene, string>>>> = {  xiaoyu: {
     text: {
       arrival: "行吧，到了先看看末班车时间。别只顾着抬头。",
       trail: "你每次说‘就走一点’，最后都要多走半座山。",
@@ -135,6 +134,18 @@ const PHONE_REPLIES: Record<ContactId, Record<"text" | "photo", Partial<Record<J
     },
   },
 };
+
+/* ---------- background music (Kevin MacLeod, incompetech.com, CC BY 4.0) ----------
+   Per DESIGN_LOCK: only "safe exploration & viewpoints" carry light music; night
+   self-rescue and searching stay with ambience and breath alone; the ending
+   theme enters slowly only after the photos have been recognized. */
+type MusicKind = "day" | "warm" | "end";
+const MUSIC_TRACKS: Record<MusicKind, { src: string; volume: number; fadeStep: number }> = {
+  day: { src: "audio/clear-air.mp3", volume: 0.14, fadeStep: 0.02 },
+  warm: { src: "audio/simple-duet.mp3", volume: 0.2, fadeStep: 0.02 },
+  end: { src: "audio/promises-to-keep.mp3", volume: 0.2, fadeStep: 0.006 },
+};
+const DAY_MUSIC_SCENES: readonly JourneyScene[] = ["arrival", "forestEntry", "trail", "chainTraverse", "rubbleSlope", "viewpoint"];
 
 const easeInOut = (value: number) => value < 0.5 ? 2 * value * value : 1 - Math.pow(-2 * value + 2, 2) / 2;
 const PixiJourney = lazy(() => import("./PixiJourney"));
@@ -335,6 +346,58 @@ export default function App() {
     }
     return () => timers.forEach(window.clearTimeout);
   }, [phase]);
+
+  const musicElsRef = useRef<Partial<Record<MusicKind, HTMLAudioElement>>>({});
+  const musicTargetsRef = useRef<Partial<Record<MusicKind, number>>>({});
+
+  useEffect(() => {
+    const base = import.meta.env.BASE_URL;
+    const kinds = Object.keys(MUSIC_TRACKS) as MusicKind[];
+    kinds.forEach((kind) => {
+      const el = document.createElement("audio");
+      el.src = `${base}${MUSIC_TRACKS[kind].src}`;
+      el.loop = true;
+      el.preload = "none";
+      el.volume = 0;
+      musicElsRef.current[kind] = el;
+    });
+    const fadeTimer = window.setInterval(() => {
+      kinds.forEach((kind) => {
+        const el = musicElsRef.current[kind];
+        if (!el) return;
+        const target = musicTargetsRef.current[kind] ?? 0;
+        const diff = target - el.volume;
+        if (target > 0 && el.paused) void el.play().catch(() => undefined);
+        if (Math.abs(diff) <= MUSIC_TRACKS[kind].fadeStep) {
+          el.volume = target;
+          if (target <= 0 && !el.paused) el.pause();
+          return;
+        }
+        el.volume = Math.max(0, Math.min(1, el.volume + Math.sign(diff) * MUSIC_TRACKS[kind].fadeStep));
+      });
+    }, 100);
+    return () => {
+      window.clearInterval(fadeTimer);
+      kinds.forEach((kind) => {
+        const el = musicElsRef.current[kind];
+        if (el) {
+          el.pause();
+          el.removeAttribute("src");
+        }
+      });
+      musicElsRef.current = {};
+    };
+  }, []);
+
+  useEffect(() => {
+    const targets: Partial<Record<MusicKind, number>> = {};
+    if (soundOn) {
+      if (phase === "carInterior") targets.warm = MUSIC_TRACKS.warm.volume;
+      else if (phase === "complete" || (phase === "valleyExit" && interactions.endingGallerySeen)) targets.end = MUSIC_TRACKS.end.volume;
+      else if (phase !== "title" && DAY_MUSIC_SCENES.includes(phase)) targets.day = MUSIC_TRACKS.day.volume;
+    }
+    musicTargetsRef.current = targets;
+  }, [interactions.endingGallerySeen, phase, soundOn]);
 
   useEffect(() => {
     const keyDown = (event: KeyboardEvent) => {
@@ -853,6 +916,7 @@ export default function App() {
         </div>
         {savedJourney && <p className="save-hint">上次停在 {SCENE_INFO[savedJourney.scene].place} · {formatGameTime(savedJourney.phone.minuteOfDay)} · 手机 {savedJourney.phone.battery}%</p>}
         <p className="title-hint">移动鼠标观察 · 点击想去的地方 · P 打开手机 · 建议佩戴耳机</p>
+        <p className="music-credit">Music: “Clear Air” “Simple Duet” “Promises to Keep” — Kevin MacLeod (incompetech.com) · CC BY 4.0</p>
       </div>
     </main>
   );
@@ -866,6 +930,7 @@ export default function App() {
         <p className="eyebrow">旅程完成 · 离开山谷以前</p>
         <h2>她没有独自走完回程。<br />也没有独自记住这一天。</h2>
         <p>手机回来了，照片也还在。那封没有落款的信，直到离开时才有了回答。</p>
+        <p className="music-credit">Music: “Clear Air” “Simple Duet” “Promises to Keep” — Kevin MacLeod (incompetech.com) · CC BY 4.0</p>
         <button className="primary-button" onClick={reset}><RotateCcw size={16} /> 再走一次</button>
       </div>
     </main>
