@@ -80,7 +80,7 @@ export const JOURNEY_SCENE_INFO: Record<JourneyScene, JourneySceneInfo> = {
     minutes: 15,
     batteryCost: 1,
     photoTitle: "下车后的第一眼",
-    thoughts: ["登山学校的教练看了看我，在地图上画了一条线：‘两个小时，你就能站在上面。’", "整辆车只有我一个人下了。天气比预报里还好。来都来了。"],
+    thoughts: ["整辆车只有我一个人下了。教练画的那条线，就从这块路牌开始。", "天气比预报里还好。来都来了，就往上走一点点。"],
   },
   forestEntry: {
     place: "落叶松林 · 入山旧路",

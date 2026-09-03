@@ -85,8 +85,6 @@ button:focus-visible,input:focus-visible { outline:2px solid #f5d8a3; outline-of
 @keyframes carArrive { from { transform:translateX(22vw) scale(.72); opacity:.18; } to { transform:translateX(0) scale(1); opacity:1; } }
 .car-headlights { position:absolute; z-index:7; right:27vw; bottom:10vh; width:58vw; height:24vh; transform:perspective(500px) rotateY(18deg) rotate(2deg); transform-origin:100% 50%; background:linear-gradient(90deg,transparent,rgba(246,230,172,.04) 24%,rgba(255,235,164,.28)); clip-path:polygon(0 28%,100% 0,100% 100%,0 72%); filter:blur(9px); mix-blend-mode:screen; animation:headlightsIn 2.2s ease both; pointer-events:none; }
 @keyframes headlightsIn { from { opacity:0; } to { opacity:.9; } }
-.rescuers-car-overlay { position:absolute; z-index:8; inset:0; width:100%; height:100%; object-fit:cover; object-position:center; pointer-events:none; filter:brightness(.66) saturate(.72); animation:rescuersSettle 1.1s ease both; }
-@keyframes rescuersSettle { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:translateY(0); } }
 .story-action { position:absolute; z-index:18; right:clamp(20px,5vw,72px); bottom:16vh; transform:none; min-height:42px; padding:0 20px; border:1px solid rgba(255,255,255,.22); border-radius:22px; color:white; background:rgba(7,15,18,.68); backdrop-filter:blur(12px); box-shadow:0 8px 24px rgba(0,0,0,.28); cursor:pointer; font:10px ui-sans-serif,system-ui,sans-serif; letter-spacing:.08em; }
 .story-action:hover { border-color:#e8d49d; background:rgba(30,35,31,.82); }.conversation-action { bottom:16vh; }.phone-return-action { bottom:16vh; color:#28332f; border-color:rgba(255,255,255,.7); background:rgba(245,241,224,.9); }
 .search-target span { border-color:rgba(210,226,207,.68); background:radial-gradient(circle,rgba(211,229,205,.2),transparent 70%); }
@@ -324,3 +322,6 @@ button:focus-visible,input:focus-visible { outline:2px solid #f5d8a3; outline-of
 .call-hangup:disabled { opacity:.35; cursor:default; }
 .scene-school .map-prop { left:40%; top:79%; width:42%; height:32%; }
 .scene-school .route-line path { stroke-dasharray:520; stroke-dashoffset:520; }
+
+/* Reduced motion: show the chapter card statically for its React-timed lifetime. */
+@media (prefers-reduced-motion:reduce) { .chapter-card { animation:none; opacity:1; transform:none; } }

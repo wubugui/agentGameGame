@@ -55,7 +55,7 @@ export type PhoneAction =
   | { type: "reset" };
 
 /* 这一天，以及第二天清晨。 */
-export const JOURNEY_DATE: GameDate = { year: 2026, month: 8, day: 20 };
+const JOURNEY_DATE: GameDate = { year: 2026, month: 8, day: 20 };
 export const NEXT_MORNING_DATE: GameDate = { year: 2026, month: 8, day: 21 };
 const START_MINUTE = 15 * 60 + 12;
 

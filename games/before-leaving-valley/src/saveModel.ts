@@ -25,7 +25,7 @@ export type JourneyInteractionState = {
 };
 
 export type JourneySave = {
-  version: 2;
+  version: 3;
   savedAt: string;
   phase: JourneyScene;
   scene: JourneyScene;
@@ -46,6 +46,9 @@ export type JourneySave = {
 // v3: six scenes were added on 2026-09-04 (school, upper ferrata, summit rest,
 // trail marker, road bank, police); older saves point at a different journey.
 const SAVE_KEY = "before-leaving-valley.journey.v3";
+// Older journeys lived under these keys; they are dropped on load so their
+// photo snapshots stop competing for the storage quota.
+const RETIRED_KEYS = ["before-leaving-valley.journey.v1", "before-leaving-valley.journey.v2"];
 
 // Photo snapshots are ~40–80 KB data URLs each; keep localStorage well below
 // its quota by persisting only the newest ones (older photos fall back to
@@ -85,37 +88,13 @@ function isPhoneState(value: unknown): value is PhoneState {
   return Array.isArray(phone.photos) && typeof phone.minuteOfDay === "number" && typeof phone.battery === "number";
 }
 
-function migrateLegacySave(raw: Record<string, unknown>): JourneySave | null {
-  if (raw.version !== 1 || !isJourneyScene(raw.scene) || !isJourneyScene(raw.phase) || !isPhoneState(raw.phone)) return null;
-  const arrivalProgress = typeof raw.arrivalProgress === "number" ? raw.arrivalProgress : 0;
-  const trailProgress = typeof raw.trailProgress === "number" ? raw.trailProgress : 0;
-  return {
-    version: 2,
-    savedAt: typeof raw.savedAt === "string" ? raw.savedAt : new Date().toISOString(),
-    phase: raw.phase,
-    scene: raw.scene,
-    sceneProgress: raw.scene === "arrival" ? arrivalProgress : raw.scene === "trail" ? trailProgress : 0,
-    bagTaken: raw.bagTaken === true,
-    arrivalProgress,
-    trailProgress,
-    route: raw.route === "open" || raw.route === "stream" ? raw.route : null,
-    streamStep: typeof raw.streamStep === "number" ? raw.streamStep : 0,
-    interactions: { ...INITIAL_INTERACTIONS },
-    look: raw.look && typeof raw.look === "object" ? raw.look as LookPoint : { x: 0, y: 0 },
-    cameraAim: raw.cameraAim && typeof raw.cameraAim === "object" ? raw.cameraAim as { x: number; y: number } : { x: 50, y: 50 },
-    cameraZoom: typeof raw.cameraZoom === "number" ? raw.cameraZoom : 1,
-    stagePhotoTaken: raw.stagePhotoTaken === true,
-    phone: raw.phone,
-  };
-}
-
 export function loadJourneySave(): JourneySave | null {
   try {
+    RETIRED_KEYS.forEach((key) => window.localStorage.removeItem(key));
     const serialized = window.localStorage.getItem(SAVE_KEY);
     if (!serialized) return null;
     const raw = JSON.parse(serialized) as Record<string, unknown>;
-    if (raw.version === 1) return migrateLegacySave(raw);
-    if (raw.version !== 2 || !isJourneyScene(raw.phase) || !isJourneyScene(raw.scene) || !isPhoneState(raw.phone)) return null;
+    if (raw.version !== 3 || !isJourneyScene(raw.phase) || !isJourneyScene(raw.scene) || !isPhoneState(raw.phone)) return null;
     return {
       ...(raw as unknown as JourneySave),
       interactions: { ...INITIAL_INTERACTIONS, ...((raw.interactions ?? {}) as Partial<JourneyInteractionState>) },

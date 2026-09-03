@@ -216,7 +216,7 @@ const PHONE_REPLIES: Record<ContactId, Record<"text" | "photo", Partial<Record<J
       arrival: "行，我等照片。",
       forestEntry: "林子里信号还有啊。替我闻一下松树。",
       trail: "你每次说‘就走一点’，最后都要多走半座山。哈哈。",
-      chainTraverse: "铁索？？你抓稳了再回我。",
+      chainTraverse: "铁索？？你这是在哪。到了给我看。",
       chainUpper: "我不看了，我看着腿软。",
       rubbleSlope: "回头看一眼走了多远，然后拍给我。",
       viewpoint: "你还在上面？替我看一眼那边的云。",
@@ -244,18 +244,18 @@ const PHONE_REPLIES: Record<ContactId, Record<"text" | "photo", Partial<Record<J
   },
   mama: {
     text: {
-      school: "有教练就好。听教练的。",
+      school: "有教练就好。他长什么样？",
       arrival: "看到了。慢慢走。",
-      forestEntry: "树多的地方凉快，走慢点。",
+      forestEntry: "树多的地方凉快。你小时候一进林子就不肯出来。",
       trail: "不用赶，看够了再往前。",
-      chainTraverse: "妈妈不看这个。到了上面再发。",
+      chainTraverse: "妈妈手心出汗。上面的风景等你发我。",
       chainUpper: "收到。上面风大吗。",
-      rubbleSlope: "石头路走稳。累了就坐一会儿。",
-      viewpoint: "风大的地方站一会儿就好。回来讲给我听。",
-      summitRest: "吃点东西。你从小爬山就忘了吃。",
-      letterBox: "别人留的信就别拿走，看看就好。",
-      sunsetFork: "天黑得快，看看时间。",
-      police: "在警局就好。人平安比什么都重要。回来再说。",
+      rubbleSlope: "走了这么远了。累了就坐一会儿，看看风景。",
+      viewpoint: "风大的地方你小时候最爱站。回来讲给我听。",
+      summitRest: "吃东西了没有？你从小爬山就忘了吃。",
+      letterBox: "有人在山顶留信，真浪漫。写了什么？",
+      sunsetFork: "这个时候的山最好看。你那边天是什么颜色？",
+      police: "在警局啊。你昨晚一定有很多话要讲，回来我听。",
       valleyExit: "定位又亮了。回来慢慢讲给我听。",
     },
     photo: {
@@ -269,8 +269,8 @@ const PHONE_REPLIES: Record<ContactId, Record<"text" | "photo", Partial<Record<J
       viewpoint: "收到了，很开阔。你爸问是哪座山。",
       summitRest: "看到巧克力了。多吃点。",
       letterBox: "有人在山顶写信，真好。",
-      sunsetFork: "好看。天黑前下来。",
-      police: "灯亮着就好。",
+      sunsetFork: "好看。像你小时候画的那种天。",
+      police: "灯亮着，真好看。",
       valleyExit: "回来了就好。",
     },
   },
@@ -343,6 +343,7 @@ export default function App() {
   const [lightMode, setLightMode] = useState<LightMode>(DEV_SCENE && NIGHT_LIGHT_SCENES.includes(DEV_SCENE) && DEV_SCENE !== "nightSlope" ? "flashlight" : "off");
   const [callActive, setCallActive] = useState(false);
   const [callStep, setCallStep] = useState(0);
+  const [chapterShown, setChapterShown] = useState(false);
   const [thought, setThought] = useState("");
   const [feedback, setFeedback] = useState("");
   const [phoneOpen, setPhoneOpen] = useState(false);
@@ -361,6 +362,23 @@ export default function App() {
   const [phone, dispatchPhone] = useReducer(phoneReducer, undefined, createJourneyPhoneState);
   const soundRef = useRef<Soundscape | null>(null);
   const breathAudioTimerRef = useRef(0);
+  const stepTimersRef = useRef(new Set<number>());
+  const deerGazeRef = useRef(0);
+
+  // Step handlers finish on a short timeout; keep every pending one so leaving
+  // the scene (menu → title, restart, continue) can cancel them.
+  const schedule = (callback: () => void, delay: number) => {
+    const id = window.setTimeout(() => {
+      stepTimersRef.current.delete(id);
+      callback();
+    }, delay);
+    stepTimersRef.current.add(id);
+    return id;
+  };
+  const clearScheduled = () => {
+    stepTimersRef.current.forEach(window.clearTimeout);
+    stepTimersRef.current.clear();
+  };
   const bagStartRef = useRef({ x: 0, y: 0 });
   const transitionRef = useRef(false);
   const walkFrameRef = useRef(0);
@@ -535,7 +553,7 @@ export default function App() {
         }
         soundRef.current?.uiTick(!phoneOpen);
         setPhoneOpen((value) => !value);
-        setPhoneTab("home");
+        setPhoneTab(callActive ? "call" : "home");
       }
       if (event.key === "Escape") {
         if (phoneOpen) setPhoneOpen(false);
@@ -569,7 +587,7 @@ export default function App() {
   }, [flash, lightMode, phone.battery]);
 
   useEffect(() => {
-    if (phase === "nightSlope") {
+    if (phase === "nightSlope" && !interactions.callDone) {
       setLightMode("off");
       setBreathState("recovery");
     }
@@ -577,12 +595,19 @@ export default function App() {
       setLightMode("off");
       setBreathState("calm");
     }
-    if (phase === "police" && phone.date.day !== NEXT_MORNING_DATE.day) {
+    // The dawn scenes start at a fixed morning time. The story clock may have
+    // already rolled past midnight on its own, so test the time of day rather
+    // than only the date.
+    const morningReached = (minute: number) => phone.date.day === NEXT_MORNING_DATE.day && phone.minuteOfDay >= minute && phone.minuteOfDay < 12 * 60;
+    if (phase === "police" && !morningReached(6 * 60 + 5)) {
       dispatchPhone({ type: "set_clock", date: { ...NEXT_MORNING_DATE }, minuteOfDay: 6 * 60 + 5 });
     }
-    if (phase === "searchRoad" && phone.date.day !== NEXT_MORNING_DATE.day) {
+    if (phase === "searchRoad" && !morningReached(6 * 60 + 35)) {
       dispatchPhone({ type: "set_clock", date: { ...NEXT_MORNING_DATE }, minuteOfDay: 6 * 60 + 35 });
     }
+    setChapterShown(true);
+    const chapterTimer = window.setTimeout(() => setChapterShown(false), 5400);
+    return () => window.clearTimeout(chapterTimer);
   }, [phase]);
 
   // The emergency call: lines arrive on their own rhythm; hanging up is hers.
@@ -598,7 +623,7 @@ export default function App() {
     const timer = window.setTimeout(() => {
       const activePhase: JourneyScene = phase === "complete" ? "valleyExit" : phase;
       const save: JourneySave = {
-        version: 2,
+        version: 3,
         savedAt: new Date().toISOString(),
         phase: activePhase,
         scene: phase === "complete" ? "valleyExit" : scene,
@@ -637,14 +662,30 @@ export default function App() {
   }, [phase]);
 
   useEffect(() => {
-    if (phase !== "sunsetFork" || deerState !== "standing") return;
+    const stopGaze = () => {
+      window.clearTimeout(deerGazeRef.current);
+      deerGazeRef.current = 0;
+    };
+    if (phase !== "sunsetFork" || deerState !== "standing") {
+      stopGaze();
+      return;
+    }
     if (moving) {
+      stopGaze();
       setDeerState("leaving");
       return;
     }
-    if (Math.abs(look.x - DEER_LOOK_X) > 0.28 || look.y > 0.35) return;
-    const timer = window.setTimeout(() => setDeerState("leaving"), 1700);
-    return () => window.clearTimeout(timer);
+    // Count time spent with the gaze inside the deer's corner; the timer keeps
+    // running while the pointer drifts around inside that zone.
+    const inZone = Math.abs(look.x - DEER_LOOK_X) <= 0.28 && look.y <= 0.35;
+    if (inZone) {
+      if (!deerGazeRef.current) {
+        deerGazeRef.current = window.setTimeout(() => {
+          deerGazeRef.current = 0;
+          setDeerState("leaving");
+        }, 1700);
+      }
+    } else stopGaze();
   }, [deerState, look.x, look.y, moving, phase]);
 
   // Ending: the letter is read out line by line before the closing card.
@@ -707,21 +748,45 @@ export default function App() {
     window.clearTimeout(feedbackTimerRef.current);
     window.clearInterval(breathAudioTimerRef.current);
     replyTimersRef.current.forEach(window.clearTimeout);
+    stepTimersRef.current.forEach(window.clearTimeout);
+    window.clearTimeout(deerGazeRef.current);
     soundRef.current?.dispose();
+    // StrictMode remounts after this cleanup: drop the closed context so
+    // startAudio builds a fresh one instead of keeping a dead reference.
+    soundRef.current = null;
+    setAudioReady(false);
   }, []);
 
-  const resetRuntime = (nextPhase: "title" | "school") => {
+  // Everything that can fire after a scene is left: the walk frame loop, step
+  // timeouts, the breath recovery timer, an open call or letter.
+  const stopRuntime = () => {
     cancelAnimationFrame(walkFrameRef.current);
+    clearScheduled();
     window.clearTimeout(recoveryTimerRef.current);
+    transitionRef.current = false;
+    setMoving(false);
+    setWalkFocus(null);
+    setCallActive(false);
+    setCallStep(0);
+    setLetterOpen(false);
+  };
+
+  const backToTitle = () => {
+    stopRuntime();
+    setMenuOpen(false);
+    setPhoneOpen(false);
+    setBreathState("calm");
+    setPhase("title");
+  };
+
+  const resetRuntime = (nextPhase: "title" | "school") => {
+    stopRuntime();
     replyTimersRef.current.forEach(window.clearTimeout);
     replyTimersRef.current = [];
     clearJourneySave();
     setSavedJourney(null);
     setPhase(nextPhase);
     setScene("school");
-    setCallActive(false);
-    setCallStep(0);
-    setLetterOpen(false);
     setBagTaken(false);
     setBagPos({ x: 84, y: 74 });
     setArrivalProgress(0);
@@ -762,7 +827,7 @@ export default function App() {
       soundRef.current?.resume();
     }
     setMenuOpen(false);
-    cancelAnimationFrame(walkFrameRef.current);
+    stopRuntime();
     setPhase(savedJourney.phase);
     setScene(savedJourney.scene);
     setBagTaken(savedJourney.bagTaken);
@@ -778,9 +843,6 @@ export default function App() {
     setWalkFocus(null);
     setBreathState("calm");
     setLightMode(NIGHT_LIGHT_SCENES.includes(savedJourney.phase) && savedJourney.interactions.callDone ? "flashlight" : "off");
-    setCallActive(false);
-    setCallStep(0);
-    setLetterOpen(false);
     setPhoneOpen(false);
     setPhoneTab("home");
     setCameraAim(savedJourney.cameraAim);
@@ -915,7 +977,7 @@ export default function App() {
     setBreathState("walking");
     if (soundOn) soundRef.current?.chainClink();
     stepSound();
-    window.setTimeout(() => {
+    schedule(() => {
       const next = interactions.chainUpperStep + 1;
       setInteractions((value) => ({ ...value, chainUpperStep: next }));
       setSceneProgress(next / CHAIN_UPPER_POINTS.length);
@@ -939,7 +1001,7 @@ export default function App() {
     setMoving(true);
     setBreathState("walking");
     stepSound();
-    window.setTimeout(() => {
+    schedule(() => {
       const next = interactions.markerStep + 1;
       setInteractions((value) => ({ ...value, markerStep: next }));
       setSceneProgress(next / MARKER_POINTS.length);
@@ -962,7 +1024,7 @@ export default function App() {
     setMoving(true);
     setBreathState("walking");
     stepSound();
-    window.setTimeout(() => {
+    schedule(() => {
       const next = interactions.bankStep + 1;
       setInteractions((value) => ({ ...value, bankStep: next }));
       setSceneProgress(next / BANK_POINTS.length);
@@ -1030,7 +1092,7 @@ export default function App() {
     setMoving(true);
     setBreathState("walking");
     stepSound();
-    window.setTimeout(() => {
+    schedule(() => {
       const next = streamStep + 1;
       setStreamStep(next);
       setTrailProgress(Math.min(1, next / STONES.length));
@@ -1049,7 +1111,7 @@ export default function App() {
     setBreathState("walking");
     if (soundOn) soundRef.current?.chainClink();
     stepSound();
-    window.setTimeout(() => {
+    schedule(() => {
       const next = interactions.chainStep + 1;
       setInteractions((value) => ({ ...value, chainStep: next }));
       setSceneProgress(next / CHAIN_POINTS.length);
@@ -1067,7 +1129,7 @@ export default function App() {
     setMoving(true);
     setBreathState("walking");
     stepSound();
-    window.setTimeout(() => {
+    schedule(() => {
       const next = interactions.rubbleStep + 1;
       setInteractions((value) => ({ ...value, rubbleStep: next }));
       setSceneProgress(next / RUBBLE_POINTS.length);
@@ -1131,7 +1193,7 @@ export default function App() {
     setMoving(true);
     setBreathState("walking");
     stepSound();
-    window.setTimeout(() => {
+    schedule(() => {
       const next = interactions.nightStep + 1;
       setInteractions((value) => ({
         ...value,
@@ -1255,7 +1317,7 @@ export default function App() {
         <div className="menu-toggle"><span>镜头呼吸与浮动细节</span><button className={settings.motion ? "on" : ""} onClick={() => updateSettings({ motion: !settings.motion })}>{settings.motion ? "开" : "关"}</button></div>
         <div className="menu-actions">
           <button className="primary-button" onClick={() => setMenuOpen(false)}>继续</button>
-          {phase !== "title" && <button className="secondary-button" onClick={() => { setMenuOpen(false); setPhoneOpen(false); setPhase("title"); }}>回到标题</button>}
+          {phase !== "title" && <button className="secondary-button" onClick={backToTitle}>回到标题</button>}
         </div>
         <p className="menu-hint">ESC 打开或关闭</p>
       </div>
@@ -1325,7 +1387,7 @@ export default function App() {
       <div className="cinema-grade" />
       <div className="film-grain" />
       <div className="scene-blink" key={`blink-${phase}`} />
-      {CHAPTER_CARDS[scene] && phase === scene && (
+      {CHAPTER_CARDS[scene] && phase === scene && chapterShown && (
         <div className="chapter-card" key={`chapter-${phase}`} aria-hidden="true">
           <small>{CHAPTER_CARDS[scene]!.eyebrow}</small>
           <strong>{CHAPTER_CARDS[scene]!.title}</strong>
