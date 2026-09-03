@@ -24,11 +24,30 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: games/before-leaving-valley/package-lock.json
+      - name: Install dependencies
+        working-directory: games/before-leaving-valley
+        run: npm ci
+      - name: Build
+        working-directory: games/before-leaving-valley
+        run: npm run build
+      # Pages serves the artifact root at /agentGameGame/, but the game's
+      # vite base is /agentGameGame/games/before-leaving-valley/ — stage the
+      # build under the matching path and add a root redirect page.
+      - name: Stage site
+        run: |
+          mkdir -p site/games/before-leaving-valley
+          cp -r games/before-leaving-valley/dist/. site/games/before-leaving-valley/
+          printf '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=games/before-leaving-valley/"><a href="games/before-leaving-valley/">走到风景那里 · 离开山谷以前</a>' > site/index.html
       - uses: actions/configure-pages@v5
         with:
           enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: site
       - id: deployment
         uses: actions/deploy-pages@v4
