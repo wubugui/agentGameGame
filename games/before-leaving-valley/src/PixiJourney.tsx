@@ -14,16 +14,19 @@ const BREATH_PROFILE: Record<BreathState, { frequency: number; amplitude: number
   recovery: { frequency: 0.4, amplitude: 4.3, sway: 0.00165 },
 };
 
-// Adaptive first-person look. The 16:9 boards have no native margin on a
-// 16:9 screen, so the camera zooms in with gaze magnitude to open panning
-// room: centered gaze shows almost the whole board, edge gaze zooms ~30% and
-// pans up to PAN_MAX per side without ever revealing an image edge.
-const LOOK_ZOOM_MIN = 1.06;
-const LOOK_ZOOM_RANGE = 0.3;
+// Adaptive first-person look with full edge reach. The 16:9 boards have no
+// native margin on a 16:9 screen, so the camera zooms in with gaze magnitude
+// to open panning room: centered gaze shows the WHOLE board (its edges sit on
+// the screen edges), edge gaze zooms and pans until the looked-at image edge
+// sits exactly on the screen edge. Breathing, step sway and roll are scaled
+// by the remaining margin budget, so they die out smoothly instead of ever
+// revealing the canvas behind the image.
+const LOOK_ZOOM_MIN = 1.0;
+const LOOK_ZOOM_RANGE = 0.36;
 const LOOK_ZOOM_EXP = 1.25;
-const PAN_SAFETY = 0.03;
-const PAN_MAX_X = 0.16;
-const PAN_MAX_Y = 0.11;
+const WALK_ZOOM_BUMP = 0.05;
+const SWAY_BUDGET_XY = 6;
+const SWAY_BUDGET_ROT = 7;
 
 type Props = {
   scene: JourneyScene;
@@ -158,7 +161,7 @@ export default function PixiJourney({ scene, walking, progress = 0, look, walkFo
         const stepX = walkingRef.current ? Math.sin(stepPhase * 0.5) * 1.8 : 0;
 
         const lookMagnitude = Math.min(1, Math.max(Math.abs(smoothedLook.x), Math.abs(smoothedLook.y)));
-        const lookZoom = LOOK_ZOOM_MIN + LOOK_ZOOM_RANGE * Math.pow(lookMagnitude, LOOK_ZOOM_EXP);
+        const lookZoom = LOOK_ZOOM_MIN + LOOK_ZOOM_RANGE * Math.pow(lookMagnitude, LOOK_ZOOM_EXP) + (walkingRef.current ? WALK_ZOOM_BUMP : 0);
         const cameraEase = 1 - Math.exp(-deltaSeconds * (walkingRef.current ? 3.6 : 6.4));
 
         sceneContainers.forEach((container, index) => {
@@ -170,24 +173,28 @@ export default function PixiJourney({ scene, walking, progress = 0, look, walkFo
         sceneSprites.forEach((sprite, index) => {
           const active = index === targetIndex;
           const travel = active ? progressRef.current : 0;
-          // Relative to the 1.15 reference framing; <1 at rest shows more of
-          // the board, >1 while looking around or approaching a destination.
-          const desiredScale = (baseScales[index] ?? sprite.scale.x) * (lookZoom / 1.15) * (1 + travel * 0.14);
+          // Relative to the 1.15 reference framing: 1.0 at rest is the exact
+          // cover fit, so the whole board fills the screen edge to edge.
+          const desiredScale = (baseScales[index] ?? sprite.scale.x) * ((lookZoom + travel * 0.14) / 1.15);
           const textureWidth = sprite.texture.width;
           const textureHeight = sprite.texture.height;
-          let panLimitX = 0.09;
-          let panLimitY = 0.055;
-          if (textureWidth > 1 && textureHeight > 1) {
-            const marginX = (desiredScale * textureWidth - app.screen.width) / 2 / app.screen.width;
-            const marginY = (desiredScale * textureHeight - app.screen.height) / 2 / app.screen.height;
-            panLimitX = clamp(marginX - PAN_SAFETY, 0, PAN_MAX_X);
-            panLimitY = clamp(marginY - PAN_SAFETY, 0, PAN_MAX_Y);
-          }
-          const viewX = -smoothedLook.x * app.screen.width * panLimitX;
-          const viewY = -smoothedLook.y * app.screen.height * panLimitY;
-          const desiredX = app.screen.width / 2 + viewX + (active ? stepX : 0);
-          const desiredY = app.screen.height / 2 + viewY + breathY + (active ? stepY + travel * 24 : 0);
-          const desiredRotation = -smoothedLook.x * 0.0035 + breathRoll + (walkingRef.current ? Math.sin(stepPhase * 0.5) * 0.0014 : 0);
+          // How far the zoomed sprite extends past each screen edge, in px.
+          const marginX = textureWidth > 1 ? Math.max(0, (desiredScale * textureWidth - app.screen.width) / 2) : 0;
+          const marginY = textureHeight > 1 ? Math.max(0, (desiredScale * textureHeight - app.screen.height) / 2) : 0;
+          // Full-reach pan: at |look| = 1 the looked-at image edge sits exactly
+          // on the corresponding screen edge.
+          const panX = smoothedLook.x * marginX;
+          const panY = smoothedLook.y * marginY;
+          // Margin still available on the tighter side after panning; sway and
+          // roll are budgeted from it so they can never expose the canvas.
+          const tightX = Math.max(0, marginX - Math.abs(panX));
+          const tightY = Math.max(0, marginY - Math.abs(panY));
+          const swayY = Math.min(1, tightY / SWAY_BUDGET_XY);
+          const swayX = Math.min(1, tightX / SWAY_BUDGET_XY);
+          const swayRot = Math.min(1, Math.min(tightX, tightY) / SWAY_BUDGET_ROT);
+          const desiredX = app.screen.width / 2 - panX + (active ? stepX * swayX : 0);
+          const desiredY = app.screen.height / 2 - panY + breathY * swayY + (active ? (stepY + travel * 24) * swayY : 0);
+          const desiredRotation = (-smoothedLook.x * 0.0035 + breathRoll + (walkingRef.current ? Math.sin(stepPhase * 0.5) * 0.0014 : 0)) * swayRot;
           sprite.x += (desiredX - sprite.x) * cameraEase;
           sprite.y += (desiredY - sprite.y) * cameraEase;
           sprite.rotation += (desiredRotation - sprite.rotation) * cameraEase;
