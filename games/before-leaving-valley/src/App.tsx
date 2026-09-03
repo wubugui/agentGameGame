@@ -3,7 +3,7 @@ import { lazy, useCallback, useEffect, useReducer, useRef, useState } from "reac
 import Phone, { type PhoneTab } from "./Phone";
 import type { BreathState, JourneyScene, LookPoint } from "./PixiJourney";
 import { createInitialPhoneState, formatGameTime, NEXT_MORNING_DATE, phoneReducer, sceneAsset, type ContactId, type PhoneState } from "./phoneModel";
-import { isJourneyScene, JOURNEY_SCENE_INFO, journeySceneIndex, nextJourneyScene } from "./journeyModel";
+import { isJourneyScene, JOURNEY_SCENE_INFO, journeySceneIndex, LETTER_LINES_IT, LETTER_LINES_ZH, nextJourneyScene } from "./journeyModel";
 import { clearJourneySave, INITIAL_INTERACTIONS, loadJourneySave, persistJourneySave, type JourneyInteractionState, type JourneySave } from "./saveModel";
 
 type Phase = "title" | JourneyScene | "complete";
@@ -53,6 +53,12 @@ const SEARCH_POINTS = [
 ];
 
 type LightMode = "off" | "phone" | "flashlight";
+type DeerState = "hidden" | "standing" | "leaving";
+
+// Where the deer stands on the sunset board, as a look-space x (-1..1); used to
+// notice when she is looking straight at it.
+const DEER_LOOK_X = (0.24 - 0.5) * 2;
+const CREDIT_LINES_TOTAL = LETTER_LINES_IT.length + LETTER_LINES_ZH.length;
 
 type SoundscapeNodes = {
   windGain: GainNode;
@@ -196,6 +202,9 @@ export default function App() {
   const [soundOn, setSoundOn] = useState(true);
   const [audioReady, setAudioReady] = useState(false);
   const [savedJourney, setSavedJourney] = useState<JourneySave | null>(() => loadJourneySave());
+  const [deerState, setDeerState] = useState<DeerState>("hidden");
+  const [letterOpen, setLetterOpen] = useState(false);
+  const [creditLine, setCreditLine] = useState(0);
   const [phone, dispatchPhone] = useReducer(phoneReducer, undefined, createJourneyPhoneState);
   const audioRef = useRef<AudioContext | null>(null);
   const audioNodesRef = useRef<SoundscapeNodes | null>(null);
@@ -496,6 +505,43 @@ export default function App() {
     return () => window.clearTimeout(timer);
   }, [arrivalProgress, bagTaken, cameraAim, cameraZoom, interactions, moving, phase, phone, route, scene, sceneProgress, stagePhotoTaken, streamStep, trailProgress]);
 
+  // The deer at the tree line: steps out a moment after she arrives on the
+  // shoulder, watches her for a while, and walks off when she looks straight
+  // at it for a beat, starts walking, or simply after a while.
+  useEffect(() => {
+    if (phase !== "sunsetFork") {
+      setDeerState("hidden");
+      return;
+    }
+    const appear = window.setTimeout(() => setDeerState("standing"), 2400);
+    const leave = window.setTimeout(() => setDeerState((state) => state === "standing" ? "leaving" : state), 14000);
+    return () => {
+      window.clearTimeout(appear);
+      window.clearTimeout(leave);
+    };
+  }, [phase]);
+
+  useEffect(() => {
+    if (phase !== "sunsetFork" || deerState !== "standing") return;
+    if (moving) {
+      setDeerState("leaving");
+      return;
+    }
+    if (Math.abs(look.x - DEER_LOOK_X) > 0.28 || look.y > 0.35) return;
+    const timer = window.setTimeout(() => setDeerState("leaving"), 1700);
+    return () => window.clearTimeout(timer);
+  }, [deerState, look.x, look.y, moving, phase]);
+
+  // Ending: the letter is read out line by line before the closing card.
+  useEffect(() => {
+    if (phase !== "complete") {
+      setCreditLine(0);
+      return;
+    }
+    const timer = window.setInterval(() => setCreditLine((value) => value > CREDIT_LINES_TOTAL ? value : value + 1), 1400);
+    return () => window.clearInterval(timer);
+  }, [phase]);
+
   useEffect(() => {
     const beat = PHONE_BEATS[phase];
     if (!beat || narrativeMessagesRef.current.has(beat.id)) return;
@@ -689,7 +735,7 @@ export default function App() {
       else flash("林间旧路在树影中间");
     }
     if (phase === "letterBox" && !interactions.letterRead) {
-      flash("石头后面好像还压着什么");
+      flash("信箱里好像留着什么");
     }
     if (phase === "sunsetFork" || phase === "valleyExit" || phase === "viewpoint" || (phase === "letterBox" && interactions.letterRead)) {
       startAutomaticWalk(focus);
@@ -783,7 +829,14 @@ export default function App() {
   };
 
   const readLetter = () => {
-    if (phase !== "letterBox" || interactions.letterRead) return;
+    if (phase !== "letterBox" || interactions.letterRead || letterOpen) return;
+    setLetterOpen(true);
+    setThought("");
+  };
+
+  const putLetterBack = () => {
+    if (!letterOpen) return;
+    setLetterOpen(false);
     setInteractions((value) => ({ ...value, letterRead: true }));
     setThought("读不懂。可是有人把它留在这里，留给任何一个走上来的人。我把它拍了下来，放回信箱。");
     dispatchPhone({
@@ -932,8 +985,9 @@ export default function App() {
   const progress = phase === "arrival" ? arrivalProgress : phase === "trail" ? trailProgress : phase === "complete" ? 1 : sceneProgress;
 
   if (phase === "title") return (
-    <main className="game-shell title-screen">
+    <main className="game-shell title-screen" onPointerMove={worldMove}>
       <PixiJourney scene="arrival" walking={false} progress={0} look={look} walkFocus={null} breath="calm" onReady={onCanvasReady} />
+      <div className="title-art" style={{ backgroundImage: `url("${import.meta.env.BASE_URL}art/title-key-art-v1.webp")`, "--tilt-x": `${(-look.x * 14).toFixed(1)}px`, "--tilt-y": `${(-look.y * 9).toFixed(1)}px` } as React.CSSProperties} />
       <div className="cinema-grade" />
       <div className={`title-card ${canvasReady ? "is-ready" : ""}`}>
         <p className="eyebrow">离开山谷以前</p>
@@ -950,30 +1004,47 @@ export default function App() {
     </main>
   );
 
-  if (phase === "complete") return (
-    <main className="game-shell complete-screen">
-      <PixiJourney scene="valleyExit" walking={false} progress={1} look={look} walkFocus={null} breath="calm" />
-      <div className="cinema-grade" />
-      <div className="complete-card">
-        <span className="completion-mark"><Check size={23} /></span>
-        <p className="eyebrow">离开山谷以前</p>
-        <h2>你是特别的。</h2>
-        <p>手机回来了，一张照片都没少。有些话在山里读不懂，离开的时候，才知道它为什么在那里。</p>
-        <p className="music-credit">Music: “Clear Air” “Simple Duet” “Promises to Keep” — Kevin MacLeod (incompetech.com) · CC BY 4.0</p>
-        <button className="primary-button" onClick={reset}><RotateCcw size={16} /> 再走一次</button>
-      </div>
-    </main>
-  );
+  if (phase === "complete") {
+    const creditsDone = creditLine > CREDIT_LINES_TOTAL;
+    return (
+      <main className="game-shell complete-screen" onPointerDown={() => { if (!creditsDone) setCreditLine(CREDIT_LINES_TOTAL + 1); }}>
+        <PixiJourney scene="valleyExit" walking={false} progress={1} look={look} walkFocus={null} breath="calm" />
+        <div className="cinema-grade" />
+        {!creditsDone ? (
+          <div className="credits-poem" aria-live="polite">
+            <div className="credits-block credits-it">
+              {LETTER_LINES_IT.map((line, index) => <p key={`it-${index}`} className={index < creditLine ? "shown" : ""}>{line || " "}</p>)}
+            </div>
+            <div className="credits-block credits-zh">
+              {LETTER_LINES_ZH.map((line, index) => <p key={`zh-${index}`} className={index + LETTER_LINES_IT.length < creditLine ? "shown" : ""}>{line || " "}</p>)}
+            </div>
+            <p className="credits-skip">点击跳过</p>
+          </div>
+        ) : (
+          <div className="complete-card">
+            <span className="completion-mark"><Check size={23} /></span>
+            <p className="eyebrow">离开山谷以前</p>
+            <h2>你是特别的。</h2>
+            <p>手机回来了，一张照片都没少。有些话在山里读不懂，离开的时候，才知道它为什么在那里。</p>
+            <p className="credits-source">灵感来自一段真实的经历 · 山顶那封信的作者不详</p>
+            <p className="music-credit">Music: “Clear Air” “Simple Duet” “Promises to Keep” — Kevin MacLeod (incompetech.com) · CC BY 4.0</p>
+            <button className="primary-button" onClick={reset}><RotateCcw size={16} /> 再走一次</button>
+          </div>
+        )}
+      </main>
+    );
+  }
 
   const info = SCENE_INFO[scene];
   const stone = STONES[Math.min(streamStep, STONES.length - 1)];
   const displayTime = formatGameTime(phone.minuteOfDay);
 
   return (
-    <main className={`game-shell scene-${scene} scene-light-${info.light} light-${lightMode} ${moving ? "is-moving" : ""} breath-${breathState}`}>
+    <main className={`game-shell scene-${scene} scene-light-${info.light} light-${lightMode} ${moving ? "is-moving" : ""} ${letterOpen ? "letter-open" : ""} breath-${breathState}`}>
       <PixiJourney scene={renderScene} walking={moving} progress={progress} look={look} walkFocus={walkFocus} breath={breathState} anchorLayerRef={anchorLayerRef} />
       <div className="cinema-grade" />
       <div className="film-grain" />
+      <div className="scene-blink" key={`blink-${phase}`} />
       {info.light === "night" && <><div className="journey-night-ambient" /><div className="journey-darkness" style={{ "--beam-x": `${(look.x + 1) * 50}%`, "--beam-y": `${(look.y + 1) * 50}%` } as React.CSSProperties} /><div className="journey-light-volume" style={{ "--beam-x": `${(look.x + 1) * 50}%`, "--beam-y": `${(look.y + 1) * 50}%` } as React.CSSProperties} /></>}
 
       <div className="scene-caption"><span>{displayTime}</span>{info.place} · {info.elevation}</div>
@@ -1022,7 +1093,7 @@ export default function App() {
         {phase === "rubbleSlope" && interactions.rubbleStep < RUBBLE_POINTS.length && (
           <button className="terrain-target rubble-target" style={{ left: `${RUBBLE_POINTS[interactions.rubbleStep].x}%`, top: `${RUBBLE_POINTS[interactions.rubbleStep].y}%` }} onPointerDown={(event) => { event.stopPropagation(); advanceRubble(); }} aria-label="踩向下一块稳定石面"><span /></button>
         )}
-        {phase === "letterBox" && !interactions.letterRead && (
+        {phase === "letterBox" && !interactions.letterRead && !letterOpen && (
           <button className="letter-prop" onPointerDown={(event) => { event.stopPropagation(); readLetter(); }}><span>信箱里的一张纸</span></button>
         )}
         {(phase === "nightSlope" || phase === "deepForest") && (() => {
@@ -1033,7 +1104,12 @@ export default function App() {
           return localStep >= 0 && localStep < points.length ? <button className={`terrain-target night-target ${lightMode === "off" ? "unlit" : ""}`} style={{ left: `${point.x}%`, top: `${point.y}%` }} onPointerDown={(event) => { event.stopPropagation(); advanceNight(phase); }} aria-label="确认下一处落脚点"><span /></button> : null;
         })()}
         {phase === "roadside" && <><div className="car-headlights" /><img className="rescue-car-prop" src={`${import.meta.env.BASE_URL}art/rescue-car-cutout-v2.webp`} alt="停在谷底公路边的蓝色旧车" /></>}
-        {phase === "carInterior" && <img className="rescuers-car-overlay" src={`${import.meta.env.BASE_URL}art/rescuers-car-overlay-v1.webp`} alt="前排的两个人" />}
+        {phase === "sunsetFork" && deerState !== "hidden" && (
+          <img className={`deer-prop deer-${deerState}`} src={`${import.meta.env.BASE_URL}art/deer-v1.webp`} alt="林线边的一只鹿" draggable={false} />
+        )}
+        {phase === "searchRoad" && interactions.searchStep >= SEARCH_POINTS.length && (
+          <img className={`finder-prop ${interactions.phoneReturned ? "finder-leaving" : "finder-waiting"}`} src={`${import.meta.env.BASE_URL}art/finder-v1.webp`} alt="举着手机走来的人" draggable={false} onPointerDown={(event) => { event.stopPropagation(); acceptReturnedPhone(); }} />
+        )}
         {phase === "searchRoad" && interactions.searchStep < SEARCH_POINTS.length && <button className="terrain-target search-target" style={{ left: `${SEARCH_POINTS[interactions.searchStep].x}%`, top: `${SEARCH_POINTS[interactions.searchStep].y}%` }} onPointerDown={(event) => { event.stopPropagation(); advanceSearch(); }} aria-label={`查看${SEARCH_POINTS[interactions.searchStep].label}`}><span /></button>}
       </div>
 
@@ -1041,6 +1117,14 @@ export default function App() {
       {phase === "carInterior" && interactions.rescueStep < 3 && <button className="story-action conversation-action" onPointerDown={(event) => { event.stopPropagation(); advanceRescueConversation(); }}>{interactions.rescueStep === 0 ? "接过那瓶水，听他们说" : "继续听"}</button>}
       {phase === "searchRoad" && interactions.searchStep >= SEARCH_POINTS.length && !interactions.phoneReturned && <button className="story-action phone-return-action" onPointerDown={(event) => { event.stopPropagation(); acceptReturnedPhone(); }}>“是你吗？锁屏上的那个女孩。”</button>}
 
+      {letterOpen && (
+        <div className="letter-view" onPointerDown={(event) => { event.stopPropagation(); putLetterBack(); }} role="dialog" aria-label="信箱里的那张纸">
+          <div className="letter-view-paper" style={{ backgroundImage: `url("${import.meta.env.BASE_URL}art/letter-paper-v1.webp")` }}>
+            {LETTER_LINES_IT.map((line, index) => <p key={index}>{line || " "}</p>)}
+          </div>
+          <p className="letter-view-hint">读不懂。点一下，把它拍下来放回去</p>
+        </div>
+      )}
       {thought && <div className="thought-line">{thought}</div>}
       {feedback && <div className="world-feedback">{feedback}</div>}
 

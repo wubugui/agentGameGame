@@ -292,7 +292,7 @@ export default function Phone({
                   <div className="photo-detail">
                     <div className={`photo-detail-image ${selectedPhoto.kind === "letter" ? "is-letter" : ""}`} style={photoStyle(selectedPhoto)}>
                       {selectedPhoto.kind === "letter" && (
-                        <div className="letter-paper" aria-label="信箱里的那张纸">
+                        <div className="letter-paper" aria-label="信箱里的那张纸" style={{ backgroundImage: `url("${import.meta.env.BASE_URL}art/letter-paper-v1.webp")` }}>
                           {LETTER_LINES_IT.map((line, index) => <p key={`it-${index}`}>{line}</p>)}
                           {letterTranslated
                             ? <div className="letter-zh">{LETTER_LINES_ZH.map((line, index) => <p key={`zh-${index}`}>{line}</p>)}</div>

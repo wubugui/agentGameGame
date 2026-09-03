@@ -119,7 +119,7 @@ export const JOURNEY_SCENE_INFO: Record<JourneyScene, JourneySceneInfo> = {
   letterBox: {
     place: "山顶 · 信箱",
     elevation: "2,480 m",
-    asset: "art/stage1-viewpoint-clean-v2.webp",
+    asset: "art/letterbox-summit-v1.webp",
     light: "dusk",
     minutes: 15,
     batteryCost: 1,
@@ -129,12 +129,12 @@ export const JOURNEY_SCENE_INFO: Record<JourneyScene, JourneySceneInfo> = {
   sunsetFork: {
     place: "山肩 · 望见山屋",
     elevation: "2,380 m",
-    asset: "art/rubble-slope-base-v1.webp",
+    asset: "art/hut-sunset-v1.webp",
     light: "dusk",
     minutes: 60,
     batteryCost: 2,
     photoTitle: "光已经走到山后面",
-    thoughts: ["山屋在对面的山肩上，看起来很近。可路要先下到谷底，再绕上去。", "光已经走到山后面了。林线边站着一只鹿，看了我一会儿，才慢慢走开。"],
+    thoughts: ["山屋就在坡顶，窗亮着，看起来很近。可碎石坡上每一步都比想的慢，天已经这样了。", "光已经走到山后面了。林线边站着一只鹿，看了我一会儿，才慢慢走开。"],
   },
   nightSlope: {
     place: "回程山坡 · 无照明路段",
@@ -169,7 +169,7 @@ export const JOURNEY_SCENE_INFO: Record<JourneyScene, JourneySceneInfo> = {
   carInterior: {
     place: "他们的车 · 暖风口旁",
     elevation: "1,530 m",
-    asset: "art/car-interior-base-v1.webp",
+    asset: "art/car-interior-couple-v1.webp",
     light: "interior",
     minutes: 26,
     batteryCost: 0,
