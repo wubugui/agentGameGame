@@ -104,6 +104,7 @@ export default function Phone({
 
   // 结尾要求她真的回看那张信的照片；若相册里没有信（开发预览），退回到“打开相册”即可。
   const hasLetterPhoto = phone.photos.some((photo) => photo.kind === "letter");
+  const dateLabelFor = (photo: PhonePhoto) => photo.isNew && photo.day !== undefined && photo.day !== phone.date.day ? "昨天" : photo.dateLabel;
   useEffect(() => {
     if (tab === "conversation") threadEndRef.current?.scrollIntoView({ block: "end" });
     if (tab === "gallery" && (!hasLetterPhoto || selectedPhoto?.kind === "letter")) onGalleryViewed?.();
@@ -231,7 +232,7 @@ export default function Phone({
                   <div className="chat-thread">
                     {activeThread.map((message, index) => {
                       const previous = activeThread[index - 1];
-                      const showTime = !previous || message.minute - previous.minute >= 3;
+                      const showTime = !previous || previous.minute > message.minute || message.minute - previous.minute >= 3;
                       const attachedPhoto = message.photoId ? phone.photos.find((photo) => photo.id === message.photoId) : undefined;
                       return (
                         <div className={`message-row ${message.direction}`} key={message.id}>
@@ -308,7 +309,7 @@ export default function Phone({
             )}
 
             {tab === "gallery" && (
-              <PhonePage title={selectedPhoto ? selectedPhoto.title : "这一年"} subtitle={selectedPhoto ? `${selectedPhoto.dateLabel} · ${selectedPhoto.place}` : `${phone.photos.length} 张照片`} back={() => { setSharingPhoto(false); selectedPhoto ? setSelectedPhoto(null) : setTab("home"); }}>
+              <PhonePage title={selectedPhoto ? selectedPhoto.title : "这一年"} subtitle={selectedPhoto ? `${dateLabelFor(selectedPhoto)} · ${selectedPhoto.place}` : `${phone.photos.length} 张照片`} back={() => { setSharingPhoto(false); selectedPhoto ? setSelectedPhoto(null) : setTab("home"); }}>
                 {selectedPhoto ? (
                   <div className="photo-detail">
                     <div className={`photo-detail-image ${selectedPhoto.kind === "letter" ? "is-letter" : ""}`} style={photoStyle(selectedPhoto)}>
@@ -321,7 +322,7 @@ export default function Phone({
                         </div>
                       )}
                     </div>
-                    <div className="photo-detail-meta"><strong>{selectedPhoto.title}</strong><span>{selectedPhoto.dateLabel}{selectedPhoto.minute !== undefined ? ` ${formatGameTime(selectedPhoto.minute)}` : ""}</span><small>{selectedPhoto.place}</small></div>
+                    <div className="photo-detail-meta"><strong>{selectedPhoto.title}</strong><span>{dateLabelFor(selectedPhoto)}{selectedPhoto.minute !== undefined ? ` ${formatGameTime(selectedPhoto.minute)}` : ""}</span><small>{selectedPhoto.place}</small></div>
                     <button className="photo-share-button" onClick={() => setSharingPhoto((value) => !value)}><Share2 size={15} /> 发给朋友</button>
                     {sharingPhoto && <div className="share-sheet"><small>发送这张照片</small>{CONTACT_ORDER.map((contactId) => <button key={contactId} onClick={() => sharePhoto(contactId)}><Avatar contactId={contactId} /><span><strong>{CONTACTS[contactId].name}</strong><small>{CONTACTS[contactId].relation}</small></span></button>)}</div>}
                   </div>

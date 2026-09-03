@@ -126,7 +126,13 @@ async function repeat(sel, n, label, gap = 300) { for (let i = 0; i < n; i++) { 
     await untilScene("deepForest");
     await repeat(".night-target", 4, "deep forest", 200);
     await untilScene("marker656");
-    await repeat(".night-target", 3, "marker", 200);
+    // The marker search only shows a target where the light is pointing: sweep the gaze first.
+    for (const [i, [fx, fy]] of [[0.22, 0.64], [0.68, 0.68], [0.58, 0.44]].entries()) {
+      const el = $(".world-input"); pointer(el, fx, fy, "pointermove");
+      await waitFor(() => !moving() && $(".night-target"), `marker target ${i + 1}`);
+      await press(".night-target", `marker ${i + 1}/3`);
+      await sleep(PACED ? 3200 : 300);
+    }
     await untilScene("roadBank");
     await repeat(".night-target", 4, "bank", 200);
     await untilScene("roadside");

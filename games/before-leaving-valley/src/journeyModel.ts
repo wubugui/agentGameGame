@@ -180,7 +180,7 @@ export const JOURNEY_SCENE_INFO: Record<JourneyScene, JourneySceneInfo> = {
     minutes: 28,
     batteryCost: 5,
     photoTitle: "补光灯照到的那小块路",
-    thoughts: ["天不是一下子黑的。是我终于承认，已经看不清路了。", "求助电话接通了，两种语言在风里碎成一片。我挂掉电话，打开补光灯。"],
+    thoughts: ["天不是一下子黑的。是我终于承认，已经看不清路了。", "信号只剩一格。先打电话。"],
   },
   deepForest: {
     place: "落叶松林 · 656 号小径",
@@ -190,7 +190,7 @@ export const JOURNEY_SCENE_INFO: Record<JourneyScene, JourneySceneInfo> = {
     minutes: 24,
     batteryCost: 6,
     photoTitle: "林子里只有呼吸声",
-    thoughts: ["林子把风挡住以后，我才听见自己的呼吸有多快。", "656 号路标。往上爬，就能到公路。我对自己说了三遍。"],
+    thoughts: ["林子把风挡住以后，我才听见自己的呼吸有多快。", "我记得地图上有一条 656 号小径，就在这片林子里。找到它，就能到公路。"],
   },
   marker656: {
     place: "落叶松林 · 岔口",
@@ -200,7 +200,7 @@ export const JOURNEY_SCENE_INFO: Record<JourneyScene, JourneySceneInfo> = {
     minutes: 22,
     batteryCost: 0,
     photoTitle: "红白两道漆",
-    thoughts: ["路在这里分开了。地图上说，这附近应该有一根路标。", "光只有那么一小圈。一处一处地照过去。"],
+    thoughts: ["路在这里分开了。我记得地图上，这附近有一根路标。", "光只有那么一小圈。一处一处地照过去。"],
   },
   roadBank: {
     place: "路基下 · 最后一段",
@@ -230,7 +230,7 @@ export const JOURNEY_SCENE_INFO: Record<JourneyScene, JourneySceneInfo> = {
     minutes: 26,
     batteryCost: 0,
     photoTitle: "陌生人的暖风",
-    thoughts: ["他们没有问我为什么一个人跑进山里，只先递来一瓶水。", "暖风口对着我。副驾上的人把外套往我这边又推了一点。"],
+    thoughts: ["他们没有问我为什么一个人跑进山里。", "暖风口对着我。副驾上的人把外套往我这边又推了一点。"],
   },
   police: {
     place: "谷口 · 警局",
@@ -240,7 +240,7 @@ export const JOURNEY_SCENE_INFO: Record<JourneyScene, JourneySceneInfo> = {
     minutes: 24,
     batteryCost: 0,
     photoTitle: "门口的那盏灯",
-    thoughts: ["天刚亮，他们就把车停在了警局门口。", "‘去登记一下。山里捡到东西的人，一般会送到这里。’"],
+    thoughts: ["天刚亮，他们就把车停在了警局门口。", "‘去登记一下，’开车的人说，‘我们在车里等你。’"],
   },
   searchRoad: {
     place: "落叶松林 · 清晨",

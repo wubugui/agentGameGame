@@ -21,10 +21,10 @@ const STONES = [
 ];
 
 const CHAIN_POINTS = [
-  { x: 26, y: 61 },
-  { x: 35, y: 54 },
-  { x: 44, y: 47 },
-  { x: 53, y: 40 },
+  { x: 26, y: 50 },
+  { x: 35, y: 43 },
+  { x: 44, y: 35 },
+  { x: 53, y: 26 },
 ];
 
 const RUBBLE_POINTS = [
@@ -81,7 +81,7 @@ const CALL_LINES = [
   "我说：我在山上。天黑了。我一个人。",
   "对方的英语和我的英语在风里碎成一片。",
   "我只听清了一句：往公路的方向走。",
-  "通话结束 · 02:14",
+  "通话 2 分 14 秒",
 ];
 
 type LightMode = "off" | "phone" | "flashlight";
@@ -90,7 +90,7 @@ type DeerState = "hidden" | "standing" | "leaving";
 // Where the deer stands on the sunset board, as a look-space x (-1..1); used to
 // notice when she is looking straight at it.
 const DEER_LOOK_X = (0.24 - 0.5) * 2;
-const CREDIT_LINES_TOTAL = LETTER_LINES_IT.length + LETTER_LINES_ZH.length;
+const CREDIT_LINES_TOTAL = LETTER_LINES_IT.length + 1;
 
 // Quiet chapter cards at the turns of the day.
 const CHAPTER_CARDS: Partial<Record<JourneyScene, { eyebrow: string; title: string }>> = {
@@ -203,9 +203,9 @@ const PHONE_BEATS: Partial<Record<Phase, { id: string; contactId: ContactId; tex
   forestEntry: { id: "forest-asha", contactId: "asha", text: "看到怪路牌记得拍。我想画一组路牌。" },
   trail: { id: "trail-xiaoyu", contactId: "xiaoyu", text: "刚看了你的定位，那边的天好蓝。替我多看两眼。" },
   chainUpper: { id: "upper-xiaoyu", contactId: "xiaoyu", text: "？？？你的定位怎么在一面悬崖上" },
-  viewpoint: { id: "viewpoint-mama", contactId: "mama", text: "小树收到了。今天的山好看吗？" },
-  summitRest: { id: "rest-asha", contactId: "asha", text: "书装完了。空房间里回声好大。你到顶了吗？" },
-  sunsetFork: { id: "sunset-asha", contactId: "asha", text: "我在收拾最后一箱书。你那边现在是什么颜色的天？" },
+  viewpoint: { id: "viewpoint-mama", contactId: "mama", text: "你爸问你在哪座山。今天的山好看吗？" },
+  summitRest: { id: "rest-asha", contactId: "asha", text: "我在收拾最后一箱书。你到顶了吗？" },
+  sunsetFork: { id: "sunset-asha", contactId: "asha", text: "书装完了。空房间里回声好大。你那边现在是什么颜色的天？" },
   nightSlope: { id: "night-xiaoyu", contactId: "xiaoyu", text: "睡前看到你的定位还在山上。拍到星星了吗？" },
   valleyExit: { id: "exit-xiaoyu", contactId: "xiaoyu", text: "定位又亮了！！你昨晚去哪了，一整夜都是灰的" },
 };
@@ -344,7 +344,15 @@ export default function App() {
   const [callActive, setCallActive] = useState(false);
   const [callStep, setCallStep] = useState(0);
   const [chapterShown, setChapterShown] = useState(false);
-  const [thought, setThought] = useState("");
+  const [thought, setThoughtRaw] = useState("");
+  const thoughtTimersRef = useRef<number[]>([]);
+  // Any line spoken by an interaction cancels the scene's scripted opening lines
+  // so a click within the first seconds is never overwritten.
+  const setThought = (text: string) => {
+    thoughtTimersRef.current.forEach(window.clearTimeout);
+    thoughtTimersRef.current = [];
+    setThoughtRaw(text);
+  };
   const [feedback, setFeedback] = useState("");
   const [phoneOpen, setPhoneOpen] = useState(false);
   const [phoneTab, setPhoneTab] = useState<PhoneTab>("home");
@@ -481,13 +489,15 @@ export default function App() {
   }, [audioReady, breathState, phase, soundOn]);
 
   useEffect(() => {
+    thoughtTimersRef.current.forEach(window.clearTimeout);
     const timers: number[] = [];
-    setThought("");
+    setThoughtRaw("");
     if (phase !== "title" && phase !== "complete") {
       const [first, second] = SCENE_INFO[phase].thoughts;
-      timers.push(window.setTimeout(() => setThought(first), 650));
-      timers.push(window.setTimeout(() => setThought(second), 4300));
+      timers.push(window.setTimeout(() => setThoughtRaw(first), 650));
+      timers.push(window.setTimeout(() => setThoughtRaw(second), 4300));
     }
+    thoughtTimersRef.current = timers;
     return () => timers.forEach(window.clearTimeout);
   }, [phase]);
 
@@ -1251,8 +1261,8 @@ export default function App() {
   const acceptReturnedPhone = () => {
     if (phase !== "searchRoad" || interactions.searchStep < SEARCH_POINTS.length || interactions.phoneReturned) return;
     setInteractions((value) => ({ ...value, phoneLost: false, phoneReturned: true }));
-    setThought("她一早在山上捡到它，送去了警局。锁屏是我的脸，界面是中文，警局的人想起昨晚山里那通电话。屏幕没碎，一张照片都没少。");
-    dispatchPhone({ type: "receive_message", contactId: "mama", text: "定位又亮起来了。回来慢慢讲给我听。" });
+    setThought("她一早在山上捡到它。锁屏是我的脸，界面是中文。她本来要送去警局，在谷口听说昨晚有个女孩从山里打过电话，就沿着这条路找了上来。屏幕没碎，一张照片都没少。");
+    dispatchPhone({ type: "receive_message", contactId: "mama", text: "定位又亮起来了。妈妈一直在看这个小点。" });
   };
 
   const openPhone = (tab: PhoneTab = "home") => {
@@ -1358,7 +1368,7 @@ export default function App() {
               {LETTER_LINES_IT.map((line, index) => <p key={`it-${index}`} className={index < creditLine ? "shown" : ""}>{line || " "}</p>)}
             </div>
             <div className="credits-block credits-zh">
-              {LETTER_LINES_ZH.map((line, index) => <p key={`zh-${index}`} className={index + LETTER_LINES_IT.length < creditLine ? "shown" : ""}>{line || " "}</p>)}
+              {LETTER_LINES_ZH.map((line, index) => <p key={`zh-${index}`} className={index + 1 < creditLine ? "shown" : ""}>{line || " "}</p>)}
             </div>
             <p className="credits-skip">点击跳过</p>
           </div>
@@ -1405,7 +1415,7 @@ export default function App() {
       {NIGHT_LIGHT_SCENES.includes(phase as JourneyScene) && (phase !== "nightSlope" || interactions.callDone) && (
         <div className="light-controls" aria-label="选择照明方式">
           <button className={lightMode === "flashlight" ? "active" : ""} onClick={() => chooseLight("flashlight")}><Flashlight size={16} />补光灯</button>
-          <button className={lightMode === "phone" ? "active" : ""} disabled={interactions.phoneLost || phone.battery <= 0} onClick={() => chooseLight("phone")}><Smartphone size={16} />手机光 · {phone.battery}%</button>
+          <button className={lightMode === "phone" ? "active" : ""} disabled={interactions.phoneLost || phone.battery <= 0} onClick={() => chooseLight("phone")}><Smartphone size={16} />{interactions.phoneLost ? "手机 · 不在身上" : `手机光 · ${phone.battery}%`}</button>
         </div>
       )}
 
@@ -1454,8 +1464,8 @@ export default function App() {
         {phase === "summitRest" && !interactions.chocolateEaten && (
           <button className="chocolate-prop" onPointerDown={(event) => { event.stopPropagation(); eatChocolate(); }} aria-label="掰一块巧克力" />
         )}
-        {phase === "marker656" && interactions.markerStep < MARKER_POINTS.length && (
-          <button className={`terrain-target night-target ${lightMode === "off" ? "unlit" : ""}`} style={{ left: `${MARKER_POINTS[interactions.markerStep].x}%`, top: `${MARKER_POINTS[interactions.markerStep].y}%` }} onPointerDown={(event) => { event.stopPropagation(); advanceMarker(); }} aria-label={`照向${MARKER_POINTS[interactions.markerStep].label}`}><span /></button>
+        {phase === "marker656" && interactions.markerStep < MARKER_POINTS.length && lightMode !== "off" && Math.hypot(look.x - (MARKER_POINTS[interactions.markerStep].x / 100 - 0.5) * 2, look.y - (MARKER_POINTS[interactions.markerStep].y / 100 - 0.5) * 2) < 0.42 && (
+          <button className="terrain-target night-target" style={{ left: `${MARKER_POINTS[interactions.markerStep].x}%`, top: `${MARKER_POINTS[interactions.markerStep].y}%` }} onPointerDown={(event) => { event.stopPropagation(); advanceMarker(); }} aria-label={`照向${MARKER_POINTS[interactions.markerStep].label}`}><span /></button>
         )}
         {phase === "roadBank" && interactions.bankStep < BANK_POINTS.length && (
           <button className={`terrain-target night-target bank-target ${lightMode === "off" ? "unlit" : ""}`} style={{ left: `${BANK_POINTS[interactions.bankStep].x}%`, top: `${BANK_POINTS[interactions.bankStep].y}%` }} onPointerDown={(event) => { event.stopPropagation(); advanceBank(); }} aria-label="抓住下一处树根"><span /></button>
@@ -1515,9 +1525,9 @@ export default function App() {
         {phase === "police" && "门口的灯还亮着"}
         {phase === "arrival" && !bagTaken && "抓住背包，拖向画面下方"}
         {phase === "arrival" && bagTaken && !moving && arrivalProgress < 1 && "看向山路，点击想走到的位置"}
-        {phase === "arrival" && moving && "正在走近 · 镜头会朝向目的地"}
+        {phase === "arrival" && moving && "走过去"}
         {phase === "trail" && route === null && "看向并点击左侧山路，或直接踩右侧石头"}
-        {phase === "trail" && route === "open" && moving && "脚步会把你带到路的那一头"}
+        {phase === "trail" && route === "open" && moving && "沿着这条路走"}
         {phase === "trail" && route === "stream" && streamStep < STONES.length && "看准发亮的石面，逐块踩过去"}
         {phase === "forestEntry" && !moving && "沿着林中透光的旧路继续走"}
         {phase === "chainTraverse" && "抓住发亮的下一段铁索，逐步横移"}

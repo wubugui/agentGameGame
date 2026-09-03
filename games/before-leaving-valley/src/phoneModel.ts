@@ -30,6 +30,7 @@ export type PhonePhoto = {
   zoom: number;
   isNew?: boolean;
   kind?: PhotoKind;
+  day?: number;
 };
 
 export type PhoneState = {
@@ -62,7 +63,7 @@ const START_MINUTE = 15 * 60 + 12;
 export const CONTACTS: Record<ContactId, { name: string; avatar: string; relation: string }> = {
   xiaoyu: { name: "小鱼", avatar: "🐟", relation: "从小一起长大" },
   mama: { name: "妈妈", avatar: "桂", relation: "刚刚在线" },
-  asha: { name: "阿夏", avatar: "夏", relation: "伦敦的同学 · 下周也回国" },
+  asha: { name: "阿禾", avatar: "禾", relation: "伦敦的同学 · 下周也回国" },
 };
 
 /* 她在英国的这一年。行李已经寄回去了，照片都在这部手机里。 */
@@ -97,7 +98,7 @@ const INITIAL_PHOTOS: PhonePhoto[] = [
   {
     id: "memory-blue-train",
     asset: "art/memory-blue-train-v1.webp",
-    title: "阿夏把最后一瓣橘子给我",
+    title: "阿禾把最后一瓣橘子给我",
     place: "去北方的慢车",
     dateLabel: "去年11月",
     position: { x: 53, y: 50 },
@@ -250,6 +251,7 @@ export function phoneReducer(state: PhoneState, action: PhoneAction): PhoneState
         id: messageId("photo"),
         dateLabel: "今天",
         minute: state.minuteOfDay,
+        day: state.date.day,
         isNew: true,
       };
       return {

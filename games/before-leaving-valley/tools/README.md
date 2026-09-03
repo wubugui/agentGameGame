@@ -48,3 +48,11 @@ node tools/shot.mjs school out.png "document.querySelector('.map-prop').dispatch
 ```
 
 阅读节奏模式：`set PACED=1` 后运行 smoke.mjs，脚本会按每字约 0.18 秒读独白、在三个场景拍照并发给朋友、看消息、在山顶读信 9 秒、结尾读译文 14 秒，输出一次"像人一样玩"的实测时长。首屏测量：`node tools/perf.mjs`（先 `npx vite preview --port 5175`）。
+
+JS 探针（在真实布局下读取任意表达式的值）：
+
+```bash
+EVAL="document.querySelector('.map-prop').getBoundingClientRect().toJSON()" node tools/probe.mjs school x "" 1500
+```
+
+QA 记录见 `docs/QA_REPORT.md`。

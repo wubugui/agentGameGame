@@ -325,3 +325,6 @@ button:focus-visible,input:focus-visible { outline:2px solid #f5d8a3; outline-of
 
 /* Reduced motion: show the chapter card statically for its React-timed lifetime. */
 @media (prefers-reduced-motion:reduce) { .chapter-card { animation:none; opacity:1; transform:none; } }
+.credits-skip { font-size:12px; }
+.letter-paper .letter-zh { font-size:12px; line-height:1.9; }
+.photo-detail-image.is-letter { min-height:600px; }
