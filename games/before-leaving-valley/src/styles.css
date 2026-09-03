@@ -278,3 +278,21 @@ button:focus-visible,input:focus-visible { outline:2px solid #f5d8a3; outline-of
 .chapter-card small { font-size:11px; letter-spacing:.34em; color:rgba(255,255,255,.7); }
 .chapter-card strong { font-size:clamp(30px,4.4vw,52px); font-weight:400; letter-spacing:.2em; }
 @keyframes chapterCard { 0% { opacity:0; transform:translateY(10px); } 18% { opacity:1; transform:none; } 74% { opacity:1; } 100% { opacity:0; transform:translateY(-6px); } }
+
+/* ---------- pause / settings menu ---------- */
+.menu-overlay { position:absolute; inset:0; z-index:40; display:grid; place-items:center; background:rgba(6,12,15,.62); backdrop-filter:blur(10px); animation:letterViewIn .35s ease both; cursor:default; }
+.menu-card { width:min(420px,88vw); padding:30px 30px 26px; border:1px solid rgba(255,255,255,.14); border-radius:22px; background:rgba(12,22,26,.86); box-shadow:0 30px 70px rgba(0,0,0,.5); color:white; }
+.menu-card h3 { margin:0 0 4px; font-size:22px; font-weight:450; letter-spacing:.16em; }
+.menu-card .eyebrow { margin:0 0 20px; }
+.menu-row { display:grid; grid-template-columns:1fr 150px 40px; align-items:center; gap:12px; margin:12px 0; font-size:12px; letter-spacing:.08em; color:rgba(255,255,255,.85); }
+.menu-row input[type=range] { width:100%; accent-color:#e5ca92; }
+.menu-row output { text-align:right; font-variant-numeric:tabular-nums; color:rgba(255,255,255,.55); font-size:11px; }
+.menu-toggle { display:flex; justify-content:space-between; align-items:center; margin:16px 0 6px; font-size:12px; letter-spacing:.08em; }
+.menu-toggle button { min-width:64px; height:30px; padding:0 12px; border:1px solid rgba(255,255,255,.22); border-radius:15px; background:rgba(255,255,255,.06); color:white; cursor:pointer; font-size:11px; letter-spacing:.08em; }
+.menu-toggle button.on { background:#e5ca92; color:#26302c; border-color:#e5ca92; }
+.menu-actions { display:flex; gap:10px; margin-top:22px; }
+.menu-actions .primary-button, .menu-actions .secondary-button { flex:1; }
+.menu-hint { margin:14px 0 0; text-align:center; color:rgba(255,255,255,.35); font-size:10px; letter-spacing:.2em; }
+.reduce-motion .film-grain, .reduce-motion .scene-blink { display:none; }
+.reduce-motion .title-art { animation:none; }
+.reduce-motion .chapter-card { animation-duration:3s; }

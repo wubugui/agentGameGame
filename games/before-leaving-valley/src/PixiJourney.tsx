@@ -37,11 +37,12 @@ type Props = {
   breath: BreathState;
   anchorLayerRef?: { current: HTMLDivElement | null };
   onReady?: () => void;
+  reduceMotion?: boolean;
 };
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
-export default function PixiJourney({ scene, walking, progress = 0, look, walkFocus, breath, anchorLayerRef, onReady }: Props) {
+export default function PixiJourney({ scene, walking, progress = 0, look, walkFocus, breath, anchorLayerRef, onReady, reduceMotion = false }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef(scene);
   const walkingRef = useRef(walking);
@@ -49,7 +50,9 @@ export default function PixiJourney({ scene, walking, progress = 0, look, walkFo
   const lookRef = useRef(look);
   const walkFocusRef = useRef(walkFocus);
   const breathRef = useRef(breath);
+  const reduceMotionRef = useRef(reduceMotion);
 
+  useEffect(() => { reduceMotionRef.current = reduceMotion; }, [reduceMotion]);
   useEffect(() => { sceneRef.current = scene; }, [scene]);
   useEffect(() => { walkingRef.current = walking; }, [walking]);
   useEffect(() => { progressRef.current = progress; }, [progress]);
@@ -172,13 +175,14 @@ export default function PixiJourney({ scene, walking, progress = 0, look, walkFo
         smoothedLook.y += (clamp(requestedLook.y, -1, 1) - smoothedLook.y) * response;
 
         const profile = BREATH_PROFILE[breathRef.current];
+        const motionScale = reduceMotionRef.current ? 0.25 : 1;
         const breathPhase = elapsed * Math.PI * 2 * profile.frequency;
         const inhaleCurve = Math.sin(breathPhase) * 0.72 + Math.sin(breathPhase * 2 + 0.5) * 0.28;
-        const breathY = inhaleCurve * profile.amplitude;
-        const breathRoll = Math.sin(breathPhase + 0.8) * profile.sway;
+        const breathY = inhaleCurve * profile.amplitude * motionScale;
+        const breathRoll = Math.sin(breathPhase + 0.8) * profile.sway * motionScale;
         const stepPhase = elapsed * Math.PI * 2 * 1.72;
-        const stepY = walkingRef.current ? Math.sin(stepPhase) * 5.2 + Math.abs(Math.sin(stepPhase * 0.5)) * 1.8 : 0;
-        const stepX = walkingRef.current ? Math.sin(stepPhase * 0.5) * 1.8 : 0;
+        const stepY = walkingRef.current ? (Math.sin(stepPhase) * 5.2 + Math.abs(Math.sin(stepPhase * 0.5)) * 1.8) * motionScale : 0;
+        const stepX = walkingRef.current ? Math.sin(stepPhase * 0.5) * 1.8 * motionScale : 0;
 
         const lookMagnitude = Math.min(1, Math.max(Math.abs(smoothedLook.x), Math.abs(smoothedLook.y)));
         const lookZoom = LOOK_ZOOM_MIN + LOOK_ZOOM_RANGE * Math.pow(lookMagnitude, LOOK_ZOOM_EXP) + (walkingRef.current ? WALK_ZOOM_BUMP : 0);
@@ -190,7 +194,7 @@ export default function PixiJourney({ scene, walking, progress = 0, look, walkFo
           container.visible = container.alpha > 0.005;
         });
 
-        const moteTarget = moteAlphaFor(JOURNEY_SCENE_INFO[sceneRef.current].light);
+        const moteTarget = reduceMotionRef.current ? 0 : moteAlphaFor(JOURNEY_SCENE_INFO[sceneRef.current].light);
         motes.alpha += (moteTarget - motes.alpha) * Math.min(1, deltaSeconds * 0.9);
         motes.visible = motes.alpha > 0.01;
         if (motes.visible) {

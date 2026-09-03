@@ -29,3 +29,7 @@ ffmpeg -y -i keyed.png -c:v libwebp -quality 92 public/art/name-v1.webp
 ```
 
 `key-sprite.py` 兼容本机的 Python 2.7 + PIL + numpy。
+
+## 自动通关冒烟测试
+
+把 `tools/autoplay.js` 整段粘进浏览器控制台（停在标题页），它会用合成事件从下车一路点到完成页，时间线写在 `window.__log`。2026-09-04 的结果：全程无卡点，纯操作路径 98 秒。

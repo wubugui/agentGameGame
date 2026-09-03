@@ -1,5 +1,7 @@
-import { Check, Flashlight, RotateCcw, Smartphone, Volume2, VolumeX } from "lucide-react";
+import { Check, Flashlight, RotateCcw, Settings as SettingsIcon, Smartphone, Volume2, VolumeX } from "lucide-react";
 import { lazy, useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { loadSettings, saveSettings, type GameSettings } from "./settings";
+import { SILENCE, Soundscape, type Ambience, type SoundMaterial } from "./soundscape";
 import Phone, { type PhoneTab } from "./Phone";
 import type { BreathState, JourneyScene, LookPoint } from "./PixiJourney";
 import { createInitialPhoneState, formatGameTime, NEXT_MORNING_DATE, phoneReducer, sceneAsset, type ContactId, type PhoneState } from "./phoneModel";
@@ -69,11 +71,29 @@ const CHAPTER_CARDS: Partial<Record<JourneyScene, { eyebrow: string; title: stri
   searchRoad: { eyebrow: "第二天 · 清晨", title: "回头路" },
 };
 
-type SoundscapeNodes = {
-  windGain: GainNode;
-  windFilter: BiquadFilterNode;
-  engineGain: GainNode;
+// What each place sounds like. Wind tone: open ridge ~1450, forest ~900, night ~540.
+const AMBIENCE: Record<JourneyScene, Ambience> = {
+  arrival: { ...SILENCE, wind: 0.4, windTone: 920, birds: 0.5 },
+  forestEntry: { ...SILENCE, wind: 0.25, windTone: 900, birds: 0.9, stream: 0.12 },
+  trail: { ...SILENCE, wind: 0.25, windTone: 900, birds: 0.8, stream: 0.7 },
+  chainTraverse: { ...SILENCE, wind: 0.95, windTone: 1450, birds: 0.12 },
+  rubbleSlope: { ...SILENCE, wind: 0.75, windTone: 1450, birds: 0.2 },
+  viewpoint: { ...SILENCE, wind: 0.85, windTone: 1450, birds: 0.25 },
+  letterBox: { ...SILENCE, wind: 0.7, windTone: 1300, birds: 0.2 },
+  sunsetFork: { ...SILENCE, wind: 0.6, windTone: 1200, birds: 0.08, crickets: 0.3 },
+  nightSlope: { ...SILENCE, wind: 0.5, windTone: 540, crickets: 0.7 },
+  deepForest: { ...SILENCE, wind: 0.2, windTone: 540, crickets: 0.9, stream: 0.1 },
+  roadside: { ...SILENCE, wind: 0.3, windTone: 700, crickets: 0.5, engine: 0.6 },
+  carInterior: { ...SILENCE, wind: 0.05, windTone: 360, engine: 1, heater: 1 },
+  searchRoad: { ...SILENCE, wind: 0.25, windTone: 900, birds: 0.7, stream: 0.1 },
+  valleyExit: { ...SILENCE, wind: 0.3, windTone: 900, birds: 0.6, engine: 0.15 },
 };
+
+const stepMaterialFor = (scene: JourneyScene): SoundMaterial =>
+  scene === "chainTraverse" || scene === "rubbleSlope" || scene === "nightSlope" ? "rock"
+    : scene === "roadside" || scene === "valleyExit" || scene === "arrival" ? "road"
+      : scene === "sunsetFork" ? "gravel"
+        : "soft";
 
 const requestedDevScene = import.meta.env.DEV ? new URLSearchParams(window.location.search).get("scene") : null;
 const DEV_SCENE: JourneyScene | null = isJourneyScene(requestedDevScene) ? requestedDevScene : null;
@@ -210,13 +230,14 @@ export default function App() {
   const [stagePhotoTaken, setStagePhotoTaken] = useState(false);
   const [soundOn, setSoundOn] = useState(true);
   const [audioReady, setAudioReady] = useState(false);
+  const [settings, setSettings] = useState<GameSettings>(() => loadSettings());
+  const [menuOpen, setMenuOpen] = useState(false);
   const [savedJourney, setSavedJourney] = useState<JourneySave | null>(() => loadJourneySave());
   const [deerState, setDeerState] = useState<DeerState>("hidden");
   const [letterOpen, setLetterOpen] = useState(false);
   const [creditLine, setCreditLine] = useState(0);
   const [phone, dispatchPhone] = useReducer(phoneReducer, undefined, createJourneyPhoneState);
-  const audioRef = useRef<AudioContext | null>(null);
-  const audioNodesRef = useRef<SoundscapeNodes | null>(null);
+  const soundRef = useRef<Soundscape | null>(null);
   const breathAudioTimerRef = useRef(0);
   const bagStartRef = useRef({ x: 0, y: 0 });
   const transitionRef = useRef(false);
@@ -240,59 +261,29 @@ export default function App() {
   }, [phase, sceneProgress]);
 
   const startAudio = useCallback(() => {
-    if (audioRef.current) return;
-    const AudioCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioCtor) return;
-    const ctx = new AudioCtor();
-    const buffer = ctx.createBuffer(1, ctx.sampleRate * 3, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    let last = 0;
-    for (let index = 0; index < data.length; index += 1) {
-      last = last * 0.985 + (Math.random() * 2 - 1) * 0.015;
-      data[index] = last;
+    if (soundRef.current) return;
+    try {
+      const sound = new Soundscape();
+      sound.setMaster(settings.master);
+      soundRef.current = sound;
+      setAudioReady(true);
+    } catch {
+      // No Web Audio; the game stays silent but playable.
     }
-    const wind = ctx.createBufferSource();
-    const filter = ctx.createBiquadFilter();
-    const gain = ctx.createGain();
-    wind.buffer = buffer;
-    wind.loop = true;
-    filter.type = "lowpass";
-    filter.frequency.value = 720;
-    gain.gain.value = 0.035;
-    wind.connect(filter).connect(gain).connect(ctx.destination);
-    wind.start();
-    const engine = ctx.createOscillator();
-    const engineFilter = ctx.createBiquadFilter();
-    const engineGain = ctx.createGain();
-    engine.type = "sawtooth";
-    engine.frequency.value = 47;
-    engineFilter.type = "lowpass";
-    engineFilter.frequency.value = 92;
-    engineGain.gain.value = 0;
-    engine.connect(engineFilter).connect(engineGain).connect(ctx.destination);
-    engine.start();
-    audioRef.current = ctx;
-    audioNodesRef.current = { windGain: gain, windFilter: filter, engineGain };
-    setAudioReady(true);
-  }, []);
+  }, [settings.master]);
 
   const stepSound = useCallback(() => {
-    const ctx = audioRef.current;
-    if (!ctx || !soundOn) return;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    const rocky = scene === "chainTraverse" || scene === "rubbleSlope" || scene === "nightSlope";
-    const soft = scene === "forestEntry" || scene === "trail" || scene === "deepForest" || scene === "searchRoad";
-    const baseFrequency = rocky ? 92 : soft ? 68 : 78;
-    osc.type = "triangle";
-    osc.frequency.setValueAtTime(baseFrequency + Math.random() * 24, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(rocky ? 48 : 38, ctx.currentTime + 0.13);
-    gain.gain.setValueAtTime(rocky ? 0.038 : soft ? 0.022 : 0.03, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.14);
-    osc.connect(gain).connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.15);
+    if (!soundOn) return;
+    soundRef.current?.step(stepMaterialFor(scene));
   }, [scene, soundOn]);
+
+  const updateSettings = useCallback((patch: Partial<GameSettings>) => {
+    setSettings((current) => {
+      const next = { ...current, ...patch };
+      saveSettings(next);
+      return next;
+    });
+  }, []);
 
   const beginRecovery = useCallback((duration = 5200) => {
     window.clearTimeout(recoveryTimerRef.current);
@@ -302,68 +293,35 @@ export default function App() {
 
   useEffect(() => {
     if (!soundOn) {
-      const ctx = audioRef.current;
-      if (ctx && ctx.state === "running") void ctx.suspend();
+      soundRef.current?.suspend();
       return;
     }
     startAudio();
-    const ctx = audioRef.current;
-    if (ctx && ctx.state === "suspended") void ctx.resume();
+    soundRef.current?.resume();
   }, [soundOn, startAudio]);
 
   useEffect(() => {
-    const ctx = audioRef.current;
-    const nodes = audioNodesRef.current;
-    if (!audioReady || !ctx || !nodes) return;
+    soundRef.current?.setMaster(settings.master);
+  }, [audioReady, settings.master]);
+
+  useEffect(() => {
+    const sound = soundRef.current;
+    if (!audioReady || !sound) return;
     const activeScene: JourneyScene = phase === "title" ? "arrival" : phase === "complete" ? "valleyExit" : phase;
-    const openWindScenes: JourneyScene[] = ["chainTraverse", "rubbleSlope", "viewpoint", "letterBox", "sunsetFork", "nightSlope"];
-    const forestScenes: JourneyScene[] = ["forestEntry", "trail", "deepForest", "searchRoad"];
-    const windTarget = activeScene === "carInterior" ? 0.006 : activeScene === "roadside" ? 0.024 : openWindScenes.includes(activeScene) ? 0.072 : forestScenes.includes(activeScene) ? 0.027 : 0.038;
-    const filterTarget = activeScene === "carInterior" ? 360 : activeScene === "nightSlope" || activeScene === "deepForest" ? 540 : openWindScenes.includes(activeScene) ? 1450 : 920;
-    const engineTarget = activeScene === "carInterior" ? 0.034 : activeScene === "roadside" ? 0.02 : 0;
-    const now = ctx.currentTime;
-    nodes.windGain.gain.cancelScheduledValues(now);
-    nodes.windFilter.frequency.cancelScheduledValues(now);
-    nodes.engineGain.gain.cancelScheduledValues(now);
-    nodes.windGain.gain.linearRampToValueAtTime(windTarget, now + 1.2);
-    nodes.windFilter.frequency.linearRampToValueAtTime(filterTarget, now + 1.2);
-    nodes.engineGain.gain.linearRampToValueAtTime(engineTarget, now + 1.5);
+    sound.setAmbience(phase === "title" ? { ...AMBIENCE.arrival, wind: 0.25, birds: 0.3 } : AMBIENCE[activeScene]);
+    if (phase === "carInterior") sound.carDoor();
   }, [audioReady, phase]);
 
   useEffect(() => {
     window.clearInterval(breathAudioTimerRef.current);
-    const ctx = audioRef.current;
-    if (!audioReady || !ctx || !soundOn || phase === "title" || phase === "complete") return;
+    const sound = soundRef.current;
+    if (!audioReady || !sound || !soundOn || phase === "title" || phase === "complete") return;
     const profile = breathState === "walking"
       ? { interval: 1720, duration: .72, gain: .015, cutoff: 1050 }
       : breathState === "recovery"
         ? { interval: 2500, duration: 1.05, gain: .021, cutoff: 920 }
         : { interval: 5000, duration: 1.18, gain: .0065, cutoff: 760 };
-    const playBreath = () => {
-      if (ctx.state !== "running") return;
-      const source = ctx.createBufferSource();
-      const filter = ctx.createBiquadFilter();
-      const gain = ctx.createGain();
-      const sampleCount = Math.ceil(ctx.sampleRate * profile.duration);
-      const buffer = ctx.createBuffer(1, sampleCount, ctx.sampleRate);
-      const data = buffer.getChannelData(0);
-      let shaped = 0;
-      for (let index = 0; index < data.length; index += 1) {
-        shaped = shaped * .86 + (Math.random() * 2 - 1) * .14;
-        data[index] = shaped;
-      }
-      source.buffer = buffer;
-      filter.type = "bandpass";
-      filter.frequency.value = profile.cutoff;
-      filter.Q.value = .55;
-      const now = ctx.currentTime;
-      gain.gain.setValueAtTime(.0001, now);
-      gain.gain.exponentialRampToValueAtTime(profile.gain, now + profile.duration * .4);
-      gain.gain.exponentialRampToValueAtTime(.0001, now + profile.duration);
-      source.connect(filter).connect(gain).connect(ctx.destination);
-      source.start(now);
-      source.stop(now + profile.duration + .04);
-    };
+    const playBreath = () => sound.breath(profile);
     const first = window.setTimeout(playBreath, 420);
     breathAudioTimerRef.current = window.setInterval(playBreath, profile.interval);
     return () => {
@@ -427,25 +385,30 @@ export default function App() {
 
   useEffect(() => {
     const targets: Partial<Record<MusicKind, number>> = {};
-    if (soundOn) {
-      if (phase === "carInterior") targets.warm = MUSIC_TRACKS.warm.volume;
-      else if (phase === "complete" || (phase === "valleyExit" && interactions.endingGallerySeen)) targets.end = MUSIC_TRACKS.end.volume;
-      else if (phase !== "title" && DAY_MUSIC_SCENES.includes(phase)) targets.day = MUSIC_TRACKS.day.volume;
+    const level = settings.music;
+    if (soundOn && level > 0) {
+      if (phase === "carInterior") targets.warm = MUSIC_TRACKS.warm.volume * level;
+      else if (phase === "complete" || (phase === "valleyExit" && interactions.endingGallerySeen)) targets.end = MUSIC_TRACKS.end.volume * level;
+      else if (phase !== "title" && DAY_MUSIC_SCENES.includes(phase)) targets.day = MUSIC_TRACKS.day.volume * level;
     }
     musicTargetsRef.current = targets;
-  }, [interactions.endingGallerySeen, phase, soundOn]);
+  }, [interactions.endingGallerySeen, phase, settings.music, soundOn]);
 
   useEffect(() => {
     const keyDown = (event: KeyboardEvent) => {
-      if (event.key.toLowerCase() === "p" && phase !== "title" && phase !== "complete") {
+      if (event.key.toLowerCase() === "p" && phase !== "title" && phase !== "complete" && !menuOpen) {
         if (interactions.phoneLost) {
           flash("外套口袋是空的。手机不在身上。");
           return;
         }
+        soundRef.current?.uiTick(!phoneOpen);
         setPhoneOpen((value) => !value);
         setPhoneTab("home");
       }
-      if (event.key === "Escape") setPhoneOpen(false);
+      if (event.key === "Escape") {
+        if (phoneOpen) setPhoneOpen(false);
+        else if (phase !== "complete") setMenuOpen((value) => !value);
+      }
       if (event.code === "Space" && phase === "trail" && route !== "open") {
         event.preventDefault();
         advanceStone();
@@ -597,8 +560,7 @@ export default function App() {
     window.clearTimeout(feedbackTimerRef.current);
     window.clearInterval(breathAudioTimerRef.current);
     replyTimersRef.current.forEach(window.clearTimeout);
-    const ctx = audioRef.current;
-    if (ctx && ctx.state !== "closed") void ctx.close();
+    soundRef.current?.dispose();
   }, []);
 
   const resetRuntime = (nextPhase: "title" | "arrival") => {
@@ -637,9 +599,9 @@ export default function App() {
   const begin = () => {
     if (soundOn) {
       startAudio();
-      const ctx = audioRef.current;
-      if (ctx && ctx.state === "suspended") void ctx.resume();
+      soundRef.current?.resume();
     }
+    setMenuOpen(false);
     resetRuntime("arrival");
   };
 
@@ -647,9 +609,9 @@ export default function App() {
     if (!savedJourney) return;
     if (soundOn) {
       startAudio();
-      const ctx = audioRef.current;
-      if (ctx && ctx.state === "suspended") void ctx.resume();
+      soundRef.current?.resume();
     }
+    setMenuOpen(false);
     cancelAnimationFrame(walkFrameRef.current);
     setPhase(savedJourney.phase);
     setScene(savedJourney.scene);
@@ -807,6 +769,7 @@ export default function App() {
     setWalkFocus({ x: (point.x / 100 - 0.5) * 2, y: (point.y / 100 - 0.5) * 2 });
     setMoving(true);
     setBreathState("walking");
+    if (soundOn) soundRef.current?.chainClink();
     stepSound();
     window.setTimeout(() => {
       const next = interactions.chainStep + 1;
@@ -903,6 +866,7 @@ export default function App() {
       if (nightScene === "deepForest" && next >= NIGHT_SLOPE_POINTS.length + DEEP_FOREST_POINTS.length) {
         setPhoneOpen(false);
         if (lightMode === "phone") setLightMode("off");
+        if (soundOn) soundRef.current?.slip();
         setThought("脚下的石头滚了一下。我抓住树，站稳了——再摸口袋时，手机已经不在了。");
         beginRecovery(9000);
       } else {
@@ -955,10 +919,17 @@ export default function App() {
     }
     setCameraAim({ x: 50 + look.x * 34, y: 50 + look.y * 28 });
     setPhoneTab(tab);
+    if (soundOn) soundRef.current?.uiTick(true);
     setPhoneOpen(true);
   };
 
+  const closePhone = () => {
+    if (soundOn) soundRef.current?.uiTick(false);
+    setPhoneOpen(false);
+  };
+
   const takePhoto = (snapshot?: string) => {
+    if (soundOn) soundRef.current?.shutter();
     dispatchPhone({
       type: "capture_photo",
       photo: {
@@ -993,9 +964,26 @@ export default function App() {
   const renderScene = phase === "complete" ? "valleyExit" : scene;
   const progress = phase === "arrival" ? arrivalProgress : phase === "trail" ? trailProgress : phase === "complete" ? 1 : sceneProgress;
 
+  const menu = menuOpen ? (
+    <div className="menu-overlay" onPointerDown={(event) => { if (event.target === event.currentTarget) setMenuOpen(false); }}>
+      <div className="menu-card" role="dialog" aria-label="设置">
+        <p className="eyebrow">离开山谷以前</p>
+        <h3>设置</h3>
+        <label className="menu-row"><span>环境声与音效</span><input type="range" min={0} max={1} step={0.05} value={settings.master} onChange={(event) => updateSettings({ master: Number(event.target.value) })} /><output>{Math.round(settings.master * 100)}</output></label>
+        <label className="menu-row"><span>音乐</span><input type="range" min={0} max={1} step={0.05} value={settings.music} onChange={(event) => updateSettings({ music: Number(event.target.value) })} /><output>{Math.round(settings.music * 100)}</output></label>
+        <div className="menu-toggle"><span>镜头呼吸与浮动细节</span><button className={settings.motion ? "on" : ""} onClick={() => updateSettings({ motion: !settings.motion })}>{settings.motion ? "开" : "关"}</button></div>
+        <div className="menu-actions">
+          <button className="primary-button" onClick={() => setMenuOpen(false)}>继续</button>
+          {phase !== "title" && <button className="secondary-button" onClick={() => { setMenuOpen(false); setPhoneOpen(false); setPhase("title"); }}>回到标题</button>}
+        </div>
+        <p className="menu-hint">ESC 打开或关闭</p>
+      </div>
+    </div>
+  ) : null;
+
   if (phase === "title") return (
-    <main className="game-shell title-screen" onPointerMove={worldMove}>
-      <PixiJourney scene="arrival" walking={false} progress={0} look={look} walkFocus={null} breath="calm" onReady={onCanvasReady} />
+    <main className={`game-shell title-screen ${settings.motion ? "" : "reduce-motion"}`} onPointerMove={worldMove}>
+      <PixiJourney scene="arrival" walking={false} progress={0} look={look} walkFocus={null} breath="calm" onReady={onCanvasReady} reduceMotion={!settings.motion} />
       <div className="title-art" style={{ backgroundImage: `url("${import.meta.env.BASE_URL}art/title-key-art-v1.webp")`, "--tilt-x": `${(-look.x * 14).toFixed(1)}px`, "--tilt-y": `${(-look.y * 9).toFixed(1)}px` } as React.CSSProperties} />
       <div className="cinema-grade" />
       <div className={`title-card ${canvasReady ? "is-ready" : ""}`}>
@@ -1005,11 +993,13 @@ export default function App() {
         <div className="title-actions">
           <button className="primary-button" onClick={savedJourney ? continueJourney : begin}>{savedJourney ? "继续旅程" : "下车"}</button>
           {savedJourney && <button className="secondary-button" onClick={begin}>重新开始</button>}
+          <button className="secondary-button" onClick={() => setMenuOpen(true)}>设置</button>
         </div>
         {savedJourney && <p className="save-hint">上次停在 {SCENE_INFO[savedJourney.scene].place} · {formatGameTime(savedJourney.phone.minuteOfDay)} · 手机 {savedJourney.phone.battery}%</p>}
         <p className="title-hint">移动鼠标观察 · 点击想去的地方 · P 打开手机 · 建议佩戴耳机</p>
         <p className="music-credit">Music: “Clear Air” “Simple Duet” “Promises to Keep” — Kevin MacLeod (incompetech.com) · CC BY 4.0</p>
       </div>
+      {menu}
     </main>
   );
 
@@ -1017,7 +1007,7 @@ export default function App() {
     const creditsDone = creditLine > CREDIT_LINES_TOTAL;
     return (
       <main className="game-shell complete-screen" onPointerDown={() => { if (!creditsDone) setCreditLine(CREDIT_LINES_TOTAL + 1); }}>
-        <PixiJourney scene="valleyExit" walking={false} progress={1} look={look} walkFocus={null} breath="calm" />
+        <PixiJourney scene="valleyExit" walking={false} progress={1} look={look} walkFocus={null} breath="calm" reduceMotion={!settings.motion} />
         <div className="cinema-grade" />
         {!creditsDone ? (
           <div className="credits-poem" aria-live="polite">
@@ -1049,8 +1039,8 @@ export default function App() {
   const displayTime = formatGameTime(phone.minuteOfDay);
 
   return (
-    <main className={`game-shell scene-${scene} scene-light-${info.light} light-${lightMode} ${moving ? "is-moving" : ""} ${letterOpen ? "letter-open" : ""} breath-${breathState}`}>
-      <PixiJourney scene={renderScene} walking={moving} progress={progress} look={look} walkFocus={walkFocus} breath={breathState} anchorLayerRef={anchorLayerRef} />
+    <main className={`game-shell scene-${scene} scene-light-${info.light} light-${lightMode} ${moving ? "is-moving" : ""} ${letterOpen ? "letter-open" : ""} ${settings.motion ? "" : "reduce-motion"} breath-${breathState}`}>
+      <PixiJourney scene={renderScene} walking={moving} progress={progress} look={look} walkFocus={walkFocus} breath={breathState} anchorLayerRef={anchorLayerRef} reduceMotion={!settings.motion} />
       <div className="cinema-grade" />
       <div className="film-grain" />
       <div className="scene-blink" key={`blink-${phase}`} />
@@ -1066,6 +1056,7 @@ export default function App() {
       <div className="utility-controls">
         <button onClick={() => setSoundOn((value) => !value)} aria-label="切换声音">{soundOn ? <Volume2 size={17} /> : <VolumeX size={17} />}</button>
         <button className={interactions.phoneLost ? "phone-missing" : ""} onClick={() => openPhone()} aria-label={interactions.phoneLost ? "手机已遗失" : "打开手机"}><Smartphone size={17} /><kbd>P</kbd></button>
+        <button onClick={() => setMenuOpen(true)} aria-label="设置"><SettingsIcon size={17} /></button>
       </div>
 
       {(phase === "nightSlope" || phase === "deepForest") && (
@@ -1173,7 +1164,7 @@ export default function App() {
         <Phone
           tab={phoneTab}
           setTab={setPhoneTab}
-          close={() => setPhoneOpen(false)}
+          close={closePhone}
           phone={phone}
           dispatch={dispatchPhone}
           scene={scene}
@@ -1190,6 +1181,7 @@ export default function App() {
           letterTranslated={interactions.phoneReturned}
         />
       )}
+      {menu}
     </main>
   );
 }
