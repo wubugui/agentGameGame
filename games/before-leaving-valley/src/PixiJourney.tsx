@@ -99,6 +99,26 @@ export default function PixiJourney({ scene, walking, progress = 0, look, walkFo
       const haze = new Graphics();
       app.stage.addChild(haze);
 
+      // Drifting motes: pollen and dust in the daylight, a few sparks of it
+      // at dusk and dawn, nothing in the dark. Purely atmospheric.
+      const moteTexture = app.renderer.generateTexture(new Graphics().circle(8, 8, 8).fill({ color: 0xfff1d6, alpha: 1 }));
+      const motes = new Container();
+      motes.alpha = 0;
+      app.stage.addChild(motes);
+      type Mote = { sprite: Sprite; speed: number; drift: number; phase: number; size: number };
+      const moteList: Mote[] = [];
+      for (let index = 0; index < 46; index += 1) {
+        const sprite = new Sprite(moteTexture);
+        sprite.anchor.set(0.5);
+        const size = 0.12 + Math.random() * 0.3;
+        sprite.scale.set(size);
+        sprite.alpha = 0.12 + Math.random() * 0.3;
+        sprite.position.set(Math.random() * 2000, Math.random() * 1200);
+        motes.addChild(sprite);
+        moteList.push({ sprite, speed: 4 + Math.random() * 10, drift: 6 + Math.random() * 14, phase: Math.random() * Math.PI * 2, size });
+      }
+      const moteAlphaFor = (light: string) => light === "day" ? 0.85 : light === "dusk" ? 0.4 : light === "dawn" ? 0.55 : light === "interior" ? 0.25 : 0;
+
       const fitSprite = (sprite: Sprite, index: number) => {
         if (sprite.texture.width <= 1 || sprite.texture.height <= 1) return;
         const width = app.screen.width;
@@ -169,6 +189,22 @@ export default function PixiJourney({ scene, walking, progress = 0, look, walkFo
           container.alpha += (targetAlpha - container.alpha) * Math.min(1, ticker.deltaTime * 0.055);
           container.visible = container.alpha > 0.005;
         });
+
+        const moteTarget = moteAlphaFor(JOURNEY_SCENE_INFO[sceneRef.current].light);
+        motes.alpha += (moteTarget - motes.alpha) * Math.min(1, deltaSeconds * 0.9);
+        motes.visible = motes.alpha > 0.01;
+        if (motes.visible) {
+          const width = app.screen.width;
+          const height = app.screen.height;
+          moteList.forEach((mote) => {
+            mote.sprite.y -= mote.speed * deltaSeconds * (walkingRef.current ? 1.8 : 1);
+            mote.sprite.x += Math.sin(elapsed * 0.6 + mote.phase) * mote.drift * deltaSeconds - smoothedLook.x * 12 * deltaSeconds;
+            if (mote.sprite.y < -20) { mote.sprite.y = height + 20; mote.sprite.x = Math.random() * width; }
+            if (mote.sprite.x < -20) mote.sprite.x = width + 20;
+            if (mote.sprite.x > width + 20) mote.sprite.x = -20;
+            mote.sprite.alpha = (0.1 + 0.28 * (0.5 + 0.5 * Math.sin(elapsed * 1.3 + mote.phase * 3))) * (0.6 + mote.size);
+          });
+        }
 
         sceneSprites.forEach((sprite, index) => {
           const active = index === targetIndex;

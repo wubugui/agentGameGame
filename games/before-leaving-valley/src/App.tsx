@@ -60,6 +60,15 @@ type DeerState = "hidden" | "standing" | "leaving";
 const DEER_LOOK_X = (0.24 - 0.5) * 2;
 const CREDIT_LINES_TOTAL = LETTER_LINES_IT.length + LETTER_LINES_ZH.length;
 
+// Quiet chapter cards at the turns of the day.
+const CHAPTER_CARDS: Partial<Record<JourneyScene, { eyebrow: string; title: string }>> = {
+  arrival: { eyebrow: "多洛米蒂 · 八月", title: "来都来了" },
+  sunsetFork: { eyebrow: "日落", title: "光已经走到山后面" },
+  nightSlope: { eyebrow: "夜", title: "一小块一小块地走" },
+  roadside: { eyebrow: "谷底公路", title: "远处终于有了灯" },
+  searchRoad: { eyebrow: "第二天 · 清晨", title: "回头路" },
+};
+
 type SoundscapeNodes = {
   windGain: GainNode;
   windFilter: BiquadFilterNode;
@@ -1045,6 +1054,12 @@ export default function App() {
       <div className="cinema-grade" />
       <div className="film-grain" />
       <div className="scene-blink" key={`blink-${phase}`} />
+      {CHAPTER_CARDS[scene] && phase === scene && (
+        <div className="chapter-card" key={`chapter-${phase}`} aria-hidden="true">
+          <small>{CHAPTER_CARDS[scene]!.eyebrow}</small>
+          <strong>{CHAPTER_CARDS[scene]!.title}</strong>
+        </div>
+      )}
       {info.light === "night" && <><div className="journey-night-ambient" /><div className="journey-darkness" style={{ "--beam-x": `${(look.x + 1) * 50}%`, "--beam-y": `${(look.y + 1) * 50}%` } as React.CSSProperties} /><div className="journey-light-volume" style={{ "--beam-x": `${(look.x + 1) * 50}%`, "--beam-y": `${(look.y + 1) * 50}%` } as React.CSSProperties} /></>}
 
       <div className="scene-caption"><span>{displayTime}</span>{info.place} · {info.elevation}</div>

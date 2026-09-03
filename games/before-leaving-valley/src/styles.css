@@ -272,3 +272,9 @@ button:focus-visible,input:focus-visible { outline:2px solid #f5d8a3; outline-of
 .letter-view-paper p { min-height:1.85em; }
 .letter-open .action-whisper, .letter-open .letter-prop { opacity:0; pointer-events:none; }
 .letter-view-paper { display:flex; flex-direction:column; justify-content:center; }
+
+/* ---------- chapter cards at the turns of the day ---------- */
+.chapter-card { position:absolute; z-index:14; left:0; right:0; top:34%; display:grid; justify-items:center; gap:10px; text-align:center; color:white; text-shadow:0 3px 30px rgba(0,0,0,.85); pointer-events:none; animation:chapterCard 5.2s ease both; }
+.chapter-card small { font-size:11px; letter-spacing:.34em; color:rgba(255,255,255,.7); }
+.chapter-card strong { font-size:clamp(30px,4.4vw,52px); font-weight:400; letter-spacing:.2em; }
+@keyframes chapterCard { 0% { opacity:0; transform:translateY(10px); } 18% { opacity:1; transform:none; } 74% { opacity:1; } 100% { opacity:0; transform:translateY(-6px); } }
