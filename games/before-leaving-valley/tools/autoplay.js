@@ -38,8 +38,37 @@ async function walkTo(fx, fy, label) {
   await waitFor(() => moving(), "walk start", 4000);
   await waitFor(() => !moving(), "walk end", 12000);
 }
-async function untilScene(name) { const s = sceneOf(); const ok = await waitFor(() => sceneOf() === name, `scene ${name}`, 20000); log(`${ok ? "→" : "✗"} ${name}`); return ok; }
-async function repeat(sel, n, label, gap = 300) { for (let i = 0; i < n; i++) { await waitFor(() => !moving() && $(sel), `${label} ${i + 1}`); await press(sel, `${label} ${i + 1}/${n}`); await sleep(gap); } }
+const clock = () => (document.querySelector(".scene-caption span")?.textContent || "").trim();
+const PACED = !!window.__paced;
+// Reading pace: a person reads the two thought lines, looks around, maybe takes a photo.
+async function settle(extra = 0) {
+  if (!PACED) return;
+  await sleep(5200);
+  const text = document.querySelector(".thought-line")?.textContent || "";
+  await sleep(1200 + text.length * 180 + extra);
+}
+async function untilScene(name) { const ok = await waitFor(() => sceneOf() === name, `scene ${name}`, 20000); log(`${ok ? "OK" : "FAIL"} ${name} @ ${clock()}`); await settle(); return ok; }
+async function takePhotoAndSend(contactIndex = 0) {
+  if (!PACED) return;
+  const open = $(".utility-controls button[aria-label=\"打开手机\"]"); if (!open) return;
+  open.click(); await sleep(1500);
+  const camera = [...document.querySelectorAll(".app-grid button")].find((b) => b.textContent.includes("相机")); if (!camera) { $(".phone-close")?.click(); return; }
+  camera.click(); await sleep(2500);
+  $(".shutter")?.click(); await sleep(2500);
+  $(".camera-thumbnail")?.click(); await sleep(1500);
+  $(".gallery-grid button")?.click(); await sleep(2000);
+  $(".photo-share-button")?.click(); await sleep(1200);
+  const contacts = document.querySelectorAll(".share-sheet > button"); contacts[contactIndex]?.click(); await sleep(4500);
+  $(".phone-close")?.click(); await sleep(800); log("photo taken and sent");
+}
+async function readMessages() {
+  if (!PACED) return;
+  const open = $(".utility-controls button[aria-label=\"打开手机\"]"); if (!open) return;
+  open.click(); await sleep(1500);
+  const messages = [...document.querySelectorAll(".app-grid button")].find((b) => b.textContent.includes("消息")); if (messages) { messages.click(); await sleep(1500); const first = $(".message-contact"); if (first) { first.click(); await sleep(3500); } }
+  $(".phone-close")?.click(); await sleep(800); log("messages read");
+}
+async function repeat(sel, n, label, gap = 300) { for (let i = 0; i < n; i++) { await waitFor(() => !moving() && $(sel), `${label} ${i + 1}`); await press(sel, `${label} ${i + 1}/${n}`); await sleep(PACED ? gap + 2600 + ((document.querySelector(".thought-line")?.textContent || "").length * 120) : gap); } }
 (async () => {
   window.__t0 = performance.now();
   try {
@@ -58,6 +87,7 @@ async function repeat(sel, n, label, gap = 300) { for (let i = 0; i < n; i++) { 
     await sleep(300);
     await walkTo(0.55, 0.62, "arrival road");
     await untilScene("forestEntry");
+    await takePhotoAndSend(2);
     await walkTo(0.5, 0.6, "forest path");
     await untilScene("trail");
     await walkTo(0.3, 0.6, "left path");
@@ -68,6 +98,8 @@ async function repeat(sel, n, label, gap = 300) { for (let i = 0; i < n; i++) { 
     await untilScene("rubbleSlope");
     await repeat(".rubble-target", 4, "rubble", 200);
     await untilScene("viewpoint");
+    await takePhotoAndSend(0);
+    await readMessages();
     await walkTo(0.5, 0.5, "viewpoint");
     await untilScene("summitRest");
     await press(".chocolate-prop", "chocolate");
@@ -76,12 +108,13 @@ async function repeat(sel, n, label, gap = 300) { for (let i = 0; i < n; i++) { 
     await untilScene("letterBox");
     await press(".letter-prop", "letter prop");
     await waitFor(() => $(".letter-view"), "letter view");
-    await sleep(600);
+    await sleep(PACED ? 9000 : 600);
     await press(".letter-view", "put letter back");
     await sleep(400);
     await walkTo(0.5, 0.7, "down from summit");
     await untilScene("sunsetFork");
-    await sleep(1500);
+    await takePhotoAndSend(1);
+    await sleep(PACED ? 6000 : 1500);
     await walkTo(0.5, 0.7, "descend");
     await untilScene("nightSlope");
     await press(".call-action", "call");
@@ -113,11 +146,11 @@ async function repeat(sel, n, label, gap = 300) { for (let i = 0; i < n; i++) { 
     await waitFor(() => $(".gallery-grid button.is-letter"), "letter tile");
     $(".gallery-grid button.is-letter").click(); log("open letter photo");
     await waitFor(() => $(".letter-paper .letter-zh"), "translation visible");
-    await sleep(800);
+    await sleep(PACED ? 14000 : 800);
     $(".phone-close").click(); log("close phone");
     await untilScene("complete");
     await waitFor(() => $(".complete-card"), "complete card", 40000);
-    log("DONE total");
+    log("DONE total @ " + clock());
   } catch (e) { log("ERROR " + (e && e.message)); }
   window.__done = true;
 })();

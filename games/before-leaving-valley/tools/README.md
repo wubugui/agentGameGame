@@ -46,3 +46,5 @@ node tools/smoke.mjs         # 输出时间线，最后打印 SMOKE PASS / FAIL�
 ```bash
 node tools/shot.mjs school out.png "document.querySelector('.map-prop').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}))" 4000
 ```
+
+阅读节奏模式：`set PACED=1` 后运行 smoke.mjs，脚本会按每字约 0.18 秒读独白、在三个场景拍照并发给朋友、看消息、在山顶读信 9 秒、结尾读译文 14 秒，输出一次"像人一样玩"的实测时长。首屏测量：`node tools/perf.mjs`（先 `npx vite preview --port 5175`）。

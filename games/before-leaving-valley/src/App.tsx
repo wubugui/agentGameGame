@@ -371,6 +371,16 @@ export default function App() {
   const anchorLayerRef = useRef<HTMLDivElement>(null);
   const onCanvasReady = useCallback(() => setCanvasReady(true), []);
 
+  // The title needs only its key art, not the whole renderer: show the card as
+  // soon as that one image is in, while the canvas keeps preloading behind it.
+  useEffect(() => {
+    const image = new Image();
+    image.onload = () => setCanvasReady(true);
+    image.src = `${import.meta.env.BASE_URL}art/title-key-art-v1.webp`;
+    const fallback = window.setTimeout(() => setCanvasReady(true), 4000);
+    return () => window.clearTimeout(fallback);
+  }, []);
+
   const flash = useCallback((message: string) => {
     window.clearTimeout(feedbackTimerRef.current);
     setFeedback(message);

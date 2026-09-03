@@ -114,10 +114,11 @@ try {
   await evaluate("localStorage.clear(); location.reload(); 1");
   await load;
   await sleep(4000);
+  if (process.env.PACED) await evaluate("window.__paced = true; 1");
   await cdp.send("Runtime.evaluate", { expression: script }, sessionId);
   const started = Date.now();
   let last = 0;
-  while (Date.now() - started < 8 * 60 * 1000) {
+  while (Date.now() - started < (process.env.PACED ? 60 : 8) * 60 * 1000) {
     await sleep(2000);
     const state = await evaluate("JSON.stringify({ done: !!window.__done, log: window.__log || [] })");
     const { done, log } = JSON.parse(state);
