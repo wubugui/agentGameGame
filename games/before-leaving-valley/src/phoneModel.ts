@@ -16,6 +16,8 @@ export type GameDate = {
   day: number;
 };
 
+export type PhotoKind = "letter";
+
 export type PhonePhoto = {
   id: string;
   asset: string;
@@ -27,6 +29,7 @@ export type PhonePhoto = {
   position: { x: number; y: number };
   zoom: number;
   isNew?: boolean;
+  kind?: PhotoKind;
 };
 
 export type PhoneState = {
@@ -51,18 +54,24 @@ export type PhoneAction =
   | { type: "restore"; state: PhoneState }
   | { type: "reset" };
 
+/* 这一天，以及第二天清晨。 */
+export const JOURNEY_DATE: GameDate = { year: 2026, month: 8, day: 20 };
+export const NEXT_MORNING_DATE: GameDate = { year: 2026, month: 8, day: 21 };
+const START_MINUTE = 15 * 60 + 12;
+
 export const CONTACTS: Record<ContactId, { name: string; avatar: string; relation: string }> = {
-  xiaoyu: { name: "小鱼", avatar: "🐟", relation: "最会操心的朋友" },
+  xiaoyu: { name: "小鱼", avatar: "🐟", relation: "从小一起长大" },
   mama: { name: "妈妈", avatar: "桂", relation: "刚刚在线" },
-  asha: { name: "阿夏", avatar: "夏", relation: "旅行群认识的朋友" },
+  asha: { name: "阿夏", avatar: "夏", relation: "伦敦的同学 · 下周也回国" },
 };
 
+/* 她在英国的这一年。行李已经寄回去了，照片都在这部手机里。 */
 const INITIAL_PHOTOS: PhonePhoto[] = [
   {
     id: "memory-ridge",
     asset: "art/ridge.webp",
-    title: "那次真的爬得腿软",
-    place: "北岭旧栈道",
+    title: "第一次一个人去的山",
+    place: "北边的山",
     dateLabel: "6月2日",
     position: { x: 62, y: 48 },
     zoom: 1.08,
@@ -71,7 +80,7 @@ const INITIAL_PHOTOS: PhonePhoto[] = [
     id: "memory-road",
     asset: "art/road.webp",
     title: "错过车以后看到的天",
-    place: "云岬公路",
+    place: "回学校的公路",
     dateLabel: "4月18日",
     position: { x: 50, y: 48 },
     zoom: 1.04,
@@ -80,7 +89,7 @@ const INITIAL_PHOTOS: PhonePhoto[] = [
     id: "memory-rain-cafe",
     asset: "art/memory-rain-cafe-v1.webp",
     title: "雨停以前画完的那页",
-    place: "南站旁的小咖啡馆",
+    place: "伦敦 · 学校旁的咖啡馆",
     dateLabel: "2月11日",
     position: { x: 52, y: 56 },
     zoom: 1.08,
@@ -89,7 +98,7 @@ const INITIAL_PHOTOS: PhonePhoto[] = [
     id: "memory-blue-train",
     asset: "art/memory-blue-train-v1.webp",
     title: "阿夏把最后一瓣橘子给我",
-    place: "回程慢车",
+    place: "去北方的慢车",
     dateLabel: "去年11月",
     position: { x: 53, y: 50 },
     zoom: 1.06,
@@ -98,7 +107,7 @@ const INITIAL_PHOTOS: PhonePhoto[] = [
     id: "memory-forest",
     asset: "art/forest.webp",
     title: "说好只走到天黑前",
-    place: "青杉林",
+    place: "校园后面的林子",
     dateLabel: "去年10月",
     position: { x: 46, y: 54 },
     zoom: 1.06,
@@ -107,28 +116,27 @@ const INITIAL_PHOTOS: PhonePhoto[] = [
 
 const makeInitialThreads = (): Record<ContactId, PhoneMessage[]> => ({
   xiaoyu: [
-    { id: "xy-1", direction: "incoming", text: "你真下车了？那站看起来什么都没有诶", minute: 13 * 60 + 56 },
-    { id: "xy-2", direction: "outgoing", text: "嗯！就走一小段～", minute: 13 * 60 + 57 },
-    { id: "xy-3", direction: "outgoing", text: "看到好看的给你拍 📷", minute: 13 * 60 + 57 },
-    { id: "xy-4", direction: "incoming", text: "晚上别错过末班车。还有，充电宝带了吗", minute: 13 * 60 + 58 },
-    { id: "xy-5", direction: "outgoing", text: "带了带了，像带小孩一样操心我", minute: 13 * 60 + 59 },
+    { id: "xy-1", direction: "incoming", text: "你真的一个人去爬山了？", minute: 14 * 60 + 31 },
+    { id: "xy-2", direction: "outgoing", text: "嗯！登山学校的教练给我画了路线，说两小时就能登顶", minute: 14 * 60 + 33 },
+    { id: "xy-3", direction: "outgoing", text: "看到好看的给你拍 📷", minute: 14 * 60 + 33 },
+    { id: "xy-4", direction: "incoming", text: "等你的照片。回国第一顿我请", minute: 14 * 60 + 35 },
   ],
   mama: [
     { id: "ma-1", direction: "incoming", text: "到了给我发个小树，不用打电话。", minute: 12 * 60 + 42 },
-    { id: "ma-2", direction: "outgoing", text: "🌲 到啦，天气很好。", minute: 13 * 60 + 48 },
-    { id: "ma-3", direction: "incoming", text: "好，玩开心。鞋带系紧。", minute: 13 * 60 + 49 },
+    { id: "ma-2", direction: "outgoing", text: "🌲 到啦，天气很好。", minute: 14 * 60 + 58 },
+    { id: "ma-3", direction: "incoming", text: "好，玩开心。回来给我看照片。", minute: 14 * 60 + 59 },
   ],
   asha: [
-    { id: "ax-1", direction: "incoming", text: "你上次那组雨后车窗能不能发原图？想拿来画。", minute: 11 * 60 + 16 },
-    { id: "ax-2", direction: "outgoing", text: "晚上回去传你，我今天又临时拐进一座山了。", minute: 13 * 60 + 51 },
-    { id: "ax-3", direction: "incoming", text: "哈哈，很像你。看到怪路牌记得拍！", minute: 13 * 60 + 52 },
+    { id: "ax-1", direction: "incoming", text: "钥匙交了。站在空房间里，忽然有点想哭。", minute: 11 * 60 + 16 },
+    { id: "ax-2", direction: "outgoing", text: "我也是。行李都寄回去了，只背了一个包来意大利。", minute: 14 * 60 + 40 },
+    { id: "ax-3", direction: "incoming", text: "一年就这么过完了。多拍点，回国一起看。", minute: 14 * 60 + 41 },
   ],
 });
 
 export function createInitialPhoneState(): PhoneState {
   return {
-    date: { year: 2024, month: 10, day: 17 },
-    minuteOfDay: 14 * 60 + 6,
+    date: { ...JOURNEY_DATE },
+    minuteOfDay: START_MINUTE,
     battery: 82,
     threads: makeInitialThreads(),
     unread: { xiaoyu: 0, mama: 0, asha: 0 },

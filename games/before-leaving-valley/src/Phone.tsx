@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type Dispatch, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
 import type { JourneyScene } from "./PixiJourney";
-import { journeySceneIndex } from "./journeyModel";
+import { journeySceneIndex, LETTER_LINES_IT, LETTER_LINES_ZH } from "./journeyModel";
 import {
   CONTACTS,
   formatGameDate,
@@ -50,6 +50,7 @@ type Props = {
   takePhoto: (snapshot?: string) => void;
   requestReply: (contactId: ContactId, kind: "text" | "photo") => void;
   onGalleryViewed?: () => void;
+  letterTranslated: boolean;
 };
 
 const CONTACT_ORDER: ContactId[] = ["xiaoyu", "mama", "asha"];
@@ -71,6 +72,7 @@ export default function Phone({
   takePhoto,
   requestReply,
   onGalleryViewed,
+  letterTranslated,
 }: Props) {
   const [activeContact, setActiveContact] = useState<ContactId>("xiaoyu");
   const [draft, setDraft] = useState("");
@@ -90,10 +92,12 @@ export default function Phone({
   const mapX = 55 + returnProgress * 225;
   const mapY = 409 - returnProgress * 325;
 
+  // 结尾要求她真的回看那张信的照片；若相册里没有信（开发预览），退回到“打开相册”即可。
+  const hasLetterPhoto = phone.photos.some((photo) => photo.kind === "letter");
   useEffect(() => {
     if (tab === "conversation") threadEndRef.current?.scrollIntoView({ block: "end" });
-    if (tab === "gallery") onGalleryViewed?.();
-  }, [phone.threads, tab, activeContact, onGalleryViewed]);
+    if (tab === "gallery" && (!hasLetterPhoto || selectedPhoto?.kind === "letter")) onGalleryViewed?.();
+  }, [phone.threads, tab, activeContact, onGalleryViewed, hasLetterPhoto, selectedPhoto]);
 
   const openConversation = (contactId: ContactId) => {
     setActiveContact(contactId);
@@ -148,7 +152,7 @@ export default function Phone({
         <div className="case-side-button case-side-button-top" />
         <div className="case-side-button case-side-button-bottom" />
         <div className="case-sticker case-sticker-mountain">△</div>
-        <div className="case-sticker case-sticker-ticket">LOEN<br />10·17</div>
+        <div className="case-sticker case-sticker-ticket">DOLOMITI<br />8·20</div>
         <div className="phone-frame">
           <div className="phone-island" />
           <div className="phone-status">
@@ -168,7 +172,7 @@ export default function Phone({
                 </div>
                 <div className="home-widget">
                   <small>今天</small>
-                  <span>临时下车也算计划</span>
+                  <span>来都来了</span>
                   <em>{place}</em>
                 </div>
                 <div className="app-grid">
@@ -230,7 +234,7 @@ export default function Phone({
             )}
 
             {tab === "map" && (
-              <PhonePage title="离线地图" subtitle="洛恩谷区域 · 可离线查看" back={() => setTab("home")}>
+              <PhonePage title="离线地图" subtitle="多洛米蒂 · 可离线查看" back={() => setTab("home")}>
                 <div className="map-app">
                   <div className="map-toolbar">
                     <button onClick={() => setMapZoom((value) => Math.min(1.7, value + 0.2))} aria-label="放大地图"><Plus size={15} /></button>
@@ -238,7 +242,7 @@ export default function Phone({
                   </div>
                   <div className="map-viewport">
                     <div className="map-sheet" style={{ transform: `scale(${mapZoom})` }}>
-                      <svg viewBox="0 0 320 480" aria-label="洛恩谷步道地图">
+                      <svg viewBox="0 0 320 480" aria-label="步道地图">
                         <path className="contour" d="M-10 80 C60 20 145 38 215 5 S340 30 350 92" />
                         <path className="contour" d="M-30 135 C48 70 145 98 225 54 S342 74 360 132" />
                         <path className="contour" d="M-20 205 C80 134 152 170 242 112 S346 134 360 205" />
@@ -250,12 +254,12 @@ export default function Phone({
                         <circle className="origin" cx="55" cy="409" r="5" />
                         <g className="you" transform={`translate(${mapX} ${mapY})`}><circle r="9" /><path d="M0 -4 L4 5 L0 3 L-4 5 Z" /></g>
                       </svg>
-                      <span className="map-name map-name-origin">临时停靠点</span>
-                      <span className="map-name map-name-fork">旧牧道岔口</span>
-                      <span className="map-name map-name-view">无名观景台</span>
+                      <span className="map-name map-name-origin">登山学校</span>
+                      <span className="map-name map-name-fork">牧道岔口</span>
+                      <span className="map-name map-name-view">山顶信箱</span>
                     </div>
                   </div>
-                  <div className="map-location-card"><Navigation size={17} /><span><strong>{place}</strong><small>末班车 19:10 · 路线已离线保存</small></span></div>
+                  <div className="map-location-card"><Navigation size={17} /><span><strong>{place}</strong><small>教练画的路线 · 已离线保存</small></span></div>
                 </div>
               </PhonePage>
             )}
@@ -283,17 +287,26 @@ export default function Phone({
             )}
 
             {tab === "gallery" && (
-              <PhonePage title={selectedPhoto ? selectedPhoto.title : "这次真的有出门"} subtitle={selectedPhoto ? `${selectedPhoto.dateLabel} · ${selectedPhoto.place}` : `${phone.photos.length} 张照片`} back={() => { setSharingPhoto(false); selectedPhoto ? setSelectedPhoto(null) : setTab("home"); }}>
+              <PhonePage title={selectedPhoto ? selectedPhoto.title : "这一年"} subtitle={selectedPhoto ? `${selectedPhoto.dateLabel} · ${selectedPhoto.place}` : `${phone.photos.length} 张照片`} back={() => { setSharingPhoto(false); selectedPhoto ? setSelectedPhoto(null) : setTab("home"); }}>
                 {selectedPhoto ? (
                   <div className="photo-detail">
-                    <div className="photo-detail-image" style={photoStyle(selectedPhoto)} />
+                    <div className={`photo-detail-image ${selectedPhoto.kind === "letter" ? "is-letter" : ""}`} style={photoStyle(selectedPhoto)}>
+                      {selectedPhoto.kind === "letter" && (
+                        <div className="letter-paper" aria-label="信箱里的那张纸">
+                          {LETTER_LINES_IT.map((line, index) => <p key={`it-${index}`}>{line}</p>)}
+                          {letterTranslated
+                            ? <div className="letter-zh">{LETTER_LINES_ZH.map((line, index) => <p key={`zh-${index}`}>{line}</p>)}</div>
+                            : <div className="letter-note">看不懂。先留着。</div>}
+                        </div>
+                      )}
+                    </div>
                     <div className="photo-detail-meta"><strong>{selectedPhoto.title}</strong><span>{selectedPhoto.dateLabel}{selectedPhoto.minute !== undefined ? ` ${formatGameTime(selectedPhoto.minute)}` : ""}</span><small>{selectedPhoto.place}</small></div>
                     <button className="photo-share-button" onClick={() => setSharingPhoto((value) => !value)}><Share2 size={15} /> 发给朋友</button>
                     {sharingPhoto && <div className="share-sheet"><small>发送这张照片</small>{CONTACT_ORDER.map((contactId) => <button key={contactId} onClick={() => sharePhoto(contactId)}><Avatar contactId={contactId} /><span><strong>{CONTACTS[contactId].name}</strong><small>{CONTACTS[contactId].relation}</small></span></button>)}</div>}
                   </div>
                 ) : (
                   <div className="gallery-grid">
-                    {phone.photos.map((photo) => <button key={photo.id} onClick={() => { setSharingPhoto(false); setSelectedPhoto(photo); }} style={photoStyle(photo)} aria-label={`${photo.dateLabel}，${photo.title}`}><span>{photo.isNew ? formatGameTime(photo.minute ?? phone.minuteOfDay) : photo.dateLabel}</span></button>)}
+                    {phone.photos.map((photo) => <button key={photo.id} className={photo.kind === "letter" ? "is-letter" : undefined} onClick={() => { setSharingPhoto(false); setSelectedPhoto(photo); }} style={photoStyle(photo)} aria-label={`${photo.dateLabel}，${photo.title}`}><span>{photo.kind === "letter" ? "信" : photo.isNew ? formatGameTime(photo.minute ?? phone.minuteOfDay) : photo.dateLabel}</span></button>)}
                   </div>
                 )}
               </PhonePage>

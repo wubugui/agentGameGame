@@ -36,7 +36,8 @@ export type JourneySave = {
   phone: PhoneState;
 };
 
-const SAVE_KEY = "before-leaving-valley.journey.v1";
+// v2: the script, dates and album were rewritten on 2026-09-04; older saves are dropped.
+const SAVE_KEY = "before-leaving-valley.journey.v2";
 
 // Photo snapshots are ~40–80 KB data URLs each; keep localStorage well below
 // its quota by persisting only the newest ones (older photos fall back to
