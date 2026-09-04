@@ -1,508 +1,348 @@
-import { Check, Flashlight, RotateCcw, Settings as SettingsIcon, Smartphone, Volume2, VolumeX } from "lucide-react";
-import { lazy, useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { RotateCcw, Settings as SettingsIcon, Smartphone, Volume2, VolumeX } from "lucide-react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import PanoStage, { type BreathState, type LookPoint } from "./PanoStage";
+import Phone, { type PhoneTab } from "./Phone";
+import { createInitialPhoneState, formatGameTime, NEXT_MORNING_DATE, nodeAsset, phoneReducer, THIRD_DAY_DATE, type ContactId } from "./phoneModel";
 import { loadSettings, saveSettings, type GameSettings } from "./settings";
 import { SILENCE, Soundscape, type Ambience, type SoundMaterial } from "./soundscape";
-import Phone, { type PhoneTab } from "./Phone";
-import type { BreathState, JourneyScene, LookPoint } from "./PixiJourney";
-import { createInitialPhoneState, formatGameTime, NEXT_MORNING_DATE, phoneReducer, sceneAsset, type ContactId, type PhoneState } from "./phoneModel";
-import { isJourneyScene, JOURNEY_SCENE_INFO, journeySceneIndex, LETTER_LINES_IT, LETTER_LINES_ZH, nextJourneyScene } from "./journeyModel";
-import { clearJourneySave, INITIAL_INTERACTIONS, loadJourneySave, persistJourneySave, type JourneyInteractionState, type JourneySave } from "./saveModel";
+import { clearJourneySave, INITIAL_FLAGS, loadJourneySave, persistJourneySave, type Flags, type JourneySave } from "./saveModel";
+import {
+  BUS_STOP_LINES, CABLE_ANCHORS, CALL_LINES, CAR_LINES, CHOCOLATE_ANCHOR, CLOSING_LINES, CRACK_HOLDS, DAYLIGHT_LEFT, DEER_ANCHOR,
+  FOREST_STEPS, HOTEL_CALLS, HOURS_ALREADY, HUT_ANCHOR, HUT_HOURS, isNodeId, LETTER_LINES_IT, LETTER_LINES_ZH, MAILBOX_ANCHOR, MAP_LEGS, NODE_IDS, NODES,
+  nodeIndex, PLATEAU_MAP_ANCHOR, POLICE_COUNTER_ANCHOR, POLICE_LINES, SCREE_STEPS, SEARCH_SPOTS, SIGNPOST_ARMS, SUMMIT_CAMERA_ANCHOR, SUMMIT_CROSS_ANCHOR, type Anchor, type NodeId,
+} from "./story";
 
-type Phase = "title" | JourneyScene | "complete";
-type Route = "open" | "stream" | null;
+type Phase = "title" | "play" | "complete";
+type Overlay = "none" | "map" | "notebook" | "call" | "findmy" | "hotel" | "selfie";
+type CarState = "none" | "first" | "second" | "stopped";
+type DeerState = "standing" | "fleeing" | "gone";
 
-const SCENE_INFO = JOURNEY_SCENE_INFO;
-
-const STONES = [
-  { x: 68, y: 70 },
-  { x: 61, y: 61 },
-  { x: 67, y: 51 },
-  { x: 73, y: 41 },
-];
-
-const CHAIN_POINTS = [
-  { x: 26, y: 50 },
-  { x: 35, y: 43 },
-  { x: 44, y: 35 },
-  { x: 53, y: 26 },
-];
-
-const RUBBLE_POINTS = [
-  { x: 42, y: 70 },
-  { x: 54, y: 60 },
-  { x: 63, y: 49 },
-  { x: 73, y: 36 },
-];
-
-const NIGHT_SLOPE_POINTS = [
-  { x: 40, y: 72 },
-  { x: 47, y: 61 },
-  { x: 37, y: 50 },
-  { x: 30, y: 39 },
-];
-
-const DEEP_FOREST_POINTS = [
-  { x: 64, y: 71 },
-  { x: 69, y: 60 },
-  { x: 75, y: 49 },
-  { x: 68, y: 39 },
-];
-
-const SEARCH_POINTS = [
-  { x: 23, y: 62, label: "倒下的树根" },
-  { x: 49, y: 73, label: "白色石头" },
-  { x: 70, y: 54, label: "拐弯处的苔" },
-];
-
-const CHAIN_UPPER_POINTS = [
-  { x: 71, y: 84 },
-  { x: 62, y: 66 },
-  { x: 54, y: 50 },
-  { x: 46, y: 34 },
-];
-
-const MARKER_POINTS = [
-  { x: 22, y: 64, label: "树桩" },
-  { x: 68, y: 68, label: "溪边的石头" },
-  { x: 58, y: 44, label: "路标" },
-];
-
-const BANK_POINTS = [
-  { x: 34, y: 74 },
-  { x: 50, y: 60 },
-  { x: 60, y: 46 },
-  { x: 64, y: 28 },
-];
-
-// The call she makes on the slope. Rhythm only; she gets herself down.
-const CALL_LINES = [
-  "拨号中……",
-  "接通了。‘Pronto, emergenza.’",
-  "我说：我在山上。天黑了。我一个人。",
-  "对方的英语和我的英语在风里碎成一片。",
-  "我只听清了一句：往公路的方向走。",
-  "通话 2 分 14 秒",
-];
-
-type LightMode = "off" | "phone" | "flashlight";
-type DeerState = "hidden" | "standing" | "leaving";
-
-// Where the deer stands on the sunset board, as a look-space x (-1..1); used to
-// notice when she is looking straight at it.
-const DEER_LOOK_X = (0.24 - 0.5) * 2;
-const CREDIT_LINES_TOTAL = LETTER_LINES_IT.length + 1;
-
-// Quiet chapter cards at the turns of the day.
-const CHAPTER_CARDS: Partial<Record<JourneyScene, { eyebrow: string; title: string }>> = {
-  school: { eyebrow: "多洛米蒂 · 八月", title: "两个小时" },
-  arrival: { eyebrow: "下午", title: "来都来了" },
-  sunsetFork: { eyebrow: "日落", title: "光已经走到山后面" },
-  nightSlope: { eyebrow: "夜", title: "一小块一小块地走" },
-  roadside: { eyebrow: "谷底公路", title: "远处终于有了灯" },
-  police: { eyebrow: "第二天 · 清晨", title: "天亮了" },
-  searchRoad: { eyebrow: "清晨", title: "回头路" },
+/* ---------- per-node sound ---------- */
+const AMBIENCE: Record<NodeId, Ambience> = {
+  meadow: { ...SILENCE, wind: 0.45, windTone: 950, birds: 0.6 },
+  approach: { ...SILENCE, wind: 0.6, windTone: 1100, birds: 0.35 },
+  plaque: { ...SILENCE, wind: 0.7, windTone: 1300, birds: 0.2 },
+  cable: { ...SILENCE, wind: 0.95, windTone: 1450, birds: 0.1 },
+  crack: { ...SILENCE, wind: 0.9, windTone: 1500, birds: 0.05 },
+  mailbox: { ...SILENCE, wind: 0.8, windTone: 1400, birds: 0.15 },
+  exit: { ...SILENCE, wind: 0.85, windTone: 1450, birds: 0.08 },
+  summit: { ...SILENCE, wind: 1, windTone: 1500, birds: 0.05 },
+  plateau: { ...SILENCE, wind: 0.75, windTone: 1400 },
+  hutView: { ...SILENCE, wind: 0.7, windTone: 1350 },
+  signpost: { ...SILENCE, wind: 0.6, windTone: 1200, crickets: 0.1 },
+  scree: { ...SILENCE, wind: 0.65, windTone: 1100, crickets: 0.2 },
+  deer: { ...SILENCE, wind: 0.4, windTone: 900, crickets: 0.45 },
+  forestEdge: { ...SILENCE, wind: 0.35, windTone: 700, crickets: 0.7 },
+  forest1: { ...SILENCE, wind: 0.3, windTone: 560, crickets: 0.6 },
+  forest2: { ...SILENCE, wind: 0.3, windTone: 540, crickets: 0.6, stream: 0.15 },
+  hairpin: { ...SILENCE, wind: 0.3, windTone: 600, crickets: 0.5 },
+  car: { ...SILENCE, engine: 0.6, heater: 0.7 },
+  search: { ...SILENCE, wind: 0.3, windTone: 900, birds: 0.8, stream: 0.2 },
+  hotel: { ...SILENCE, wind: 0.05, windTone: 500, heater: 0.16 },
+  busStop: { ...SILENCE, wind: 0.35, windTone: 950, birds: 0.55 },
+  police: { ...SILENCE, wind: 0.05, windTone: 500, heater: 0.2 },
+  bench: { ...SILENCE, wind: 0.4, windTone: 950, birds: 0.5 },
 };
 
-// What each place sounds like. Wind tone: open ridge ~1450, forest ~900, night ~540.
-const AMBIENCE: Record<JourneyScene, Ambience> = {
-  school: { ...SILENCE, wind: 0.06, windTone: 500, birds: 0.25 },
-  arrival: { ...SILENCE, wind: 0.4, windTone: 920, birds: 0.5 },
-  forestEntry: { ...SILENCE, wind: 0.25, windTone: 900, birds: 0.9, stream: 0.12 },
-  trail: { ...SILENCE, wind: 0.25, windTone: 900, birds: 0.8, stream: 0.7 },
-  chainTraverse: { ...SILENCE, wind: 0.95, windTone: 1450, birds: 0.12 },
-  chainUpper: { ...SILENCE, wind: 1, windTone: 1500, birds: 0.05 },
-  rubbleSlope: { ...SILENCE, wind: 0.75, windTone: 1450, birds: 0.2 },
-  viewpoint: { ...SILENCE, wind: 0.85, windTone: 1450, birds: 0.25 },
-  summitRest: { ...SILENCE, wind: 0.7, windTone: 1400, birds: 0.25 },
-  letterBox: { ...SILENCE, wind: 0.7, windTone: 1300, birds: 0.2 },
-  sunsetFork: { ...SILENCE, wind: 0.6, windTone: 1200, birds: 0.08, crickets: 0.3 },
-  nightSlope: { ...SILENCE, wind: 0.5, windTone: 540, crickets: 0.7 },
-  deepForest: { ...SILENCE, wind: 0.2, windTone: 540, crickets: 0.9, stream: 0.1 },
-  marker656: { ...SILENCE, wind: 0.18, windTone: 520, crickets: 0.85 },
-  roadBank: { ...SILENCE, wind: 0.35, windTone: 620, crickets: 0.4, engine: 0.12 },
-  roadside: { ...SILENCE, wind: 0.3, windTone: 700, crickets: 0.5, engine: 0.6 },
-  carInterior: { ...SILENCE, wind: 0.05, windTone: 360, engine: 1, heater: 1 },
-  police: { ...SILENCE, wind: 0.15, windTone: 800, birds: 0.5, engine: 0.1 },
-  searchRoad: { ...SILENCE, wind: 0.25, windTone: 900, birds: 0.7, stream: 0.1 },
-  valleyExit: { ...SILENCE, wind: 0.3, windTone: 900, birds: 0.6, engine: 0.15 },
+const MATERIAL: Record<NodeId, SoundMaterial> = {
+  meadow: "soft", approach: "gravel", plaque: "rock", cable: "rock", crack: "rock", mailbox: "rock", exit: "rock", summit: "rock",
+  plateau: "gravel", hutView: "gravel", signpost: "gravel", scree: "gravel", deer: "soft", forestEdge: "soft", forest1: "soft", forest2: "soft",
+  hairpin: "road", car: "road", search: "soft", hotel: "road", busStop: "road", police: "road", bench: "road",
 };
 
-const stepMaterialFor = (scene: JourneyScene): SoundMaterial =>
-  scene === "chainTraverse" || scene === "chainUpper" || scene === "rubbleSlope" || scene === "nightSlope" ? "rock"
-    : scene === "roadside" || scene === "valleyExit" || scene === "arrival" || scene === "school" || scene === "police" ? "road"
-      : scene === "sunsetFork" || scene === "roadBank" ? "gravel"
-        : "soft";
+const NIGHT_NODES: readonly NodeId[] = ["forestEdge", "forest1", "forest2", "hairpin"];
+const DAY_MUSIC_NODES: readonly NodeId[] = ["meadow", "approach", "plaque", "cable", "crack", "mailbox", "exit", "summit", "plateau"];
 
-const NIGHT_LIGHT_SCENES: readonly JourneyScene[] = ["nightSlope", "deepForest", "marker656", "roadBank"];
-
-const requestedDevScene = import.meta.env.DEV ? new URLSearchParams(window.location.search).get("scene") : null;
-const DEV_SCENE: JourneyScene | null = isJourneyScene(requestedDevScene) ? requestedDevScene : null;
-
-function createDevInteractions(scene: JourneyScene | null): JourneyInteractionState {
-  const state = { ...INITIAL_INTERACTIONS };
-  if (!scene) return state;
-  const index = journeySceneIndex(scene);
-  const after = (other: JourneyScene) => index > journeySceneIndex(other);
-  if (after("school")) state.routeDrawn = true;
-  if (after("chainTraverse")) state.chainStep = CHAIN_POINTS.length;
-  if (after("chainUpper")) state.chainUpperStep = CHAIN_UPPER_POINTS.length;
-  if (after("rubbleSlope")) state.rubbleStep = RUBBLE_POINTS.length;
-  if (after("summitRest")) state.chocolateEaten = true;
-  if (after("letterBox")) state.letterRead = true;
-  if (after("nightSlope")) { state.callDone = true; state.nightStep = NIGHT_SLOPE_POINTS.length; }
-  if (after("deepForest")) { state.nightStep += DEEP_FOREST_POINTS.length; state.phoneLost = true; }
-  if (after("marker656")) state.markerStep = MARKER_POINTS.length;
-  if (after("roadBank")) state.bankStep = BANK_POINTS.length;
-  if (after("roadside")) state.rescuersMet = true;
-  if (after("carInterior")) state.rescueStep = 6;
-  if (after("police")) state.policeStep = 3;
-  if (scene === "valleyExit") { state.searchStep = SEARCH_POINTS.length; state.phoneReturned = true; state.phoneLost = false; }
-  return state;
-}
-
-function createJourneyPhoneState(): PhoneState {
-  const state = createInitialPhoneState();
-  if (!DEV_SCENE) return state;
-  const previewTimes: Partial<Record<JourneyScene, number>> = {
-    school: 14 * 60 + 40,
-    chainUpper: 16 * 60 + 50,
-    summitRest: 18 * 60 + 5,
-    sunsetFork: 19 * 60 + 40,
-    nightSlope: 20 * 60 + 50,
-    deepForest: 21 * 60 + 30,
-    marker656: 21 * 60 + 55,
-    roadBank: 22 * 60 + 5,
-    roadside: 22 * 60 + 25,
-    carInterior: 22 * 60 + 40,
-    police: 6 * 60 + 5,
-    searchRoad: 6 * 60 + 35,
-    valleyExit: 7 * 60 + 40,
-  };
-  state.minuteOfDay = previewTimes[DEV_SCENE] ?? state.minuteOfDay;
-  if (DEV_SCENE === "police" || DEV_SCENE === "searchRoad" || DEV_SCENE === "valleyExit") state.date = { ...NEXT_MORNING_DATE };
-  // Past the summit she has already photographed the letter; seed it so the
-  // ending can be previewed from any later scene.
-  if (journeySceneIndex(DEV_SCENE) > journeySceneIndex("letterBox")) {
-    state.photos = [{
-      id: "dev-letter",
-      kind: "letter",
-      asset: JOURNEY_SCENE_INFO.letterBox.asset,
-      title: JOURNEY_SCENE_INFO.letterBox.photoTitle,
-      place: JOURNEY_SCENE_INFO.letterBox.place,
-      dateLabel: DEV_SCENE === "police" || DEV_SCENE === "searchRoad" || DEV_SCENE === "valleyExit" ? "昨天" : "今天",
-      minute: 17 * 60 + 5,
-      position: { x: 68, y: 66 },
-      zoom: 1.6,
-      isNew: true,
-    }, ...state.photos];
-  }
-  return state;
-}
-
-const PHONE_BEATS: Partial<Record<Phase, { id: string; contactId: ContactId; text: string }>> = {
-  forestEntry: { id: "forest-asha", contactId: "asha", text: "看到怪路牌记得拍。我想画一组路牌。" },
-  trail: { id: "trail-xiaoyu", contactId: "xiaoyu", text: "刚看了你的定位，那边的天好蓝。替我多看两眼。" },
-  chainUpper: { id: "upper-xiaoyu", contactId: "xiaoyu", text: "？？？你的定位怎么在一面悬崖上" },
-  viewpoint: { id: "viewpoint-mama", contactId: "mama", text: "你爸问你在哪座山。今天的山好看吗？" },
-  summitRest: { id: "rest-asha", contactId: "asha", text: "我在收拾最后一箱书。你到顶了吗？" },
-  sunsetFork: { id: "sunset-asha", contactId: "asha", text: "书装完了。空房间里回声好大。你那边现在是什么颜色的天？" },
-  nightSlope: { id: "night-xiaoyu", contactId: "xiaoyu", text: "睡前看到你的定位还在山上。拍到星星了吗？" },
-  valleyExit: { id: "exit-xiaoyu", contactId: "xiaoyu", text: "定位又亮了！！你昨晚去哪了，一整夜都是灰的" },
-};
-
-const PHONE_REPLIES: Record<ContactId, Record<"text" | "photo", Partial<Record<JourneyScene, string>>>> = {  xiaoyu: {
-    text: {
-      school: "教练？你还真找了个教练。行，等你照片。",
-      arrival: "行，我等照片。",
-      forestEntry: "林子里信号还有啊。替我闻一下松树。",
-      trail: "你每次说‘就走一点’，最后都要多走半座山。哈哈。",
-      chainTraverse: "铁索？？你这是在哪。到了给我看。",
-      chainUpper: "我不看了，我看着腿软。",
-      rubbleSlope: "回头看一眼走了多远，然后拍给我。",
-      viewpoint: "你还在上面？替我看一眼那边的云。",
-      summitRest: "巧克力留一半！你每次都吃光。",
-      letterBox: "信箱？山顶有信箱？你拍了没有。",
-      sunsetFork: "太阳下山了你还在上面？慢慢来。",
-      police: "警局？？你先告诉我你人没事。",
-      valleyExit: "回来第一顿我请。你把这一夜讲三遍我都听。",
-    },
-    photo: {
-      school: "这地图上的线画得好随意，哈哈。",
-      arrival: "空得有点电影开场的感觉。",
-      forestEntry: "这光！像有人在树上开了灯。",
-      trail: "这个光好看。构图也很你——路总要留一大半。",
-      chainTraverse: "你在悬崖上还拍照？？好吧，好看。",
-      chainUpper: "只有天。这张我要设成壁纸。",
-      rubbleSlope: "原来你走了这么远。",
-      viewpoint: "好看！原图存好，回来洗出来贴墙上。",
-      summitRest: "巧克力和风景一起拍，很你。",
-      letterBox: "意大利语？我一个词都不认识。留着，回来找人翻。",
-      sunsetFork: "这个颜色。我不说话了。",
-      police: "灯还亮着。好温柔的一张。",
-      valleyExit: "回头看那一眼，我懂。",
-    },
-  },
-  mama: {
-    text: {
-      school: "有教练就好。他长什么样？",
-      arrival: "看到了。慢慢走。",
-      forestEntry: "树多的地方凉快。你小时候一进林子就不肯出来。",
-      trail: "不用赶，看够了再往前。",
-      chainTraverse: "妈妈手心出汗。上面的风景等你发我。",
-      chainUpper: "收到。上面风大吗。",
-      rubbleSlope: "走了这么远了。累了就坐一会儿，看看风景。",
-      viewpoint: "风大的地方你小时候最爱站。回来讲给我听。",
-      summitRest: "吃东西了没有？你从小爬山就忘了吃。",
-      letterBox: "有人在山顶留信，真浪漫。写了什么？",
-      sunsetFork: "这个时候的山最好看。你那边天是什么颜色？",
-      police: "在警局啊。你昨晚一定有很多话要讲，回来我听。",
-      valleyExit: "定位又亮了。回来慢慢讲给我听。",
-    },
-    photo: {
-      school: "地图。你小时候也爱看地图。",
-      arrival: "天气真好。你小时候也总爱在半路忽然下车看东西。",
-      forestEntry: "这片林子真好看。",
-      trail: "树很漂亮。",
-      chainTraverse: "妈妈手心出汗。",
-      chainUpper: "天真蓝。",
-      rubbleSlope: "走了好远。",
-      viewpoint: "收到了，很开阔。你爸问是哪座山。",
-      summitRest: "看到巧克力了。多吃点。",
-      letterBox: "有人在山顶写信，真好。",
-      sunsetFork: "好看。像你小时候画的那种天。",
-      police: "灯亮着，真好看。",
-      valleyExit: "回来了就好。",
-    },
-  },
-  asha: {
-    text: {
-      school: "教练画的线发我一张，我想画一张‘别人给我画的地图’。",
-      arrival: "临时拐进去的地方通常最好画，帮我多看两眼颜色。",
-      forestEntry: "松林里的光是绿的还是黄的？我要画。",
-      trail: "别找标准路线，哪边让你想走就走哪边。",
-      chainTraverse: "铁索是什么颜色？我猜是锈红。",
-      chainUpper: "你现在的视野里有几种蓝？",
-      rubbleSlope: "回头的那一眼，一定要拍。",
-      viewpoint: "先别给风景起名字，回来再告诉我它像什么。",
-      summitRest: "坐着的时候看一眼脚边，脚边总有好东西。",
-      letterBox: "信！山顶的信！念给我听，我不管听不听得懂。",
-      sunsetFork: "日落的橙色和珊瑚色，哪个多？",
-      police: "警局门口有灯吗。有的话拍一张。",
-      valleyExit: "回来一起看。这一年，还有这一夜。",
-    },
-    photo: {
-      school: "地图的褶皱我要画。",
-      arrival: "这个灰蓝和珊瑚色可以！原图留着，我晚上想画。",
-      forestEntry: "松针里漏下来的光。我知道该怎么画了。",
-      trail: "你把路放在画面边上这点很妙，像它还会继续出去。",
-      chainTraverse: "岩壁的白和天的蓝。谢谢。",
-      chainUpper: "只有天。这张我画三遍。",
-      rubbleSlope: "线一样的小路。像回忆。",
-      viewpoint: "光落得太好了。别滤镜，原图就这样发我。",
-      summitRest: "银纸的反光。细节满分。",
-      letterBox: "纸的黄。字的灰。我懂了。",
-      sunsetFork: "这一张，什么都不用画了。",
-      police: "灯的黄和天的粉。早安。",
-      valleyExit: "回头的路。我等你回来一起画。",
-    },
-  },
-};
-
-/* ---------- background music (Kevin MacLeod, incompetech.com, CC BY 4.0) ----------
-   Daytime scenes carry a little music; the night and the dawn search stay with
-   wind and breath alone; the ending theme enters slowly only after she has
-   re-read the letter in her own album. */
 type MusicKind = "day" | "warm" | "end";
 const MUSIC_TRACKS: Record<MusicKind, { src: string; volume: number; fadeStep: number }> = {
   day: { src: "audio/clear-air.mp3", volume: 0.14, fadeStep: 0.02 },
   warm: { src: "audio/simple-duet.mp3", volume: 0.2, fadeStep: 0.02 },
   end: { src: "audio/promises-to-keep.mp3", volume: 0.2, fadeStep: 0.006 },
 };
-const DAY_MUSIC_SCENES: readonly JourneyScene[] = ["school", "arrival", "forestEntry", "trail", "chainTraverse", "chainUpper", "rubbleSlope", "viewpoint", "summitRest"];
 
-const easeInOut = (value: number) => value < 0.5 ? 2 * value * value : 1 - Math.pow(-2 * value + 2, 2) / 2;
-const PixiJourney = lazy(() => import("./PixiJourney"));
+/* Messages that arrive on the phone while it is still in her pocket. */
+const PHONE_BEATS: Partial<Record<NodeId, Array<{ contactId: ContactId; text: string }>>> = {
+  approach: [{ contactId: "xiaoyu", text: "到山口了吗？教练说的那条 easy 路线，走慢点。" }],
+  summit: [{ contactId: "mama", text: "今天天气怎么样？记得吃东西。" }],
+  plateau: [{ contactId: "asha", text: "拍到什么了？我等着画。" }],
+};
+
+/* Messages that were waiting on the phone the whole time it was in the forest. They arrive when it comes back. */
+const RETURNED_MESSAGES: Array<{ contactId: ContactId; text: string; delay: number }> = [
+  { contactId: "xiaoyu", text: "昨晚看到你定位停在山里就再没动过。你人还好吗？", delay: 6000 },
+  { contactId: "xiaoyu", text: "看到回我一下。", delay: 8500 },
+  { contactId: "mama", text: "今天离开山里吗？到了说一声。", delay: 11000 },
+  { contactId: "mama", text: "在伦敦待了一年手机都没被偷，看来是得丢一个以示尊重。", delay: 14000 },
+  { contactId: "asha", text: "回来一起画。", delay: 17000 },
+];
+
+const PHONE_REPLIES: Record<ContactId, { text: string; photo: string }> = {
+  xiaoyu: { text: "收到。慢慢走，别赶。", photo: "这也太好看了。原图留好。" },
+  mama: { text: "好。到了发个消息。", photo: "真漂亮。你爸问是哪座山。" },
+  asha: { text: "等你回来一起画。", photo: "这一张，什么都不用改了。" },
+};
+
+/* Places on the second-day slope that hold nothing. Looking there is still looking. */
+const EMPTY_SPOTS: Array<Anchor & { label: string; line: string }> = [
+  { yaw: -34, pitch: -14, label: "路边的水沟", line: "水沟里只有松针和别人的一个瓶盖。" },
+  { yaw: 34, pitch: 4, label: "倒木后面", line: "倒木后面是一窝露水。" },
+];
+
+const ZH_LINE_COUNT = LETTER_LINES_ZH.filter((line) => line.length > 0).length;
+const CLIMB_HOLD_MS = 1100;
+const CREDIT_POEM_LINES = Math.max(LETTER_LINES_IT.length, LETTER_LINES_ZH.length);
+const CREDIT_TOTAL = CREDIT_POEM_LINES + CLOSING_LINES.length + 1;
+
+function isReady(node: NodeId, flags: Flags): boolean {
+  switch (node) {
+    case "plaque": return flags.helmet && flags.clipped;
+    case "cable": return flags.cableStep >= CABLE_ANCHORS.length;
+    case "crack": return flags.crackStep >= 4;
+    case "mailbox": return flags.letterPhotographed;
+    case "summit": return flags.summitSelfie;
+    case "hutView": return flags.hutChoice === "retreat" && flags.chocolate;
+    case "signpost": return flags.signChosen;
+    case "scree": return flags.screeStep >= SCREE_STEPS.length;
+    case "deer": return flags.deerSeen;
+    case "forestEdge": return flags.callDone;
+    case "forest1": return flags.forestStep1 >= FOREST_STEPS.forest1.length;
+    case "forest2": return flags.forestStep2 >= FOREST_STEPS.forest2.length;
+    case "hairpin": return flags.waved;
+    case "car": return flags.carLine >= CAR_LINES.length;
+    case "search": return SEARCH_SPOTS.every((_, index) => flags.searched.includes(index));
+    case "hotel": return flags.hotelCalls >= HOTEL_CALLS.length;
+    case "busStop": return flags.busAnswered && flags.womanPhotographed;
+    case "police": return flags.policeLine >= POLICE_LINES.length;
+    case "bench": return false;
+    default: return true;
+  }
+}
+
+/* Flags as they stand when a node has been fully played (used by ?node= previews in development). */
+function completeNode(node: NodeId, flags: Flags): Flags {
+  const next = { ...flags, carabiner: { ...flags.carabiner } };
+  switch (node) {
+    case "plaque": next.helmet = true; next.clipped = true; break;
+    case "cable": next.cableStep = CABLE_ANCHORS.length; next.carabiner = { a: CABLE_ANCHORS.length, b: CABLE_ANCHORS.length }; break;
+    case "crack": next.crackStep = 4; break;
+    case "mailbox": next.mailboxOpened = true; next.letterPhotographed = true; break;
+    case "summit": next.summitSelfie = true; break;
+    case "hutView": next.mapLegs = MAP_LEGS.map((_, index) => index); next.mapDone = true; next.hutChoice = "retreat"; next.chocolate = true; break;
+    case "signpost": next.signChosen = true; break;
+    case "scree": next.screeStep = SCREE_STEPS.length; break;
+    case "deer": next.deerSeen = true; break;
+    case "forestEdge": next.cameraDead = true; next.callDone = true; break;
+    case "forest1": next.forestStep1 = FOREST_STEPS.forest1.length; break;
+    case "forest2": next.forestStep2 = FOREST_STEPS.forest2.length; next.phoneLost = true; next.lostAt = 22 * 60 + 18; break;
+    case "hairpin": next.waved = true; break;
+    case "car": next.carLine = CAR_LINES.length; break;
+    case "search": next.searched = SEARCH_SPOTS.map((_, index) => index); break;
+    case "hotel": next.hotelCalls = HOTEL_CALLS.length; next.hotelCalled = HOTEL_CALLS.map((_, index) => index); break;
+    case "busStop": next.busLine = BUS_STOP_LINES.length; next.busAnswered = true; next.womanPhotographed = true; break;
+    case "police": next.policeLine = POLICE_LINES.length; next.phoneReturned = true; next.phoneLost = false; break;
+    default: break;
+  }
+  return next;
+}
+
+function flagsUpTo(node: NodeId): Flags {
+  let flags = INITIAL_FLAGS;
+  for (const id of NODE_IDS) {
+    if (id === node) break;
+    flags = completeNode(id, flags);
+  }
+  return flags;
+}
+
+function clockFor(node: NodeId) {
+  const day = NODES[node].day;
+  if (day === 2) return node === "hotel" ? { date: NEXT_MORNING_DATE, minuteOfDay: 20 * 60 + 15 } : { date: NEXT_MORNING_DATE, minuteOfDay: 8 * 60 + 40 };
+  if (day === 3) return node === "police" ? { date: THIRD_DAY_DATE, minuteOfDay: 10 * 60 + 5 } : node === "bench" ? { date: THIRD_DAY_DATE, minuteOfDay: 11 * 60 + 50 } : { date: THIRD_DAY_DATE, minuteOfDay: 9 * 60 + 5 };
+  return null;
+}
+
+function createDevPhone(node: NodeId) {
+  let phone = createInitialPhoneState();
+  for (const id of NODE_IDS) {
+    if (id === node) break;
+    phone = phoneReducer(phone, { type: "advance_time", minutes: NODES[id].minutes, batteryCost: NODES[id].battery });
+  }
+  const clock = clockFor(node);
+  if (clock) phone = phoneReducer(phone, { type: "set_clock", ...clock });
+  if (nodeIndex(node) >= nodeIndex("forestEdge") && nodeIndex(node) < nodeIndex("police")) phone = phoneReducer(phone, { type: "set_clock", battery: 9 });
+  if (nodeIndex(node) >= nodeIndex("police")) phone = phoneReducer(phone, { type: "set_clock", battery: 61 });
+  if (nodeIndex(node) > nodeIndex("mailbox")) {
+    phone = phoneReducer(phone, { type: "capture_photo", photo: { asset: nodeAsset("mailbox"), title: NODES.mailbox.photoTitle, place: NODES.mailbox.place, position: { x: 50, y: 50 }, zoom: 1.4, kind: "letter", day: 1 } });
+  }
+  return phone;
+}
+
+// ?node=<id> jumps into a node with everything before it completed. Development builds only.
+const DEV_NODE: NodeId | null = import.meta.env.DEV ? (() => {
+  const value = new URLSearchParams(window.location.search).get("node");
+  return isNodeId(value) ? value : null;
+})() : null;
+
+/* Hotspots carry their place on the painting and how close the gaze must come before they show. */
+const anchorProps = (anchor: Anchor, reveal = 10) => ({ "data-yaw": anchor.yaw, "data-pitch": anchor.pitch, "data-distance": anchor.distance ?? 10, "data-reveal": reveal });
+const propProps = (anchor: Anchor) => ({ "data-yaw": anchor.yaw, "data-pitch": anchor.pitch, "data-distance": anchor.distance ?? 10 });
+/* Pointer and keyboard both trigger a world action; a keyboard "click" has detail 0 and would otherwise be ignored. */
+const act = (fn: () => void) => ({
+  onPointerDown: (event: React.PointerEvent) => { event.stopPropagation(); fn(); },
+  onClick: (event: React.MouseEvent) => { if (event.detail === 0) fn(); },
+});
 
 export default function App() {
-  const [phase, setPhase] = useState<Phase>(DEV_SCENE ?? "title");
-  const [scene, setScene] = useState<JourneyScene>(DEV_SCENE ?? "arrival");
+  const [phase, setPhase] = useState<Phase>(DEV_NODE ? "play" : "title");
+  const [node, setNode] = useState<NodeId>(DEV_NODE ?? "meadow");
+  const [flags, setFlags] = useState<Flags>(() => DEV_NODE ? flagsUpTo(DEV_NODE) : INITIAL_FLAGS);
+  const [phone, dispatchPhone] = useReducer(phoneReducer, DEV_NODE, (dev) => dev ? createDevPhone(dev) : createInitialPhoneState());
+  const [settings, setSettings] = useState<GameSettings>(loadSettings);
+  const [savedJourney, setSavedJourney] = useState<JourneySave | null>(() => DEV_NODE ? null : loadJourneySave());
+  const [soundOn, setSoundOn] = useState(true);
+  const [audioReady, setAudioReady] = useState(false);
   const [canvasReady, setCanvasReady] = useState(false);
-  const [bagTaken, setBagTaken] = useState(DEV_SCENE !== null && DEV_SCENE !== "arrival");
-  const [bagPos, setBagPos] = useState({ x: 84, y: 74 });
-  const [bagDragging, setBagDragging] = useState(false);
-  const [arrivalProgress, setArrivalProgress] = useState(0);
-  const [trailProgress, setTrailProgress] = useState(0);
-  const [sceneProgress, setSceneProgress] = useState(0);
-  const [route, setRoute] = useState<Route>(null);
-  const [streamStep, setStreamStep] = useState(0);
-  const [interactions, setInteractions] = useState<JourneyInteractionState>(() => createDevInteractions(DEV_SCENE));
-  const [moving, setMoving] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [look, setLook] = useState<LookPoint>({ x: 0, y: 0 });
-  const [walkFocus, setWalkFocus] = useState<LookPoint | null>(null);
-  const [breathState, setBreathState] = useState<BreathState>("calm");
-  const [lightMode, setLightMode] = useState<LightMode>(DEV_SCENE && NIGHT_LIGHT_SCENES.includes(DEV_SCENE) && DEV_SCENE !== "nightSlope" ? "flashlight" : "off");
-  const [callActive, setCallActive] = useState(false);
-  const [callStep, setCallStep] = useState(0);
-  const [chapterShown, setChapterShown] = useState(false);
-  const [thought, setThoughtRaw] = useState("");
-  const thoughtTimersRef = useRef<number[]>([]);
-  // Any line spoken by an interaction cancels the scene's scripted opening lines
-  // so a click within the first seconds is never overwritten.
-  const setThought = (text: string) => {
-    thoughtTimersRef.current.forEach(window.clearTimeout);
-    thoughtTimersRef.current = [];
-    setThoughtRaw(text);
-  };
+  const [walking, setWalking] = useState(false);
+  const [walkProgress, setWalkProgress] = useState(0);
+  const [breath, setBreath] = useState<BreathState>("calm");
+  const [thought, setThought] = useState("");
   const [feedback, setFeedback] = useState("");
+  const [chapterShown, setChapterShown] = useState(false);
+  const [overlay, setOverlay] = useState<Overlay>("none");
+  const [notebookReady, setNotebookReady] = useState(false);
   const [phoneOpen, setPhoneOpen] = useState(false);
   const [phoneTab, setPhoneTab] = useState<PhoneTab>("home");
   const [cameraAim, setCameraAim] = useState({ x: 50, y: 50 });
   const [cameraZoom, setCameraZoom] = useState(1);
-  const [stagePhotoTaken, setStagePhotoTaken] = useState(false);
-  const [soundOn, setSoundOn] = useState(true);
-  const [audioReady, setAudioReady] = useState(false);
-  const [settings, setSettings] = useState<GameSettings>(() => loadSettings());
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [savedJourney, setSavedJourney] = useState<JourneySave | null>(() => loadJourneySave());
-  const [deerState, setDeerState] = useState<DeerState>("hidden");
-  const [letterOpen, setLetterOpen] = useState(false);
+  const [fear, setFear] = useState(0);
+  const [climbHold, setClimbHold] = useState(0);
+  const [carState, setCarState] = useState<CarState>("none");
+  const [deerState, setDeerState] = useState<DeerState>("standing");
+  const [womanShown, setWomanShown] = useState(false);
+  const [callStep, setCallStep] = useState(0);
+  const [nodeSeconds, setNodeSeconds] = useState(0);
   const [creditLine, setCreditLine] = useState(0);
-  const [phone, dispatchPhone] = useReducer(phoneReducer, undefined, createJourneyPhoneState);
-  const soundRef = useRef<Soundscape | null>(null);
-  const breathAudioTimerRef = useRef(0);
-  const stepTimersRef = useRef(new Set<number>());
-  const deerGazeRef = useRef(0);
 
-  // Step handlers finish on a short timeout; keep every pending one so leaving
-  // the scene (menu → title, restart, continue) can cancel them.
-  const schedule = (callback: () => void, delay: number) => {
-    const id = window.setTimeout(() => {
-      stepTimersRef.current.delete(id);
-      callback();
-    }, delay);
-    stepTimersRef.current.add(id);
-    return id;
-  };
-  const clearScheduled = () => {
-    stepTimersRef.current.forEach(window.clearTimeout);
-    stepTimersRef.current.clear();
-  };
-  const bagStartRef = useRef({ x: 0, y: 0 });
-  const transitionRef = useRef(false);
+  const soundRef = useRef<Soundscape | null>(null);
+  const musicElsRef = useRef<Partial<Record<MusicKind, HTMLAudioElement>>>({});
+  const musicTargetsRef = useRef<Partial<Record<MusicKind, number>>>({});
+  const musicBlockedRef = useRef(false);
+  const timersRef = useRef<number[]>([]);
+  const entryTimersRef = useRef<number[]>([]);
   const walkFrameRef = useRef(0);
-  const recoveryTimerRef = useRef(0);
   const feedbackTimerRef = useRef(0);
-  const replyTimersRef = useRef<number[]>([]);
-  const narrativeMessagesRef = useRef(new Set<string>());
+  const recoveryTimerRef = useRef(0);
+  const holdRef = useRef<{ start: number; raf: number } | null>(null);
   const anchorLayerRef = useRef<HTMLDivElement>(null);
+  const flagsRef = useRef(flags);
+  useEffect(() => { flagsRef.current = flags; }, [flags]);
+
+  const info = NODES[node];
+  const night = NIGHT_NODES.includes(node);
+  const ready = isReady(node, flags);
+  const unread = Object.values(phone.unread).reduce((sum, value) => sum + value, 0);
+
+  /* ---------- helpers ---------- */
+  const schedule = useCallback((fn: () => void, delay: number) => {
+    const timer = window.setTimeout(fn, delay);
+    timersRef.current.push(timer);
+    return timer;
+  }, []);
+  const clearTimers = useCallback(() => {
+    timersRef.current.forEach((timer) => window.clearTimeout(timer));
+    timersRef.current = [];
+    entryTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    entryTimersRef.current = [];
+    cancelAnimationFrame(walkFrameRef.current);
+  }, []);
+  const flash = useCallback((message: string) => {
+    window.clearTimeout(feedbackTimerRef.current);
+    setFeedback(message);
+    feedbackTimerRef.current = window.setTimeout(() => setFeedback(""), 1800);
+  }, []);
+  // A line she says. It cancels the node's own entry narration so player-triggered lines are never overwritten.
+  const say = useCallback((line: string, delay = 0) => {
+    entryTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    entryTimersRef.current = [];
+    if (delay <= 0) setThought(line);
+    else schedule(() => setThought(line), delay);
+  }, [schedule]);
+  const recover = useCallback((duration = 4200) => {
+    window.clearTimeout(recoveryTimerRef.current);
+    setBreath("recovery");
+    recoveryTimerRef.current = window.setTimeout(() => setBreath("calm"), duration);
+  }, []);
+  const patch = useCallback((update: Partial<Flags> | ((current: Flags) => Partial<Flags>)) => {
+    setFlags((current) => ({ ...current, ...(typeof update === "function" ? update(current) : update) }));
+  }, []);
+  const sfx = useCallback((name: "step" | "shutter" | "tick" | "tock" | "clink" | "slip" | "door" | "breath") => {
+    const sound = soundRef.current;
+    if (!sound || !soundOn) return;
+    if (name === "step") sound.step(MATERIAL[node]);
+    else if (name === "shutter") sound.shutter();
+    else if (name === "tick") sound.uiTick(true);
+    else if (name === "tock") sound.uiTick(false);
+    else if (name === "clink") sound.chainClink();
+    else if (name === "slip") sound.slip();
+    else if (name === "door") sound.carDoor();
+    else sound.breath({ duration: 0.9, gain: 0.5, cutoff: 900 });
+  }, [node, soundOn]);
+  const spend = useCallback((minutes: number, battery = 0) => {
+    if (flagsRef.current.phoneLost) return;
+    dispatchPhone({ type: "advance_time", minutes, batteryCost: battery });
+  }, []);
+
+  // Web Audio only starts from a user gesture; the title button and any first pointer press wake it.
+  const startAudio = useCallback(() => {
+    if (!soundRef.current) {
+      try {
+        const sound = new Soundscape();
+        sound.setMaster(settings.master);
+        soundRef.current = sound;
+        setAudioReady(true);
+      } catch { return; }
+    }
+    soundRef.current.resume();
+    musicBlockedRef.current = false;
+  }, [settings.master]);
+
+  const updateSettings = useCallback((update: Partial<GameSettings>) => {
+    setSettings((current) => { const next = { ...current, ...update }; saveSettings(next); return next; });
+  }, []);
+
   const onCanvasReady = useCallback(() => setCanvasReady(true), []);
 
-  // The title needs only its key art, not the whole renderer: show the card as
-  // soon as that one image is in, while the canvas keeps preloading behind it.
+  /* ---------- title key art ---------- */
   useEffect(() => {
     const image = new Image();
     image.onload = () => setCanvasReady(true);
-    image.src = `${import.meta.env.BASE_URL}art/title-key-art-v1.webp`;
+    image.src = `${import.meta.env.BASE_URL}pano/title-key-art.webp`;
     const fallback = window.setTimeout(() => setCanvasReady(true), 4000);
     return () => window.clearTimeout(fallback);
   }, []);
 
-  const flash = useCallback((message: string) => {
-    window.clearTimeout(feedbackTimerRef.current);
-    setFeedback(message);
-    feedbackTimerRef.current = window.setTimeout(() => setFeedback(""), 1500);
-  }, []);
-
-  const markEndingGalleryViewed = useCallback(() => {
-    if (phase !== "valleyExit" || sceneProgress < 1) return;
-    setInteractions((value) => value.endingGallerySeen ? value : { ...value, endingGallerySeen: true });
-  }, [phase, sceneProgress]);
-
-  const startAudio = useCallback(() => {
-    if (soundRef.current) return;
-    try {
-      const sound = new Soundscape();
-      sound.setMaster(settings.master);
-      soundRef.current = sound;
-      setAudioReady(true);
-    } catch {
-      // No Web Audio; the game stays silent but playable.
-    }
-  }, [settings.master]);
-
-  const stepSound = useCallback(() => {
-    if (!soundOn) return;
-    soundRef.current?.step(stepMaterialFor(scene));
-  }, [scene, soundOn]);
-
-  const updateSettings = useCallback((patch: Partial<GameSettings>) => {
-    setSettings((current) => {
-      const next = { ...current, ...patch };
-      saveSettings(next);
-      return next;
-    });
-  }, []);
-
-  const beginRecovery = useCallback((duration = 5200) => {
-    window.clearTimeout(recoveryTimerRef.current);
-    setBreathState("recovery");
-    recoveryTimerRef.current = window.setTimeout(() => setBreathState("calm"), duration);
-  }, []);
-
+  /* ---------- audio ---------- */
   useEffect(() => {
-    if (!soundOn) {
-      soundRef.current?.suspend();
-      return;
-    }
-    startAudio();
-    soundRef.current?.resume();
+    if (!soundOn) { soundRef.current?.suspend(); return; }
+    if (phase !== "title") startAudio();
+  }, [phase, soundOn, startAudio]);
+  useEffect(() => {
+    const wake = () => { if (soundOn) startAudio(); };
+    window.addEventListener("pointerdown", wake, { passive: true });
+    window.addEventListener("keydown", wake);
+    return () => { window.removeEventListener("pointerdown", wake); window.removeEventListener("keydown", wake); };
   }, [soundOn, startAudio]);
-
-  useEffect(() => {
-    soundRef.current?.setMaster(settings.master);
-  }, [audioReady, settings.master]);
-
+  useEffect(() => { soundRef.current?.setMaster(settings.master); }, [audioReady, settings.master]);
   useEffect(() => {
     const sound = soundRef.current;
     if (!audioReady || !sound) return;
-    const activeScene: JourneyScene = phase === "title" ? "arrival" : phase === "complete" ? "valleyExit" : phase;
-    sound.setAmbience(phase === "title" ? { ...AMBIENCE.arrival, wind: 0.25, birds: 0.3 } : AMBIENCE[activeScene]);
-    if (phase === "carInterior") sound.carDoor();
-  }, [audioReady, phase]);
-
-  useEffect(() => {
-    window.clearInterval(breathAudioTimerRef.current);
-    const sound = soundRef.current;
-    if (!audioReady || !sound || !soundOn || phase === "title" || phase === "complete") return;
-    const profile = breathState === "walking"
-      ? { interval: 1720, duration: .72, gain: .015, cutoff: 1050 }
-      : breathState === "recovery"
-        ? { interval: 2500, duration: 1.05, gain: .021, cutoff: 920 }
-        : { interval: 5000, duration: 1.18, gain: .0065, cutoff: 760 };
-    const playBreath = () => sound.breath(profile);
-    const first = window.setTimeout(playBreath, 420);
-    breathAudioTimerRef.current = window.setInterval(playBreath, profile.interval);
-    return () => {
-      window.clearTimeout(first);
-      window.clearInterval(breathAudioTimerRef.current);
-    };
-  }, [audioReady, breathState, phase, soundOn]);
-
-  useEffect(() => {
-    thoughtTimersRef.current.forEach(window.clearTimeout);
-    const timers: number[] = [];
-    setThoughtRaw("");
-    if (phase !== "title" && phase !== "complete") {
-      const [first, second] = SCENE_INFO[phase].thoughts;
-      timers.push(window.setTimeout(() => setThoughtRaw(first), 650));
-      timers.push(window.setTimeout(() => setThoughtRaw(second), 4300));
-    }
-    thoughtTimersRef.current = timers;
-    return () => timers.forEach(window.clearTimeout);
-  }, [phase]);
-
-  const musicElsRef = useRef<Partial<Record<MusicKind, HTMLAudioElement>>>({});
-  const musicTargetsRef = useRef<Partial<Record<MusicKind, number>>>({});
+    const base = phase === "title" ? { ...AMBIENCE.meadow, wind: 0.3 } : phase === "complete" ? AMBIENCE.bench : AMBIENCE[node];
+    // A car on the hairpin is heard before it is seen.
+    const engine = node === "hairpin" && carState !== "none" ? (carState === "stopped" ? 0.35 : 0.5) : 0;
+    sound.setAmbience(engine ? { ...base, engine } : base, node === "hairpin" ? 0.9 : 1.6);
+  }, [audioReady, carState, node, phase]);
 
   useEffect(() => {
     const base = import.meta.env.BASE_URL;
@@ -510,9 +350,7 @@ export default function App() {
     kinds.forEach((kind) => {
       const el = document.createElement("audio");
       el.src = `${base}${MUSIC_TRACKS[kind].src}`;
-      el.loop = true;
-      el.preload = "none";
-      el.volume = 0;
+      el.loop = true; el.preload = "none"; el.volume = 0;
       musicElsRef.current[kind] = el;
     });
     const fadeTimer = window.setInterval(() => {
@@ -521,7 +359,8 @@ export default function App() {
         if (!el) return;
         const target = musicTargetsRef.current[kind] ?? 0;
         const diff = target - el.volume;
-        if (target > 0 && el.paused) void el.play().catch(() => undefined);
+        // If the browser refuses playback we stop asking until the next user gesture (startAudio clears the block).
+        if (target > 0 && el.paused && !musicBlockedRef.current) el.play().catch(() => { musicBlockedRef.current = true; });
         if (Math.abs(diff) <= MUSIC_TRACKS[kind].fadeStep) {
           el.volume = target;
           if (target <= 0 && !el.paused) el.pause();
@@ -532,801 +371,453 @@ export default function App() {
     }, 100);
     return () => {
       window.clearInterval(fadeTimer);
-      kinds.forEach((kind) => {
-        const el = musicElsRef.current[kind];
-        if (el) {
-          el.pause();
-          el.removeAttribute("src");
-        }
-      });
+      kinds.forEach((kind) => { const el = musicElsRef.current[kind]; if (el) { el.pause(); el.removeAttribute("src"); } });
       musicElsRef.current = {};
     };
   }, []);
-
   useEffect(() => {
     const targets: Partial<Record<MusicKind, number>> = {};
     const level = settings.music;
-    if (soundOn && level > 0) {
-      if (phase === "carInterior") targets.warm = MUSIC_TRACKS.warm.volume * level;
-      else if (phase === "complete" || (phase === "valleyExit" && interactions.endingGallerySeen)) targets.end = MUSIC_TRACKS.end.volume * level;
-      else if (phase !== "title" && DAY_MUSIC_SCENES.includes(phase)) targets.day = MUSIC_TRACKS.day.volume * level;
+    if (soundOn && level > 0 && phase !== "title") {
+      if (node === "car") targets.warm = MUSIC_TRACKS.warm.volume * level;
+      else if (phase === "complete" || (node === "bench" && flags.letterTranslated) || (node === "police" && flags.phoneReturned)) targets.end = MUSIC_TRACKS.end.volume * level;
+      else if (DAY_MUSIC_NODES.includes(node)) targets.day = MUSIC_TRACKS.day.volume * level;
     }
     musicTargetsRef.current = targets;
-  }, [interactions.endingGallerySeen, phase, settings.music, soundOn]);
+  }, [flags.letterTranslated, flags.phoneReturned, node, phase, settings.music, soundOn]);
 
+  /* ---------- entering a node ---------- */
+  useEffect(() => {
+    if (phase !== "play") return;
+    clearTimers();
+    const chapter = Boolean(NODES[node].chapter);
+    const firstAt = chapter ? 4600 : 0;            // the first line waits for the chapter card to clear
+    const entry = (fn: () => void, delay: number) => { entryTimersRef.current.push(window.setTimeout(fn, delay)); };
+    if (firstAt === 0) setThought(NODES[node].thoughts[0]); else { setThought(""); entry(() => setThought(NODES[node].thoughts[0]), firstAt); }
+    entry(() => setThought(NODES[node].thoughts[1]), firstAt + 5200);
+    setChapterShown(chapter);
+    if (chapter) schedule(() => setChapterShown(false), 4600);
+    setCarState("none");
+    setDeerState("standing");
+    setWomanShown(false);
+    setClimbHold(0);
+    setNodeSeconds(0);
+    if (node === "forestEdge") {
+      setFear(0.3);
+      setFlags((current) => current.cameraDead ? current : { ...current, cameraDead: true });
+      dispatchPhone({ type: "set_clock", battery: Math.min(phone.battery, 9) });
+    }
+    if (node === "hairpin") setFear(0);
+    if (node === "search") schedule(() => setOverlay("findmy"), 2800);
+    if (node === "busStop") schedule(() => setWomanShown(true), 3600);
+    if (node === "car") sfx("door");
+    // A save written after the letter was translated resumes straight into the ending instead of a dead bench.
+    if (node === "bench" && flagsRef.current.letterTranslated) schedule(() => { setPhase("complete"); setCreditLine(0); clearJourneySave(); setSavedJourney(null); }, 1200);
+    const beats = PHONE_BEATS[node];
+    if (beats && !flagsRef.current.phoneLost) beats.forEach((beat, index) => schedule(() => dispatchPhone({ type: "receive_message", contactId: beat.contactId, text: beat.text }), 7000 + index * 3000));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [node, phase]);
+
+  /* seconds spent standing in the current node (drives the fading light on the scree) */
+  useEffect(() => {
+    if (phase !== "play" || node !== "scree") return;
+    const timer = window.setInterval(() => setNodeSeconds((value) => value + 1), 1000);
+    return () => window.clearInterval(timer);
+  }, [node, phase]);
+
+  /* ---------- persistence ---------- */
+  useEffect(() => {
+    if (DEV_NODE || phase !== "play" || walking || flags.letterTranslated) return;
+    const timer = window.setTimeout(() => {
+      const save: JourneySave = { version: 4, savedAt: new Date().toISOString(), node, flags, phone, cameraAim, cameraZoom };
+      persistJourneySave(save);
+      setSavedJourney(save);
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [cameraAim, cameraZoom, flags, node, phase, phone, walking]);
+
+  /* ---------- keys ---------- */
   useEffect(() => {
     const keyDown = (event: KeyboardEvent) => {
-      if (event.key.toLowerCase() === "p" && phase !== "title" && phase !== "complete" && !menuOpen) {
-        if (interactions.phoneLost) {
-          flash("外套口袋是空的。手机不在身上。");
-          return;
-        }
-        soundRef.current?.uiTick(!phoneOpen);
+      if (event.key.toLowerCase() === "p" && phase === "play" && !menuOpen) {
+        if (flags.phoneLost) { flash("外套口袋是空的。手机不在身上。"); return; }
+        sfx(phoneOpen ? "tock" : "tick");
         setPhoneOpen((value) => !value);
-        setPhoneTab(callActive ? "call" : "home");
+        setPhoneTab(overlay === "call" ? "call" : "home");
       }
       if (event.key === "Escape") {
         if (phoneOpen) setPhoneOpen(false);
+        else if (overlay !== "none" && overlay !== "call" && overlay !== "selfie") setOverlay("none");
         else if (phase !== "complete") setMenuOpen((value) => !value);
       }
-      if (event.code === "Space" && phase === "trail" && route !== "open") {
-        event.preventDefault();
-        advanceStone();
-      }
+      if (event.code === "Space" && phase === "play" && (node === "forest1" || node === "forest2") && !(event.target instanceof HTMLButtonElement)) { event.preventDefault(); shout(); }
     };
     window.addEventListener("keydown", keyDown);
     return () => window.removeEventListener("keydown", keyDown);
   });
 
   useEffect(() => {
-    if (!phoneOpen) return;
+    if (!phoneOpen || flags.phoneLost) return;
     const timer = window.setInterval(() => dispatchPhone({ type: "advance_time", minutes: 1, batteryCost: 1 }), 45000);
     return () => window.clearInterval(timer);
-  }, [phoneOpen]);
+  }, [flags.phoneLost, phoneOpen]);
 
+  /* the call: it rings, then every line has to be said again */
   useEffect(() => {
-    if (lightMode !== "phone" || interactions.phoneLost) return;
-    const timer = window.setInterval(() => dispatchPhone({ type: "advance_time", minutes: 1, batteryCost: 1 }), 30000);
-    return () => window.clearInterval(timer);
-  }, [interactions.phoneLost, lightMode]);
-
-  useEffect(() => {
-    if (phone.battery > 0 || lightMode !== "phone") return;
-    setLightMode("off");
-    flash("手机没有电了");
-  }, [flash, lightMode, phone.battery]);
-
-  useEffect(() => {
-    if (phase === "nightSlope" && !interactions.callDone) {
-      setLightMode("off");
-      setBreathState("recovery");
-    }
-    if (phase === "roadside" || phase === "carInterior" || phase === "police" || phase === "searchRoad" || phase === "valleyExit") {
-      setLightMode("off");
-      setBreathState("calm");
-    }
-    // The dawn scenes start at a fixed morning time. The story clock may have
-    // already rolled past midnight on its own, so test the time of day rather
-    // than only the date.
-    const morningReached = (minute: number) => phone.date.day === NEXT_MORNING_DATE.day && phone.minuteOfDay >= minute && phone.minuteOfDay < 12 * 60;
-    if (phase === "police" && !morningReached(6 * 60 + 5)) {
-      dispatchPhone({ type: "set_clock", date: { ...NEXT_MORNING_DATE }, minuteOfDay: 6 * 60 + 5 });
-    }
-    if (phase === "searchRoad" && !morningReached(6 * 60 + 35)) {
-      dispatchPhone({ type: "set_clock", date: { ...NEXT_MORNING_DATE }, minuteOfDay: 6 * 60 + 35 });
-    }
-    setChapterShown(true);
-    const chapterTimer = window.setTimeout(() => setChapterShown(false), 5400);
-    return () => window.clearTimeout(chapterTimer);
-  }, [phase]);
-
-  // The emergency call: lines arrive on their own rhythm; hanging up is hers.
-  useEffect(() => {
-    if (!callActive) return;
-    if (callStep >= CALL_LINES.length - 1) return;
-    const timer = window.setTimeout(() => setCallStep((value) => value + 1), callStep === 0 ? 2600 : 3000);
+    if (overlay !== "call" || callStep !== 0) return;
+    const timer = window.setTimeout(() => setCallStep(1), 1600);
     return () => window.clearTimeout(timer);
-  }, [callActive, callStep]);
+  }, [callStep, overlay]);
 
+  /* the notebook: the date is read before the shutter is offered */
   useEffect(() => {
-    if (DEV_SCENE || phase === "title" || moving) return;
-    const timer = window.setTimeout(() => {
-      const activePhase: JourneyScene = phase === "complete" ? "valleyExit" : phase;
-      const save: JourneySave = {
-        version: 3,
-        savedAt: new Date().toISOString(),
-        phase: activePhase,
-        scene: phase === "complete" ? "valleyExit" : scene,
-        sceneProgress,
-        bagTaken,
-        arrivalProgress,
-        trailProgress,
-        route,
-        streamStep,
-        interactions,
-        look,
-        cameraAim,
-        cameraZoom,
-        stagePhotoTaken,
-        phone,
-      };
-      if (persistJourneySave(save)) setSavedJourney(save);
-    }, 320);
+    if (overlay !== "notebook") { setNotebookReady(false); return; }
+    const timer = window.setTimeout(() => setNotebookReady(true), 2600);
     return () => window.clearTimeout(timer);
-  }, [arrivalProgress, bagTaken, cameraAim, cameraZoom, interactions, moving, phase, phone, route, scene, sceneProgress, stagePhotoTaken, streamStep, trailProgress]);
+  }, [overlay]);
 
-  // The deer at the tree line: steps out a moment after she arrives on the
-  // shoulder, watches her for a while, and walks off when she looks straight
-  // at it for a beat, starts walking, or simply after a while.
+  /* cars on the hairpin: the first one passes without stopping; after that a car comes by every few seconds until she waves one down. */
+  const firstCarPassedRef = useRef(false);
+  useEffect(() => { if (node !== "hairpin") firstCarPassedRef.current = false; }, [node]);
   useEffect(() => {
-    if (phase !== "sunsetFork") {
-      setDeerState("hidden");
-      return;
-    }
-    const appear = window.setTimeout(() => setDeerState("standing"), 2400);
-    const leave = window.setTimeout(() => setDeerState((state) => state === "standing" ? "leaving" : state), 14000);
-    return () => {
-      window.clearTimeout(appear);
-      window.clearTimeout(leave);
-    };
-  }, [phase]);
-
-  useEffect(() => {
-    const stopGaze = () => {
-      window.clearTimeout(deerGazeRef.current);
-      deerGazeRef.current = 0;
-    };
-    if (phase !== "sunsetFork" || deerState !== "standing") {
-      stopGaze();
-      return;
-    }
-    if (moving) {
-      stopGaze();
-      setDeerState("leaving");
-      return;
-    }
-    // Count time spent with the gaze inside the deer's corner; the timer keeps
-    // running while the pointer drifts around inside that zone.
-    const inZone = Math.abs(look.x - DEER_LOOK_X) <= 0.28 && look.y <= 0.35;
-    if (inZone) {
-      if (!deerGazeRef.current) {
-        deerGazeRef.current = window.setTimeout(() => {
-          deerGazeRef.current = 0;
-          setDeerState("leaving");
-        }, 1700);
-      }
-    } else stopGaze();
-  }, [deerState, look.x, look.y, moving, phase]);
-
-  // Ending: the letter is read out line by line before the closing card.
-  useEffect(() => {
-    if (phase !== "complete") {
-      setCreditLine(0);
-      return;
-    }
-    const timer = window.setInterval(() => setCreditLine((value) => value > CREDIT_LINES_TOTAL ? value : value + 1), 1400);
-    return () => window.clearInterval(timer);
-  }, [phase]);
-
-  useEffect(() => {
-    const beat = PHONE_BEATS[phase];
-    if (!beat || narrativeMessagesRef.current.has(beat.id)) return;
-    narrativeMessagesRef.current.add(beat.id);
-    dispatchPhone({ type: "receive_message", contactId: beat.contactId, text: beat.text });
-  }, [phase]);
-
-  useEffect(() => {
-    if (phase === "title" || phase === "complete" || transitionRef.current) return;
-    const sceneFinished =
-      (phase === "arrival" && arrivalProgress >= 1) ||
-      (phase === "trail" && trailProgress >= 1) ||
-      (phase === "chainTraverse" && interactions.chainStep >= CHAIN_POINTS.length) ||
-      (phase === "chainUpper" && interactions.chainUpperStep >= CHAIN_UPPER_POINTS.length) ||
-      (phase === "rubbleSlope" && interactions.rubbleStep >= RUBBLE_POINTS.length) ||
-      (phase === "nightSlope" && interactions.nightStep >= NIGHT_SLOPE_POINTS.length) ||
-      (phase === "deepForest" && interactions.nightStep >= NIGHT_SLOPE_POINTS.length + DEEP_FOREST_POINTS.length) ||
-      (phase === "marker656" && interactions.markerStep >= MARKER_POINTS.length) ||
-      (phase === "roadBank" && interactions.bankStep >= BANK_POINTS.length) ||
-      (phase === "roadside" && interactions.rescuersMet) ||
-      (phase === "carInterior" && interactions.rescueStep >= 6) ||
-      (phase === "police" && interactions.policeStep >= 3) ||
-      (phase === "searchRoad" && interactions.phoneReturned) ||
-      (phase === "valleyExit" && sceneProgress >= 1 && interactions.endingGallerySeen && !phoneOpen) ||
-      (!["arrival", "trail", "chainTraverse", "chainUpper", "rubbleSlope", "nightSlope", "deepForest", "marker656", "roadBank", "roadside", "carInterior", "police", "searchRoad", "valleyExit"].includes(phase) && sceneProgress >= 1);
-    if (!sceneFinished) return;
-    transitionRef.current = true;
-    const transitionDelay = phase === "viewpoint" ? 2600 : phase === "deepForest" ? 3600 : phase === "marker656" ? 2600 : phase === "roadBank" ? 3400 : phase === "roadside" ? 3800 : phase === "carInterior" ? 4200 : phase === "police" ? 3400 : phase === "searchRoad" ? 3600 : 720;
-    const timer = window.setTimeout(() => {
-      const next = nextJourneyScene(phase);
-      if (!next) {
-        setPhase("complete");
-      } else {
-        setScene(next);
-        setPhase(next);
-        setSceneProgress(0);
-      }
-      setLook({ x: 0, y: 0 });
-      setWalkFocus(null);
-      transitionRef.current = false;
-    }, transitionDelay);
+    if (phase !== "play" || node !== "hairpin" || flags.waved) return;
+    let timer = 0;
+    if (carState === "none") timer = window.setTimeout(() => setCarState(firstCarPassedRef.current ? "second" : "first"), firstCarPassedRef.current ? 4200 : 3200);
+    else if (carState === "first") timer = window.setTimeout(() => { firstCarPassedRef.current = true; setCarState("none"); }, 5400);
+    else if (carState === "second") timer = window.setTimeout(() => setCarState("none"), 5400);
     return () => window.clearTimeout(timer);
-  }, [arrivalProgress, interactions, phase, phoneOpen, sceneProgress, stagePhotoTaken, trailProgress]);
+  }, [carState, flags.waved, node, phase]);
+
+  /* credits: the letter first, alone; then her three lines; then the card */
+  useEffect(() => {
+    if (phase !== "complete" || creditLine > CREDIT_TOTAL) return;
+    const delay = creditLine === 0 ? 1800 : creditLine < CREDIT_POEM_LINES ? 1700 : creditLine === CREDIT_POEM_LINES ? 5200 : 3800;
+    const timer = window.setTimeout(() => setCreditLine((value) => value + 1), delay);
+    return () => window.clearTimeout(timer);
+  }, [creditLine, phase]);
 
   useEffect(() => () => {
-    cancelAnimationFrame(walkFrameRef.current);
-    window.clearTimeout(recoveryTimerRef.current);
-    window.clearTimeout(feedbackTimerRef.current);
-    window.clearInterval(breathAudioTimerRef.current);
-    replyTimersRef.current.forEach(window.clearTimeout);
-    stepTimersRef.current.forEach(window.clearTimeout);
-    window.clearTimeout(deerGazeRef.current);
+    clearTimers();
     soundRef.current?.dispose();
-    // StrictMode remounts after this cleanup: drop the closed context so
-    // startAudio builds a fresh one instead of keeping a dead reference.
     soundRef.current = null;
     setAudioReady(false);
-  }, []);
+  }, [clearTimers]);
 
-  // Everything that can fire after a scene is left: the walk frame loop, step
-  // timeouts, the breath recovery timer, an open call or letter.
-  const stopRuntime = () => {
-    cancelAnimationFrame(walkFrameRef.current);
-    clearScheduled();
-    window.clearTimeout(recoveryTimerRef.current);
-    transitionRef.current = false;
-    setMoving(false);
-    setWalkFocus(null);
-    setCallActive(false);
-    setCallStep(0);
-    setLetterOpen(false);
-  };
-
-  const backToTitle = () => {
-    stopRuntime();
-    setMenuOpen(false);
+  /* ---------- walking between nodes ---------- */
+  const walkOn = () => {
+    if (walking || !ready || !info.next) return;
+    const target = info.next;
+    setWalking(true);
+    setBreath("walking");
+    setOverlay("none");
     setPhoneOpen(false);
-    setBreathState("calm");
-    setPhase("title");
-  };
-
-  const resetRuntime = (nextPhase: "title" | "school") => {
-    stopRuntime();
-    replyTimersRef.current.forEach(window.clearTimeout);
-    replyTimersRef.current = [];
-    clearJourneySave();
-    setSavedJourney(null);
-    setPhase(nextPhase);
-    setScene("school");
-    setBagTaken(false);
-    setBagPos({ x: 84, y: 74 });
-    setArrivalProgress(0);
-    setTrailProgress(0);
-    setSceneProgress(0);
-    setRoute(null);
-    setStreamStep(0);
-    setInteractions({ ...INITIAL_INTERACTIONS });
-    setMoving(false);
-    setLook({ x: 0, y: 0 });
-    setWalkFocus(null);
-    setBreathState("calm");
-    setLightMode("off");
-    setPhoneOpen(false);
-    setPhoneTab("home");
-    setCameraAim({ x: 50, y: 50 });
-    setCameraZoom(1);
-    setStagePhotoTaken(false);
-    setThought("");
-    narrativeMessagesRef.current.clear();
-    dispatchPhone({ type: "reset" });
-    transitionRef.current = false;
-  };
-
-  const begin = () => {
-    if (soundOn) {
-      startAudio();
-      soundRef.current?.resume();
-    }
-    setMenuOpen(false);
-    resetRuntime("school");
-  };
-
-  const continueJourney = () => {
-    if (!savedJourney) return;
-    if (soundOn) {
-      startAudio();
-      soundRef.current?.resume();
-    }
-    setMenuOpen(false);
-    stopRuntime();
-    setPhase(savedJourney.phase);
-    setScene(savedJourney.scene);
-    setBagTaken(savedJourney.bagTaken);
-    setBagPos({ x: 84, y: 74 });
-    setArrivalProgress(savedJourney.arrivalProgress);
-    setTrailProgress(savedJourney.trailProgress);
-    setSceneProgress(savedJourney.sceneProgress);
-    setRoute(savedJourney.route);
-    setStreamStep(savedJourney.streamStep);
-    setInteractions({ ...INITIAL_INTERACTIONS, ...savedJourney.interactions });
-    setMoving(false);
-    setLook(savedJourney.look);
-    setWalkFocus(null);
-    setBreathState("calm");
-    setLightMode(NIGHT_LIGHT_SCENES.includes(savedJourney.phase) && savedJourney.interactions.callDone ? "flashlight" : "off");
-    setPhoneOpen(false);
-    setPhoneTab("home");
-    setCameraAim(savedJourney.cameraAim);
-    setCameraZoom(savedJourney.cameraZoom);
-    setStagePhotoTaken(savedJourney.stagePhotoTaken);
-    narrativeMessagesRef.current.clear();
-    const restoredSceneIndex = journeySceneIndex(savedJourney.phase);
-    (Object.entries(PHONE_BEATS) as Array<[Phase, { id: string }]>).forEach(([beatPhase, beat]) => {
-      if (isJourneyScene(beatPhase) && journeySceneIndex(beatPhase) <= restoredSceneIndex) narrativeMessagesRef.current.add(beat.id);
-    });
-    dispatchPhone({ type: "restore", state: savedJourney.phone });
-    transitionRef.current = false;
-  };
-
-  const startAutomaticWalk = useCallback((target: LookPoint) => {
-    if (moving || transitionRef.current || phase === "title" || phase === "complete") return;
-    const startValue = phase === "arrival" ? arrivalProgress : phase === "trail" ? trailProgress : sceneProgress;
-    const duration = phase === "arrival" ? 3300 : phase === "trail" ? 3900 : 3600;
-    const { minutes, batteryCost } = SCENE_INFO[scene];
-    const startedAt = performance.now();
-    let lastStepAt = -1000;
-    setWalkFocus(target);
-    setMoving(true);
-    setBreathState("walking");
-
-    const tick = (now: number) => {
-      const elapsed = now - startedAt;
-      const normalized = Math.min(1, elapsed / duration);
-      const value = startValue + (1 - startValue) * easeInOut(normalized);
-      if (phase === "arrival") setArrivalProgress(value);
-      else if (phase === "trail") setTrailProgress(value);
-      else setSceneProgress(value);
-      if (elapsed - lastStepAt > 500) {
-        lastStepAt = elapsed;
-        stepSound();
-      }
-      if (normalized < 1) {
-        walkFrameRef.current = requestAnimationFrame(tick);
-        return;
-      }
-      setMoving(false);
-      dispatchPhone({ type: "advance_time", minutes, batteryCost });
-      beginRecovery(5600);
+    sfx("step");
+    schedule(() => sfx("step"), 520);
+    schedule(() => sfx("step"), 1040);
+    const started = performance.now();
+    const duration = settings.motion ? 1500 : 900;
+    const tick = () => {
+      const progress = Math.min(1, (performance.now() - started) / duration);
+      setWalkProgress(progress);
+      if (progress < 1) { walkFrameRef.current = requestAnimationFrame(tick); return; }
+      spend(info.minutes, info.battery);
+      const clock = clockFor(target);
+      if (clock && NODES[target].day !== info.day) dispatchPhone({ type: "set_clock", ...clock });
+      setNode(target);
+      setWalking(false);
+      setWalkProgress(0);
+      setBreath(nodeIndex(target) >= nodeIndex("scree") && nodeIndex(target) <= nodeIndex("hairpin") ? "recovery" : "calm");
+      schedule(() => setBreath("calm"), 5000);
     };
     walkFrameRef.current = requestAnimationFrame(tick);
-  }, [arrivalProgress, beginRecovery, moving, phase, scene, sceneProgress, stepSound, trailProgress]);
-
-  const coords = (event: React.PointerEvent<HTMLElement>) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    return { x: (event.clientX - rect.left) / rect.width, y: (event.clientY - rect.top) / rect.height };
   };
 
-  const worldClick = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (phoneOpen || moving) return;
-    const point = coords(event);
-    const focus = { x: (point.x - 0.5) * 2, y: (point.y - 0.5) * 2 };
-    if (phase === "arrival") {
-      if (!bagTaken) {
-        flash("背包还在候车亭里");
+  const worldMove = (event: React.PointerEvent) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    setLook({ x: ((event.clientX - rect.left) / rect.width - 0.5) * 2, y: ((event.clientY - rect.top) / rect.height - 0.5) * 2 });
+  };
+
+  /* ---------- node mechanics ---------- */
+  const putOnHelmet = () => { patch({ helmet: true }); sfx("tick"); say("白色的头盔。扣好带子。"); };
+  const clipIn = () => {
+    if (!flags.helmet) { flash("先戴头盔"); return; }
+    patch({ clipped: true }); sfx("clink"); say("两把锁扣，一蓝一橙，都挂上钢缆。任何时候，至少一把在上面。");
+  };
+
+  const carabinerAction = (which: "a" | "b") => {
+    const step = flags.cableStep;
+    const mine = flags.carabiner[which];
+    const other = flags.carabiner[which === "a" ? "b" : "a"];
+    if (step >= CABLE_ANCHORS.length) return;
+    if (mine === step) {
+      if (other === -1) {
+        sfx("slip");
+        patch((current) => ({ slips: current.slips + 1, carabiner: { a: step, b: step } }));
+        flash("两把锁都离开了钢缆。手心一凉，重新挂回去。");
+        recover(3600);
+        spend(3);
         return;
       }
-      if (point.x > 0.31 && point.x < 0.78 && point.y > 0.3) startAutomaticWalk(focus);
-      else flash(point.x < 0.32 ? "公路往山下绕去了" : "那边没有可以走的路");
+      patch({ carabiner: { ...flags.carabiner, [which]: -1 } });
+      sfx("tock");
+      return;
     }
-    if (phase === "trail") {
-      if (route === null && point.x < 0.55 && point.y > 0.28) {
-        setRoute("open");
-        setThought("我选了左边。路远一点，但能一直看见山。");
-        startAutomaticWalk(focus);
-      } else if (route === "open" && trailProgress < 1) startAutomaticWalk(focus);
-      else if (route === null) flash("右侧溪水里有几块可以落脚的石头");
-    }
-    if (phase === "forestEntry") {
-      if (point.x > 0.28 && point.x < 0.76 && point.y > 0.34) startAutomaticWalk(focus);
-      else flash("林间旧路在树影中间");
-    }
-    if (phase === "letterBox" && !interactions.letterRead) {
-      flash("信箱里好像留着什么");
-    }
-    if (phase === "school") {
-      if (!interactions.routeDrawn) flash("先看看桌上的地图");
-      else if (point.x > 0.6) startAutomaticWalk(focus);
-      else flash("门在右边");
-    }
-    if (phase === "summitRest") {
-      if (!interactions.chocolateEaten) flash("先坐一会儿。脚边有东西");
-      else startAutomaticWalk(focus);
-    }
-    if (phase === "sunsetFork" || phase === "valleyExit" || phase === "viewpoint" || (phase === "letterBox" && interactions.letterRead)) {
-      startAutomaticWalk(focus);
+    if (mine === -1) {
+      const next = step + 1;
+      const carabiner = { ...flags.carabiner, [which]: next };
+      sfx("clink");
+      if (carabiner.a === next && carabiner.b === next) {
+        patch({ carabiner, cableStep: next });
+        sfx("step");
+        spend(8, 0);
+        if (next === CABLE_ANCHORS.length) say("最后一个锚点。上面是裂缝。");
+        else say(["钢缆比看起来更凉。", "一步一步。风从右边来。", "越往上，人越小。"][next - 1] ?? "");
+      } else patch({ carabiner });
     }
   };
 
-  const drawRoute = () => {
-    if (phase !== "school" || interactions.routeDrawn) return;
-    setInteractions((value) => ({ ...value, routeDrawn: true }));
-    setThought("铅笔在地图上画了一条线，停在一个小三角上。‘两个小时，你就能站在上面。’");
-    if (soundOn) soundRef.current?.uiTick(true);
-    dispatchPhone({ type: "advance_time", minutes: 6, batteryCost: 0 });
+  const grabHold = (index: number) => {
+    const hold = CRACK_HOLDS[index];
+    if (hold.order === null) {
+      sfx("slip"); patch((current) => ({ slips: current.slips + 1 })); recover(3600); spend(2);
+      flash(index === 4 ? "石片松了，掉下去很久才听见响。" : "浅槽里全是草，抓不住。");
+      return;
+    }
+    if (hold.order !== flags.crackStep) { flash(hold.order < flags.crackStep ? "已经过了这一步" : "重心还没过去。先找下一个点"); return; }
+    sfx("step"); patch({ crackStep: flags.crackStep + 1 }); spend(6);
+    say(["左脚先站稳。", "右手抠住裂缝边缘。粗糙，扎手，但很牢。", "左手石突。重心移过去。", "右脚踩进裂缝。上面又有钢缆了。"][hold.order]);
   };
 
-  const eatChocolate = () => {
-    if (phase !== "summitRest" || interactions.chocolateEaten) return;
-    setInteractions((value) => ({ ...value, chocolateEaten: true }));
-    setThought("掰下两格。剩下的用银纸包好，塞回口袋。风把包装纸吹得哗哗响。");
-    dispatchPhone({ type: "advance_time", minutes: 10, batteryCost: 0 });
-    beginRecovery(4000);
+  const openMailbox = () => { sfx("tick"); patch({ mailboxOpened: true }); setOverlay("notebook"); say("盒子里是一本本子。有人翻到 7 月 28 日那页，留了几行意大利语。"); };
+  const photographLetter = () => {
+    if (!notebookReady) return;
+    sfx("shutter");
+    dispatchPhone({ type: "capture_photo", photo: { asset: nodeAsset("mailbox"), title: "山崖上的信箱", place: NODES.mailbox.place, position: { x: 50, y: 50 }, zoom: 1.4, kind: "letter", day: 1 } });
+    patch({ letterPhotographed: true });
+    setOverlay("none");
+    say("看不懂。先拍下来，放回去。");
+    spend(4, 1);
   };
 
-  const startCall = () => {
-    if (phase !== "nightSlope" || interactions.callDone || callActive) return;
-    setCallStep(0);
-    setCallActive(true);
-    setThought("");
-    openPhone("call");
+  const lookAtCross = () => say("木头十字架。对面是 Sassolungo，云压在它上面。往下看，就是早上出发的山口。");
+  const takeSelfie = () => {
+    sfx("shutter"); setOverlay("selfie");
+    schedule(() => { setOverlay("none"); patch({ summitSelfie: true }); say("举起相机的时候，一架直升机从头顶飞过去。这一整天，山里就它和那两个人。"); }, 3200);
+    schedule(() => say("我开心了一下。然后一整天，都没再笑出来。"), 9000);
+    spend(6, 2);
   };
 
+  const toggleLeg = (index: number) => {
+    sfx("tick");
+    patch((current) => ({ mapLegs: current.mapLegs.includes(index) ? current.mapLegs.filter((value) => value !== index) : [...current.mapLegs, index] }));
+  };
+  const mapTotal = flags.mapLegs.reduce((sum, index) => sum + MAP_LEGS[index].hours, 0);
+  const closeMap = () => {
+    if (flags.mapLegs.length < MAP_LEGS.length) { flash("把每一段都加起来"); return; }
+    setOverlay("none");
+  };
+  const lookAtHut = () => say("山屋就在对面。隔着一整个山谷。地图上写着两个半小时。");
+  const chooseHut = () => { flash("天黑以前，到不了。"); say("隔着一整个山谷。地图上的两个半小时，天黑以前到不了。"); patch({ hutChoice: null }); };
+  const chooseRetreat = () => {
+    patch({ hutChoice: "retreat", mapDone: true }); setOverlay("none"); sfx("tick");
+    say("地图上一段一段加起来，从头到尾至少十个小时。教练说的是六七个。已经走了六个半小时，天只剩四个半小时。");
+    say("紧急下撤。素材不要了，饭也不吃了，一板巧克力。", 6500);
+  };
+  const eatChocolate = () => { sfx("tick"); patch({ chocolate: true }); say("一板巧克力。今天唯一的一顿饭。"); spend(3); };
+
+  const chooseArm = (index: number) => {
+    const arm = SIGNPOST_ARMS[index];
+    if (arm.correct) { patch({ signChosen: true }); sfx("tick"); say("Plan de Roces，Val Lasties，2455 米。656 号。往下。"); return; }
+    spend(60, 4); recover(5000);
+    flash(arm.label.includes("Selva") ? "这是往回走的路。一个小时没了。" : arm.label.includes("Boè") ? "往山屋的路。绕了一个小时又回到这里。" : "走错谷了。一个小时。");
+  };
+
+  const takeScreeStep = (safe: boolean) => {
+    if (flags.screeStep >= SCREE_STEPS.length) return;
+    if (!safe) { sfx("slip"); patch((current) => ({ slips: current.slips + 1 })); recover(3200); flash("石头从脚下滑走，一直滚到看不见。"); spend(4); return; }
+    sfx("step"); const next = flags.screeStep + 1; patch({ screeStep: next }); spend(11, 0);
+    if (next === 2) say("云在离我而去。");
+    if (next === 4) say("最后的夕阳也在离我而去。我一直盯着脚下。");
+    if (next === SCREE_STEPS.length) say("坡底了。林线就在前面。");
+  };
+  const dusk = node === "scree" ? Math.min(0.85, flags.screeStep / SCREE_STEPS.length * 0.5 + Math.min(1, nodeSeconds / 240) * 0.35) : 0;
+
+  const scareDeer = () => {
+    if (deerState !== "standing") return;
+    setDeerState("fleeing"); sfx("step");
+    schedule(() => { setDeerState("gone"); patch({ deerSeen: true }); say("十几只鹿，扭头跑回远处的森林。纪念品上除了鹿，还有熊、狼和野猪。"); }, 2600);
+  };
+
+  const startCall = () => { sfx("tick"); setCallStep(0); setOverlay("call"); };
+  const sayAgain = () => { if (callStep < CALL_LINES.length - 1) { sfx("tick"); setCallStep((value) => value + 1); } };
   const hangUp = () => {
-    if (!callActive) return;
-    setCallActive(false);
-    setInteractions((value) => ({ ...value, callDone: true }));
-    dispatchPhone({ type: "advance_time", minutes: 4, batteryCost: 3 });
-    closePhone();
-    setThought("挂掉电话。风还在。我打开补光灯。");
+    setOverlay("none"); setPhoneOpen(false);
+    patch({ callDone: true });
+    dispatchPhone({ type: "set_clock", battery: 8 });
+    say("对方不太会说英语，信号又很差。几乎没传递什么有效信息。相机已经没电了，手机也快了。特别特别幸运，我带了一盏拍视频用的补光灯。");
   };
 
-  const advanceChainUpper = () => {
-    if (phase !== "chainUpper" || moving || interactions.chainUpperStep >= CHAIN_UPPER_POINTS.length) return;
-    const point = CHAIN_UPPER_POINTS[interactions.chainUpperStep];
-    setWalkFocus({ x: (point.x / 100 - 0.5) * 2, y: (point.y / 100 - 0.5) * 2 });
-    setMoving(true);
-    setBreathState("walking");
-    if (soundOn) soundRef.current?.chainClink();
-    stepSound();
-    schedule(() => {
-      const next = interactions.chainUpperStep + 1;
-      setInteractions((value) => ({ ...value, chainUpperStep: next }));
-      setSceneProgress(next / CHAIN_UPPER_POINTS.length);
-      dispatchPhone({ type: "advance_time", minutes: 7, batteryCost: next === CHAIN_UPPER_POINTS.length ? 1 : 0 });
-      setMoving(false);
-      if (next === CHAIN_UPPER_POINTS.length) {
-        setThought("最后一级。翻上去的时候，风忽然从四面八方来了。");
-        beginRecovery(7200);
-      } else setBreathState("recovery");
-    }, 680);
+  const shout = () => {
+    if (node !== "forest1" && node !== "forest2") return;
+    sfx("breath"); setFear((value) => Math.max(0.12, value - 0.4));
+    flash(["呼——", "哈！", "走！", "啊——"][Math.floor(Math.random() * 4)]);
+  };
+  const forestStep = node === "forest1" ? flags.forestStep1 : flags.forestStep2;
+  const forestSteps = node === "forest1" || node === "forest2" ? FOREST_STEPS[node] : [];
+  const beginClimb = () => {
+    if (holdRef.current || (node !== "forest1" && node !== "forest2")) return;
+    const start = performance.now();
+    const required = CLIMB_HOLD_MS * (1 + fear * 0.9);
+    const loop = () => {
+      const progress = Math.min(1, (performance.now() - start) / required);
+      setClimbHold(progress);
+      if (progress < 1) { holdRef.current = { start, raf: requestAnimationFrame(loop) }; return; }
+      holdRef.current = null;
+      setClimbHold(0);
+      completeClimbStep();
+    };
+    holdRef.current = { start, raf: requestAnimationFrame(loop) };
+  };
+  const endClimb = () => {
+    if (!holdRef.current) return;
+    cancelAnimationFrame(holdRef.current.raf);
+    holdRef.current = null;
+    if (climbHold > 0.05 && climbHold < 1) { flash("手松了。再来。"); setFear((value) => Math.min(1, value + 0.08)); }
+    setClimbHold(0);
+  };
+  const completeClimbStep = () => {
+    const id = node as "forest1" | "forest2";
+    const current = id === "forest1" ? flagsRef.current.forestStep1 : flagsRef.current.forestStep2;
+    const next = current + 1;
+    sfx("step"); setFear((value) => Math.min(1, value + 0.16)); spend(9);
+    if (id === "forest1") patch({ forestStep1: next });
+    else patch({ forestStep2: next, phoneLost: flagsRef.current.phoneLost || next >= 3, lostAt: flagsRef.current.lostAt ?? (next >= 3 ? phone.minuteOfDay : null) });
+    if (id === "forest2" && next === 3 && !flagsRef.current.phoneLost) {
+      setPhoneOpen(false); sfx("slip");
+      say("口袋里滑出去一样东西。没有声音。");
+      recover(5000);
+    } else if (id === "forest1" && next === 2) say("心里有点害怕，就一直发出很粗重的声音给自己壮胆。");
+    else if (id === "forest2" && next === FOREST_STEPS.forest2.length) say("下面有一点点光。是公路。");
+  };
+  // Keyboard users hold Enter/Space on the focused hold.
+  const climbKey = (event: React.KeyboardEvent, down: boolean) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault(); event.stopPropagation();
+    if (down) beginClimb(); else endClimb();
   };
 
-  const advanceMarker = () => {
-    if (phase !== "marker656" || moving || interactions.markerStep >= MARKER_POINTS.length) return;
-    if (lightMode === "off") {
-      flash("先打开一种光，再一处一处地照");
+  const wave = () => {
+    if (node !== "hairpin" || flags.waved) return;
+    if (carState === "first") { flash("第一辆车没有停。"); return; }
+    if (carState === "second") { setCarState("stopped"); patch({ waved: true }); sfx("door"); say("第二辆车停下来了。车窗降下来，一对特别可爱的情侣。"); return; }
+    flash("路上没有车。");
+  };
+  const nextCarLine = () => { if (flags.carLine >= CAR_LINES.length) return; say(CAR_LINES[flags.carLine]); patch({ carLine: flags.carLine + 1 }); sfx("tick"); };
+
+  const searchSpot = (index: number) => {
+    if (flags.searched.includes(index)) return;
+    sfx("step"); say(SEARCH_SPOTS[index].line);
+    const searched = [...flags.searched, index];
+    patch({ searched });
+    if (SEARCH_SPOTS.every((_, spot) => searched.includes(spot))) say("好吧。昨天能那么顺利地走出来，说不定是它替我挡了一次。这一年的照片，就当留在山里了。", 5200);
+  };
+  const searchEmpty = (index: number) => { sfx("step"); say(EMPTY_SPOTS[index].line); };
+  const callHotel = (index: number) => {
+    if (flags.hotelCalled.includes(index)) return;
+    sfx("tick");
+    patch((current) => ({ hotelCalled: [...current.hotelCalled, index], hotelCalls: current.hotelCalls + 1 }));
+    dispatchPhone({ type: "advance_time", minutes: 4, batteryCost: 0 });
+    flash(["“No, sorry.”", "“Nessun telefono qui.”", "“没有人捡到。”", "“Non lo so.”", "“Mi dispiace.”"][index % 5]);
+  };
+  const closeHotel = () => {
+    if (flags.hotelCalls < HOTEL_CALLS.length) { flash("还有没打的"); return; }
+    setOverlay("none"); say("二十多个电话。得到的答案都是没有。");
+  };
+
+  const nextBusLine = () => { if (flags.busLine >= BUS_STOP_LINES.length) return; say(BUS_STOP_LINES[flags.busLine]); patch({ busLine: flags.busLine + 1 }); };
+  const answerYes = () => { patch({ busAnswered: true }); sfx("tick"); say("“Yes.” 她说：这个公交车去警察局。"); };
+  const photographWoman = () => {
+    if (flags.womanPhotographed) return;
+    sfx("shutter"); patch({ womanPhotographed: true });
+    say("来不及细问，公交已经到了。我只来得及拍下她跑开的背影。");
+  };
+
+  const nextPoliceLine = () => {
+    if (flags.policeLine >= POLICE_LINES.length) return;
+    const index = flags.policeLine;
+    say(POLICE_LINES[index]);
+    if (index === 1) {
+      patch({ policeLine: index + 1, phoneReturned: true, phoneLost: false }); dispatchPhone({ type: "set_clock", battery: 61 }); sfx("tick");
+      RETURNED_MESSAGES.forEach((message) => schedule(() => dispatchPhone({ type: "receive_message", contactId: message.contactId, text: message.text }), message.delay));
       return;
     }
-    const point = MARKER_POINTS[interactions.markerStep];
-    setWalkFocus({ x: (point.x / 100 - 0.5) * 2, y: (point.y / 100 - 0.5) * 2 });
-    setMoving(true);
-    setBreathState("walking");
-    stepSound();
-    schedule(() => {
-      const next = interactions.markerStep + 1;
-      setInteractions((value) => ({ ...value, markerStep: next }));
-      setSceneProgress(next / MARKER_POINTS.length);
-      dispatchPhone({ type: "advance_time", minutes: 7, batteryCost: 0 });
-      setMoving(false);
-      setThought(next === 1 ? "只是一截树桩。" : next === 2 ? "石头。上面什么都没有。" : "656。红白两道漆。往上，就能到公路。我对自己说了三遍。");
-      if (next === MARKER_POINTS.length) beginRecovery(6000);
-      else setBreathState("recovery");
-    }, 700);
+    patch({ policeLine: index + 1 });
   };
 
-  const advanceBank = () => {
-    if (phase !== "roadBank" || moving || interactions.bankStep >= BANK_POINTS.length) return;
-    if (lightMode === "off") {
-      flash("先打开一种光，再找下一处能抓的地方");
-      return;
-    }
-    const point = BANK_POINTS[interactions.bankStep];
-    setWalkFocus({ x: (point.x / 100 - 0.5) * 2, y: (point.y / 100 - 0.5) * 2 });
-    setMoving(true);
-    setBreathState("walking");
-    stepSound();
-    schedule(() => {
-      const next = interactions.bankStep + 1;
-      setInteractions((value) => ({ ...value, bankStep: next }));
-      setSceneProgress(next / BANK_POINTS.length);
-      dispatchPhone({ type: "advance_time", minutes: 6, batteryCost: 0 });
-      setMoving(false);
-      if (next === BANK_POINTS.length) {
-        setThought("护栏。手指碰到冰凉的铁的时候，我差点哭出来。");
-        beginRecovery(8000);
-      } else {
-        setThought(next === 1 ? "树根很结实。一下。" : next === 2 ? "石头松了一点。换一处。再一下。" : "上面那道浅黑越来越近了。");
-        setBreathState("recovery");
-      }
-    }, 760);
+  const translateLine = () => {
+    if (flags.letterTranslated) return;
+    const next = Math.min(ZH_LINE_COUNT, flags.translatedLines + 1);
+    sfx("tick");
+    if (next >= ZH_LINE_COUNT) {
+      patch({ translatedLines: next, letterTranslated: true });
+      schedule(() => setPhoneOpen(false), 6500);
+      schedule(() => { setPhase("complete"); setCreditLine(0); clearJourneySave(); setSavedJourney(null); }, 9500);
+    } else patch({ translatedLines: next });
   };
 
-  const advancePolice = () => {
-    if (phase !== "police" || interactions.policeStep >= 3) return;
-    const next = interactions.policeStep + 1;
-    const lines = [
-      "警局的人给我倒了一杯咖啡，问：手机是什么样子的？",
-      "我说：锁屏是我自己的照片，界面是中文的。他记在本子上。",
-      "‘山里捡到东西的人，通常会送到这里。’他说。我没敢抱希望。",
-    ];
-    setInteractions((value) => ({ ...value, policeStep: next }));
-    setThought(lines[next - 1]);
-    dispatchPhone({ type: "advance_time", minutes: next === 3 ? 12 : 4, batteryCost: 0 });
-  };
-
-  const worldMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    const point = coords(event);
-    setLook({ x: (point.x - 0.5) * 2, y: (point.y - 0.5) * 2 });
-  };
-
-  const bagDown = (event: React.PointerEvent<HTMLImageElement>) => {
-    event.stopPropagation();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    bagStartRef.current = { x: event.clientX, y: event.clientY };
-    setBagDragging(true);
-  };
-
-  const bagMove = (event: React.PointerEvent<HTMLImageElement>) => {
-    if (!bagDragging) return;
-    setBagPos({ x: event.clientX / window.innerWidth * 100, y: event.clientY / window.innerHeight * 100 });
-  };
-
-  const bagUp = (event: React.PointerEvent<HTMLImageElement>) => {
-    const pulledDown = event.clientY - bagStartRef.current.y > 85 || event.clientY / window.innerHeight > 0.82;
-    setBagDragging(false);
-    if (pulledDown) {
-      setBagTaken(true);
-      setThought("水、薄外套、补光灯、一板巧克力。走吧。");
-      stepSound();
-      dispatchPhone({ type: "advance_time", minutes: 2, batteryCost: 0 });
-    } else setBagPos({ x: 84, y: 74 });
-  };
-
-  function advanceStone() {
-    if (transitionRef.current || moving || streamStep >= STONES.length) return;
-    if (route === null) {
-      setRoute("stream");
-      setThought("石头只露出一点。看准下一块，再落脚。");
-    }
-    const stone = STONES[streamStep];
-    setWalkFocus({ x: (stone.x / 100 - 0.5) * 2, y: (stone.y / 100 - 0.5) * 2 });
-    setMoving(true);
-    setBreathState("walking");
-    stepSound();
-    schedule(() => {
-      const next = streamStep + 1;
-      setStreamStep(next);
-      setTrailProgress(Math.min(1, next / STONES.length));
-      dispatchPhone({ type: "advance_time", minutes: 8, batteryCost: next === STONES.length ? 2 : 0 });
-      setMoving(false);
-      if (next === STONES.length) beginRecovery(6200);
-      else setBreathState("calm");
-    }, 430);
-  }
-
-  const advanceChain = () => {
-    if (phase !== "chainTraverse" || moving || interactions.chainStep >= CHAIN_POINTS.length) return;
-    const point = CHAIN_POINTS[interactions.chainStep];
-    setWalkFocus({ x: (point.x / 100 - 0.5) * 2, y: (point.y / 100 - 0.5) * 2 });
-    setMoving(true);
-    setBreathState("walking");
-    if (soundOn) soundRef.current?.chainClink();
-    stepSound();
-    schedule(() => {
-      const next = interactions.chainStep + 1;
-      setInteractions((value) => ({ ...value, chainStep: next }));
-      setSceneProgress(next / CHAIN_POINTS.length);
-      dispatchPhone({ type: "advance_time", minutes: 8, batteryCost: next === CHAIN_POINTS.length ? 1 : 0 });
-      setMoving(false);
-      if (next === CHAIN_POINTS.length) beginRecovery(6800);
-      else setBreathState("recovery");
-    }, 620);
-  };
-
-  const advanceRubble = () => {
-    if (phase !== "rubbleSlope" || moving || interactions.rubbleStep >= RUBBLE_POINTS.length) return;
-    const point = RUBBLE_POINTS[interactions.rubbleStep];
-    setWalkFocus({ x: (point.x / 100 - 0.5) * 2, y: (point.y / 100 - 0.5) * 2 });
-    setMoving(true);
-    setBreathState("walking");
-    stepSound();
-    schedule(() => {
-      const next = interactions.rubbleStep + 1;
-      setInteractions((value) => ({ ...value, rubbleStep: next }));
-      setSceneProgress(next / RUBBLE_POINTS.length);
-      dispatchPhone({ type: "advance_time", minutes: 10, batteryCost: next === RUBBLE_POINTS.length ? 2 : 0 });
-      setMoving(false);
-      if (next === RUBBLE_POINTS.length) beginRecovery(7600);
-      else setBreathState("recovery");
-    }, 720);
-  };
-
-  const readLetter = () => {
-    if (phase !== "letterBox" || interactions.letterRead || letterOpen) return;
-    setLetterOpen(true);
-    setThought("");
-  };
-
-  const putLetterBack = () => {
-    if (!letterOpen) return;
-    setLetterOpen(false);
-    setInteractions((value) => ({ ...value, letterRead: true }));
-    setThought("读不懂。可是有人把它留在这里，留给任何一个走上来的人。我把它拍了下来，放回信箱。");
-    dispatchPhone({
-      type: "capture_photo",
-      photo: {
-        kind: "letter",
-        asset: sceneAsset("letterBox"),
-        title: SCENE_INFO.letterBox.photoTitle,
-        place: SCENE_INFO.letterBox.place,
-        position: { x: 68, y: 66 },
-        zoom: 1.6,
-      },
-    });
-  };
-
-  const chooseLight = (mode: Exclude<LightMode, "off">) => {
-    if (mode === "phone" && interactions.phoneLost) {
-      flash("手机已经不在口袋里了");
-      return;
-    }
-    if (mode === "phone" && phone.battery <= 0) {
-      flash("手机没有电了");
-      return;
-    }
-    setLightMode((current) => current === mode ? "off" : mode);
-    if (mode === "phone") dispatchPhone({ type: "advance_time", minutes: 1, batteryCost: 1 });
-  };
-
-  const advanceNight = (nightScene: "nightSlope" | "deepForest") => {
-    if (phase !== nightScene || moving) return;
-    if (lightMode === "off") {
-      flash("先打开一种光，再找下一块地面");
-      setBreathState("recovery");
-      return;
-    }
-    const offset = nightScene === "nightSlope" ? 0 : NIGHT_SLOPE_POINTS.length;
-    const points = nightScene === "nightSlope" ? NIGHT_SLOPE_POINTS : DEEP_FOREST_POINTS;
-    const localStep = interactions.nightStep - offset;
-    if (localStep < 0 || localStep >= points.length) return;
-    const point = points[localStep];
-    setWalkFocus({ x: (point.x / 100 - 0.5) * 2, y: (point.y / 100 - 0.5) * 2 });
-    setMoving(true);
-    setBreathState("walking");
-    stepSound();
-    schedule(() => {
-      const next = interactions.nightStep + 1;
-      setInteractions((value) => ({
-        ...value,
-        nightStep: next,
-        phoneLost: nightScene === "deepForest" && next >= NIGHT_SLOPE_POINTS.length + DEEP_FOREST_POINTS.length ? true : value.phoneLost,
-      }));
-      setSceneProgress((localStep + 1) / points.length);
-      dispatchPhone({ type: "advance_time", minutes: 8, batteryCost: lightMode === "phone" ? 2 : 0 });
-      setMoving(false);
-      if (nightScene === "deepForest" && next >= NIGHT_SLOPE_POINTS.length + DEEP_FOREST_POINTS.length) {
-        setPhoneOpen(false);
-        if (lightMode === "phone") setLightMode("off");
-        if (soundOn) soundRef.current?.slip();
-        setThought("脚下的石头滚了一下。我抓住树，站稳了——再摸口袋时，手机已经不在了。");
-        beginRecovery(9000);
-      } else {
-        setBreathState("recovery");
-      }
-    }, 760);
-  };
-
-  const meetRescuers = () => {
-    if (phase !== "roadside" || interactions.rescuersMet) return;
-    setInteractions((value) => ({ ...value, rescuersMet: true }));
-    setThought("车停下来了。车窗降下，里面的人先问：‘你还好吗？上来吧，外面冷。’");
-    setBreathState("recovery");
-    dispatchPhone({ type: "advance_time", minutes: SCENE_INFO.roadside.minutes, batteryCost: 0 });
-  };
-
-  const advanceRescueConversation = () => {
-    if (phase !== "carInterior" || interactions.rescueStep >= 6) return;
-    const next = interactions.rescueStep + 1;
-    const lines = [
-      "开车的人把暖风调大了一点：‘先暖和起来。你想去哪，我们送你。’",
-      "副驾上的人回过头，把一瓶水拧开递给我：‘慢慢喝。’",
-      "他们说自己是异国恋，一个住在这边，一个住在海的那边，攒了很久才凑出这几天假。",
-      "‘所以今晚，我们也算捡到一个人。’开车的人说。副驾上的人笑着打了他一下。",
-      "我说手机可能丢在山上了。他们说：那明天一早，我们送你回谷口。",
-      "我笑出了声。在暖风里，第一次觉得今天也许还是好的一天。",
-    ];
-    setInteractions((value) => ({ ...value, rescueStep: next }));
-    setThought(lines[next - 1]);
-    dispatchPhone({ type: "advance_time", minutes: next === 6 ? 16 : 4, batteryCost: 0 });
-  };
-
-  const advanceSearch = () => {
-    if (phase !== "searchRoad" || interactions.searchStep >= SEARCH_POINTS.length) return;
-    const next = interactions.searchStep + 1;
-    setInteractions((value) => ({ ...value, searchStep: next }));
-    setThought(next === 1 ? "树根旁没有。只有露水。" : next === 2 ? "白石头下面压着一颗昨晚掉下的外套扣子。手机不在。" : "拐弯处也没有。好吧。这一年的照片，就当留在山里了。我已经准备好失去一样东西。");
-    setWalkFocus({ x: (SEARCH_POINTS[next - 1].x / 100 - 0.5) * 2, y: (SEARCH_POINTS[next - 1].y / 100 - 0.5) * 2 });
-    dispatchPhone({ type: "advance_time", minutes: 9, batteryCost: 0 });
-  };
-
-  const acceptReturnedPhone = () => {
-    if (phase !== "searchRoad" || interactions.searchStep < SEARCH_POINTS.length || interactions.phoneReturned) return;
-    setInteractions((value) => ({ ...value, phoneLost: false, phoneReturned: true }));
-    setThought("她一早在山上捡到它。锁屏是我的脸，界面是中文。她本来要送去警局，在谷口听说昨晚有个女孩从山里打过电话，就沿着这条路找了上来。屏幕没碎，一张照片都没少。");
-    dispatchPhone({ type: "receive_message", contactId: "mama", text: "定位又亮起来了。妈妈一直在看这个小点。" });
-  };
-
+  /* ---------- phone ---------- */
   const openPhone = (tab: PhoneTab = "home") => {
-    if (interactions.phoneLost) {
-      flash("口袋是空的。手机留在山里了。");
-      return;
-    }
+    if (flags.phoneLost) { flash("口袋是空的。手机在森林里。"); return; }
     setCameraAim({ x: 50 + look.x * 34, y: 50 + look.y * 28 });
-    setPhoneTab(tab);
-    if (soundOn) soundRef.current?.uiTick(true);
-    setPhoneOpen(true);
+    setPhoneTab(tab); sfx("tick"); setPhoneOpen(true);
   };
-
-  const closePhone = () => {
-    if (soundOn) soundRef.current?.uiTick(false);
-    setPhoneOpen(false);
-  };
-
+  const closePhone = () => { sfx("tock"); setPhoneOpen(false); };
   const takePhoto = (snapshot?: string) => {
-    if (soundOn) soundRef.current?.shutter();
-    dispatchPhone({
-      type: "capture_photo",
-      photo: {
-        asset: sceneAsset(scene),
-        snapshot,
-        title: SCENE_INFO[scene].photoTitle,
-        place: SCENE_INFO[scene].place,
-        position: cameraAim,
-        zoom: cameraZoom,
-      },
-    });
-    if (scene === "viewpoint") setStagePhotoTaken(true);
+    sfx("shutter");
+    dispatchPhone({ type: "capture_photo", photo: { asset: nodeAsset(node), snapshot, title: info.photoTitle, place: info.place, position: cameraAim, zoom: cameraZoom, day: info.day } });
   };
-
-  const requestPhoneReply = useCallback((contactId: ContactId, kind: "text" | "photo") => {
+  const requestReply = useCallback((contactId: ContactId, kind: "text" | "photo") => {
     dispatchPhone({ type: "set_typing", contactId, value: true });
-    const timer = window.setTimeout(() => {
+    schedule(() => {
       dispatchPhone({ type: "set_typing", contactId, value: false });
-      dispatchPhone({
-        type: "receive_message",
-        contactId,
-        text: PHONE_REPLIES[contactId][kind][scene] ?? (kind === "photo" ? "看到了。原图留好，回来一起看。" : "收到。慢慢走。"),
-      });
+      dispatchPhone({ type: "receive_message", contactId, text: PHONE_REPLIES[contactId][kind] });
     }, kind === "photo" ? 1850 : 1350);
-    replyTimersRef.current.push(timer);
-  }, [scene]);
+  }, [schedule]);
 
-  const reset = () => {
-    resetRuntime("title");
+  /* ---------- flow ---------- */
+  const resetRuntime = () => {
+    clearTimers();
+    setOverlay("none"); setPhoneOpen(false); setMenuOpen(false); setFear(0); setCallStep(0); setCarState("none"); setCreditLine(0); setClimbHold(0); setWalking(false); setWalkProgress(0);
+    if (holdRef.current) { cancelAnimationFrame(holdRef.current.raf); holdRef.current = null; }
   };
+  const begin = () => {
+    clearJourneySave(); setSavedJourney(null);
+    resetRuntime();
+    setNode("meadow"); setFlags(INITIAL_FLAGS); dispatchPhone({ type: "reset" }); setCameraAim({ x: 50, y: 50 }); setCameraZoom(1);
+    setPhase("play"); startAudio();
+  };
+  const continueJourney = () => {
+    if (!savedJourney) return begin();
+    resetRuntime();
+    setNode(savedJourney.node); setFlags(savedJourney.flags); dispatchPhone({ type: "restore", state: savedJourney.phone });
+    setCameraAim(savedJourney.cameraAim); setCameraZoom(savedJourney.cameraZoom);
+    setPhase("play"); startAudio();
+  };
+  const backToTitle = () => { resetRuntime(); setPhase("title"); setSavedJourney(loadJourneySave()); };
 
-  const renderScene = phase === "complete" ? "valleyExit" : scene;
-  const progress = phase === "arrival" ? arrivalProgress : phase === "trail" ? trailProgress : phase === "complete" ? 1 : sceneProgress;
+  const displayTime = formatGameTime(phone.minuteOfDay);
+  const dayLabel = `${phone.date.month}月${phone.date.day}日`;
 
   const menu = menuOpen ? (
     <div className="menu-overlay" onPointerDown={(event) => { if (event.target === event.currentTarget) setMenuOpen(false); }}>
-      <div className="menu-card" role="dialog" aria-label="设置">
+      <div className="menu-card" role="dialog" aria-modal="true" aria-label="设置">
         <p className="eyebrow">离开山谷以前</p>
         <h3>设置</h3>
         <label className="menu-row"><span>环境声与音效</span><input type="range" min={0} max={1} step={0.05} value={settings.master} onChange={(event) => updateSettings({ master: Number(event.target.value) })} /><output>{Math.round(settings.master * 100)}</output></label>
         <label className="menu-row"><span>音乐</span><input type="range" min={0} max={1} step={0.05} value={settings.music} onChange={(event) => updateSettings({ music: Number(event.target.value) })} /><output>{Math.round(settings.music * 100)}</output></label>
-        <div className="menu-toggle"><span>镜头呼吸与浮动细节</span><button className={settings.motion ? "on" : ""} onClick={() => updateSettings({ motion: !settings.motion })}>{settings.motion ? "开" : "关"}</button></div>
+        <div className="menu-toggle"><span>镜头呼吸与步伐晃动</span><button className={settings.motion ? "on" : ""} onClick={() => updateSettings({ motion: !settings.motion })}>{settings.motion ? "开" : "关"}</button></div>
         <div className="menu-actions">
-          <button className="primary-button" onClick={() => setMenuOpen(false)}>继续</button>
+          <button className="primary-button" autoFocus onClick={() => setMenuOpen(false)}>继续</button>
           {phase !== "title" && <button className="secondary-button" onClick={backToTitle}>回到标题</button>}
         </div>
         <p className="menu-hint">ESC 打开或关闭</p>
@@ -1336,238 +827,297 @@ export default function App() {
 
   if (phase === "title") return (
     <main className={`game-shell title-screen ${settings.motion ? "" : "reduce-motion"}`} onPointerMove={worldMove}>
-      <PixiJourney scene="arrival" walking={false} progress={0} look={look} walkFocus={null} breath="calm" onReady={onCanvasReady} reduceMotion={!settings.motion} />
-      <div className="title-art" style={{ backgroundImage: `url("${import.meta.env.BASE_URL}art/title-key-art-v1.webp")`, "--tilt-x": `${(-look.x * 14).toFixed(1)}px`, "--tilt-y": `${(-look.y * 9).toFixed(1)}px` } as React.CSSProperties} />
+      <div className="title-art" style={{ backgroundImage: `url("${import.meta.env.BASE_URL}pano/title-key-art.webp")`, "--tilt-x": `${(-look.x * 14).toFixed(1)}px`, "--tilt-y": `${(-look.y * 9).toFixed(1)}px` } as React.CSSProperties} />
       <div className="cinema-grade" />
       <div className={`title-card ${canvasReady ? "is-ready" : ""}`}>
         <p className="eyebrow">离开山谷以前</p>
-        <h1>走到风景那里</h1>
-        <p className="title-subtitle">教练说，两个小时就能登顶。<br />来都来了，就往上走一点点。</p>
+        <h1>来都来了</h1>
+        <p className="title-subtitle">多洛米蒂，Passo Sella。一个人，一条飞拉达，一整天。<br />山崖上的信箱里，有一封我读不懂的信。</p>
         <div className="title-actions">
-          <button className="primary-button" onClick={savedJourney ? continueJourney : begin}>{savedJourney ? "继续旅程" : "下车"}</button>
+          <button className="primary-button" onClick={savedJourney ? continueJourney : begin}>{savedJourney ? "继续" : "下车"}</button>
           {savedJourney && <button className="secondary-button" onClick={begin}>重新开始</button>}
           <button className="secondary-button" onClick={() => setMenuOpen(true)}>设置</button>
         </div>
-        {savedJourney && <p className="save-hint">上次停在 {SCENE_INFO[savedJourney.scene].place} · {formatGameTime(savedJourney.phone.minuteOfDay)} · 手机 {savedJourney.phone.battery}%</p>}
-        <p className="title-hint">移动鼠标观察 · 点击想去的地方 · P 打开手机 · 建议佩戴耳机</p>
-        <p className="music-credit">Music: “Clear Air” “Simple Duet” “Promises to Keep” — Kevin MacLeod (incompetech.com) · CC BY 4.0</p>
+        {savedJourney && <p className="save-hint">上次停在 {NODES[savedJourney.node].place} · {formatGameTime(savedJourney.phone.minuteOfDay)}</p>}
+        <p className="title-hint">移动鼠标环视，看向什么，什么才会亮起来 · P 打开手机 · 建议佩戴耳机</p>
+        <p className="music-credit">根据 2025 年夏天一段真实的经历 · Music: Kevin MacLeod (incompetech.com) CC BY 4.0</p>
       </div>
       {menu}
     </main>
   );
 
   if (phase === "complete") {
-    const creditsDone = creditLine > CREDIT_LINES_TOTAL;
+    const done = creditLine > CREDIT_TOTAL;
+    const closingStart = CREDIT_POEM_LINES + 1;
     return (
-      <main className="game-shell complete-screen" onPointerDown={() => { if (!creditsDone) setCreditLine(CREDIT_LINES_TOTAL + 1); }}>
-        <PixiJourney scene="valleyExit" walking={false} progress={1} look={look} walkFocus={null} breath="calm" reduceMotion={!settings.motion} />
+      <main className="game-shell complete-screen" onPointerDown={() => { if (!done) setCreditLine(CREDIT_TOTAL + 1); }}>
+        <PanoStage asset={NODES.bench.asset} light="day" look={look} walking={false} progress={0} breath="calm" anchorLayerRef={anchorLayerRef} reduceMotion={!settings.motion} />
         <div className="cinema-grade" />
-        {!creditsDone ? (
+        {!done ? (
           <div className="credits-poem" aria-live="polite">
-            <div className="credits-block credits-it">
-              {LETTER_LINES_IT.map((line, index) => <p key={`it-${index}`} className={index < creditLine ? "shown" : ""}>{line || " "}</p>)}
+            <div className={`credits-pair ${creditLine >= closingStart ? "credits-dim" : ""}`}>
+              <div className="credits-block credits-it">{LETTER_LINES_IT.map((line, index) => <p key={`it-${index}`} className={index < creditLine ? "shown" : ""}>{line || " "}</p>)}</div>
+              <div className="credits-block credits-zh">{LETTER_LINES_ZH.map((line, index) => <p key={`zh-${index}`} className={index < creditLine ? "shown" : ""}>{line || " "}</p>)}</div>
             </div>
-            <div className="credits-block credits-zh">
-              {LETTER_LINES_ZH.map((line, index) => <p key={`zh-${index}`} className={index + 1 < creditLine ? "shown" : ""}>{line || " "}</p>)}
-            </div>
+            {creditLine >= closingStart && (
+              <div className="credits-block credits-closing">
+                {CLOSING_LINES.map((line, index) => <p key={`c-${index}`} className={index + closingStart <= creditLine ? "shown" : ""}>{line}</p>)}
+              </div>
+            )}
             <p className="credits-skip">点击跳过</p>
           </div>
         ) : (
           <div className="complete-card">
-            <span className="completion-mark"><Check size={23} /></span>
             <p className="eyebrow">离开山谷以前</p>
             <h2>你是特别的。</h2>
-            <p>手机回来了，一张照片都没少。有些话在山里读不懂，离开的时候，才知道它为什么在那里。</p>
-            <p className="credits-source">灵感来自一段真实的经历 · 山顶那封信的作者不详</p>
+            <p className="credits-source">根据一段真实的经历 · 2025 年 7 月 · Passo Sella</p>
             <p className="music-credit">Music: “Clear Air” “Simple Duet” “Promises to Keep” — Kevin MacLeod (incompetech.com) · CC BY 4.0</p>
-            <button className="primary-button" onClick={reset}><RotateCcw size={16} /> 再走一次</button>
+            <button className="primary-button" onClick={backToTitle}><RotateCcw size={16} /> 再走一次</button>
           </div>
         )}
       </main>
     );
   }
 
-  const info = SCENE_INFO[scene];
-  const stone = STONES[Math.min(streamStep, STONES.length - 1)];
-  const displayTime = formatGameTime(phone.minuteOfDay);
+  const holdActive = holdRef.current !== null;
 
   return (
-    <main className={`game-shell scene-${scene} scene-light-${info.light} light-${lightMode} ${moving ? "is-moving" : ""} ${letterOpen ? "letter-open" : ""} ${settings.motion ? "" : "reduce-motion"} breath-${breathState}`}>
-      <PixiJourney scene={renderScene} walking={moving} progress={progress} look={look} walkFocus={walkFocus} breath={breathState} anchorLayerRef={anchorLayerRef} reduceMotion={!settings.motion} />
+    <main className={`game-shell node-${node} scene-light-${info.light} ${walking ? "is-moving" : ""} ${settings.motion ? "" : "reduce-motion"} breath-${breath} ${overlay !== "none" && overlay !== "selfie" ? "overlay-open" : ""} ${phoneOpen ? "phone-open" : ""}`}>
+      <PanoStage asset={info.asset} light={info.light} look={look} walking={walking} progress={walkProgress} breath={breath} anchorLayerRef={anchorLayerRef} reduceMotion={!settings.motion} onReady={onCanvasReady} />
       <div className="cinema-grade" />
       <div className="film-grain" />
-      <div className="scene-blink" key={`blink-${phase}`} />
-      {CHAPTER_CARDS[scene] && phase === scene && chapterShown && (
-        <div className="chapter-card" key={`chapter-${phase}`} aria-hidden="true">
-          <small>{CHAPTER_CARDS[scene]!.eyebrow}</small>
-          <strong>{CHAPTER_CARDS[scene]!.title}</strong>
+      <div className="scene-blink" key={`blink-${node}`} />
+      {node === "scree" && <div className="dusk-fall" style={{ opacity: dusk }} />}
+      {night && <div className={`night-darkness ${node === "forestEdge" ? "faint" : node === "hairpin" ? `road ${carState !== "none" ? "lit" : ""}` : ""}`} style={{ "--beam-x": `${(look.x + 1) * 50}%`, "--beam-y": `${(look.y + 1) * 50}%` } as React.CSSProperties} />}
+      {info.chapter && chapterShown && (
+        <div className="chapter-card" key={`chapter-${node}`} aria-hidden="true">
+          <small>{info.chapter.eyebrow}</small>
+          <strong>{info.chapter.title}</strong>
         </div>
       )}
-      {info.light === "night" && <><div className="journey-night-ambient" /><div className="journey-darkness" style={{ "--beam-x": `${(look.x + 1) * 50}%`, "--beam-y": `${(look.y + 1) * 50}%` } as React.CSSProperties} /><div className="journey-light-volume" style={{ "--beam-x": `${(look.x + 1) * 50}%`, "--beam-y": `${(look.y + 1) * 50}%` } as React.CSSProperties} /></>}
 
-      <div className="scene-caption"><span>{displayTime}</span>{info.place} · {info.elevation}</div>
+      <div className="scene-caption"><span>{dayLabel} {displayTime}</span>{info.place} · {info.elevation}</div>
       <div className="utility-controls">
         <button onClick={() => setSoundOn((value) => !value)} aria-label="切换声音">{soundOn ? <Volume2 size={17} /> : <VolumeX size={17} />}</button>
-        <button className={interactions.phoneLost ? "phone-missing" : ""} onClick={() => openPhone()} aria-label={interactions.phoneLost ? "手机已遗失" : "打开手机"}><Smartphone size={17} /><kbd>P</kbd></button>
+        <button className={flags.phoneLost ? "phone-missing" : ""} onClick={() => openPhone()} aria-label={flags.phoneLost ? "手机已遗失" : "打开手机"}><Smartphone size={17} /><kbd>P</kbd>{!flags.phoneLost && unread > 0 && <i className="unread-badge">{unread}</i>}</button>
         <button onClick={() => setMenuOpen(true)} aria-label="设置"><SettingsIcon size={17} /></button>
       </div>
 
-      {NIGHT_LIGHT_SCENES.includes(phase as JourneyScene) && (phase !== "nightSlope" || interactions.callDone) && (
-        <div className="light-controls" aria-label="选择照明方式">
-          <button className={lightMode === "flashlight" ? "active" : ""} onClick={() => chooseLight("flashlight")}><Flashlight size={16} />补光灯</button>
-          <button className={lightMode === "phone" ? "active" : ""} disabled={interactions.phoneLost || phone.battery <= 0} onClick={() => chooseLight("phone")}><Smartphone size={16} />{interactions.phoneLost ? "手机 · 不在身上" : `手机光 · ${phone.battery}%`}</button>
-        </div>
-      )}
-
-      <div className="world-input" onPointerMove={worldMove} onPointerDown={worldClick}>
+      <div className="world-input" onPointerMove={worldMove}>
         <span className="gaze-dot" style={{ left: `${(look.x + 1) * 50}%`, top: `${(look.y + 1) * 50}%` }} />
-        {moving && walkFocus && <span className="walk-focus" style={{ left: `${(walkFocus.x + 1) * 50}%`, top: `${(walkFocus.y + 1) * 50}%` }} />}
       </div>
-
-      {phase === "arrival" && !bagTaken && (
-        <img
-          className={`backpack-object ${bagDragging ? "dragging" : ""}`}
-          src={`${import.meta.env.BASE_URL}art/stage1-backpack.webp`}
-          alt="候车亭座椅上的背包"
-          draggable={false}
-          style={{ left: `${bagPos.x}%`, top: `${bagPos.y}%` }}
-          onPointerDown={bagDown}
-          onPointerMove={bagMove}
-          onPointerUp={bagUp}
-          onPointerCancel={bagUp}
-        />
-      )}
 
       <div className="anchor-layer" ref={anchorLayerRef}>
-        {phase === "trail" && route !== "open" && streamStep < STONES.length && (
-          <button className="stone-target" style={{ left: `${stone.x}%`, top: `${stone.y}%` }} onPointerDown={(event) => { event.stopPropagation(); advanceStone(); }} aria-label="踩向下一块石头"><span /></button>
+        {ready && info.go && info.next && !walking && (
+          <button className="hotspot go-hotspot" {...anchorProps(info.go, 24)} {...act(walkOn)} aria-label="继续往前"><span /><em>{node === "hutView" ? "下撤" : node === "car" ? "到酒店了" : node === "hotel" ? "第三天" : node === "police" ? "到长椅上等车" : "往前"}</em></button>
         )}
 
-        {phase === "chainTraverse" && (
-          <img className={`chain-prop chain-step-${interactions.chainStep}`} src={`${import.meta.env.BASE_URL}art/chain-overlay-v1.webp`} alt="固定在岩壁上的铁索" draggable={false} />
+        {node === "plaque" && !flags.helmet && <button className="hotspot" {...anchorProps({ yaw: -18, pitch: -12 })} {...act(putOnHelmet)}><span /><em>头盔</em></button>}
+        {node === "plaque" && flags.helmet && !flags.clipped && <button className="hotspot" {...anchorProps({ yaw: 18, pitch: 5 })} {...act(clipIn)}><span /><em>钢缆起点</em></button>}
+
+        {node === "cable" && flags.cableStep < CABLE_ANCHORS.length && (
+          <span className="hotspot anchor-mark" {...propProps(CABLE_ANCHORS[flags.cableStep])} aria-hidden="true"><span /><em>锚点</em></span>
         )}
-        {phase === "chainTraverse" && interactions.chainStep < CHAIN_POINTS.length && (
-          <button className="terrain-target chain-target" style={{ left: `${CHAIN_POINTS[interactions.chainStep].x}%`, top: `${CHAIN_POINTS[interactions.chainStep].y}%` }} onPointerDown={(event) => { event.stopPropagation(); advanceChain(); }} aria-label="抓住下一段铁索"><span /></button>
+        {node === "cable" && flags.cableStep < CABLE_ANCHORS.length && (
+          <div className="anchor-panel" {...propProps({ yaw: CABLE_ANCHORS[flags.cableStep].yaw + 14, pitch: CABLE_ANCHORS[flags.cableStep].pitch + 4 })}>
+            <strong>锚点 {flags.cableStep + 1} / {CABLE_ANCHORS.length}</strong>
+            {(["a", "b"] as const).map((which) => {
+              const value = flags.carabiner[which];
+              const state = value === -1 ? "free" : value > flags.cableStep ? "next" : "clipped";
+              return (
+                <button key={which} className={`carabiner carabiner-${which} state-${state}`} {...act(() => carabinerAction(which))}>
+                  <span>{which === "a" ? "蓝锁" : "橙锁"}</span>
+                  <small>{state === "free" ? "在手里 · 挂到下一段" : state === "next" ? "已在下一段" : "解开"}</small>
+                </button>
+              );
+            })}
+          </div>
         )}
-        {phase === "chainUpper" && interactions.chainUpperStep < CHAIN_UPPER_POINTS.length && (
-          <button className="terrain-target chain-target" style={{ left: `${CHAIN_UPPER_POINTS[interactions.chainUpperStep].x}%`, top: `${CHAIN_UPPER_POINTS[interactions.chainUpperStep].y}%` }} onPointerDown={(event) => { event.stopPropagation(); advanceChainUpper(); }} aria-label="抓住上一级铁梯"><span /></button>
+
+        {node === "crack" && flags.crackStep < 4 && CRACK_HOLDS.map((hold, index) => (
+          (hold.order === null || hold.order >= flags.crackStep) && (
+            <button key={hold.label} className="hotspot hold-hotspot" {...anchorProps(hold, 11)} {...act(() => grabHold(index))}><span /><em>{hold.label}</em></button>
+          )
+        ))}
+
+        {node === "mailbox" && !flags.letterPhotographed && <button className="hotspot" {...anchorProps(MAILBOX_ANCHOR, 14)} {...act(openMailbox)}><span /><em>信箱</em></button>}
+
+        {node === "summit" && <button className="hotspot" {...anchorProps(SUMMIT_CROSS_ANCHOR, 12)} {...act(lookAtCross)}><span /><em>十字架</em></button>}
+        {node === "summit" && !flags.summitSelfie && <button className="hotspot" {...anchorProps(SUMMIT_CAMERA_ANCHOR, 12)} {...act(takeSelfie)}><span /><em>全景相机</em></button>}
+
+        {node === "hutView" && flags.hutChoice !== "retreat" && <button className="hotspot" {...anchorProps(HUT_ANCHOR, 12)} {...act(lookAtHut)}><span /><em>山屋</em></button>}
+        {node === "hutView" && !flags.mapDone && <button className="hotspot" {...anchorProps(PLATEAU_MAP_ANCHOR, 12)} {...act(() => { setOverlay("map"); sfx("tick"); })}><span /><em>摊开地图</em></button>}
+        {node === "hutView" && flags.mapDone && !flags.chocolate && <button className="hotspot" {...anchorProps(CHOCOLATE_ANCHOR, 12)} {...act(eatChocolate)}><span /><em>巧克力</em></button>}
+
+        {node === "signpost" && !flags.signChosen && SIGNPOST_ARMS.map((arm, index) => (
+          <button key={arm.label} className="hotspot sign-arm" {...anchorProps(arm, 16)} {...act(() => chooseArm(index))}><em>{arm.label}</em></button>
+        ))}
+
+        {node === "scree" && flags.screeStep < SCREE_STEPS.length && (
+          <>
+            <button className="hotspot foot-hotspot foot-flat" {...anchorProps(SCREE_STEPS[flags.screeStep].safe, 14)} {...act(() => takeScreeStep(true))} aria-label="一块平的石面"><span /></button>
+            <button className="hotspot foot-hotspot foot-loose" {...anchorProps(SCREE_STEPS[flags.screeStep].loose, 14)} {...act(() => takeScreeStep(false))} aria-label="一块斜的石面"><span /></button>
+          </>
         )}
-        {phase === "school" && !interactions.routeDrawn && (
-          <button className="map-prop" onPointerDown={(event) => { event.stopPropagation(); drawRoute(); }} aria-label="看桌上的地图" />
+
+        {node === "deer" && deerState !== "gone" && (
+          <img className={`deer-herd deer-${deerState}`} {...propProps(DEER_ANCHOR)} src={`${import.meta.env.BASE_URL}sprites/deer-herd.webp`} alt="林线边的一群鹿" draggable={false} onPointerDown={(event) => { event.stopPropagation(); scareDeer(); }} style={{ pointerEvents: "auto" }} />
         )}
-        {phase === "school" && interactions.routeDrawn && (
-          <svg className="route-line" viewBox="0 0 1280 720" aria-hidden="true">
-            <path d="M 330 652 C 410 612, 500 628, 570 592 S 660 540, 700 520 S 736 502, 748 494" />
-            <circle cx="748" cy="494" r="5" />
-          </svg>
+        {node === "deer" && deerState === "standing" && <button className="hotspot" {...anchorProps({ yaw: DEER_ANCHOR.yaw, pitch: DEER_ANCHOR.pitch }, 28)} {...act(scareDeer)}><span /><em>鹿</em></button>}
+
+        {(node === "forest1" || node === "forest2") && forestStep < forestSteps.length && (
+          <button className={`hotspot climb-hotspot ${holdActive ? "holding" : ""}`} {...anchorProps(forestSteps[forestStep], 16)} style={{ "--hold": climbHold } as React.CSSProperties}
+            onPointerDown={(event) => { event.stopPropagation(); try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* synthetic pointer */ } beginClimb(); }}
+            onPointerUp={endClimb} onPointerCancel={endClimb} onPointerLeave={endClimb}
+            onKeyDown={(event) => climbKey(event, true)} onKeyUp={(event) => climbKey(event, false)}>
+            <span /><em>{forestSteps[forestStep].kind === "root" ? "树根 · 按住" : forestSteps[forestStep].kind === "rock" ? "岩石 · 按住" : "倒木 · 按住"}</em>
+          </button>
         )}
-        {phase === "summitRest" && !interactions.chocolateEaten && (
-          <button className="chocolate-prop" onPointerDown={(event) => { event.stopPropagation(); eatChocolate(); }} aria-label="掰一块巧克力" />
+
+        {node === "hairpin" && <div className={`car-lights ${carState === "stopped" ? "stopped" : carState !== "none" ? "on" : ""}`} {...propProps({ yaw: 17, pitch: -14, distance: 12 })} />}
+
+        {node === "search" && SEARCH_SPOTS.map((spot, index) => !flags.searched.includes(index) && (
+          <button key={spot.label} className="hotspot search-hotspot" {...anchorProps(spot, 11)} {...act(() => searchSpot(index))}><span /><em>{spot.label}</em></button>
+        ))}
+        {node === "search" && EMPTY_SPOTS.map((spot, index) => (
+          <button key={spot.label} className="hotspot search-hotspot" {...anchorProps(spot, 11)} {...act(() => searchEmpty(index))}><span /><em>{spot.label}</em></button>
+        ))}
+
+        {node === "police" && flags.policeLine < POLICE_LINES.length && (
+          <button className="hotspot counter-hotspot" {...anchorProps(POLICE_COUNTER_ANCHOR, 30)} {...act(nextPoliceLine)}><span /><em>{flags.policeLine === 0 ? "柜台 · 描述那部手机" : flags.policeLine === 1 ? "他回来了" : "问是谁送来的"}</em></button>
         )}
-        {phase === "marker656" && interactions.markerStep < MARKER_POINTS.length && lightMode !== "off" && Math.hypot(look.x - (MARKER_POINTS[interactions.markerStep].x / 100 - 0.5) * 2, look.y - (MARKER_POINTS[interactions.markerStep].y / 100 - 0.5) * 2) < 0.42 && (
-          <button className="terrain-target night-target" style={{ left: `${MARKER_POINTS[interactions.markerStep].x}%`, top: `${MARKER_POINTS[interactions.markerStep].y}%` }} onPointerDown={(event) => { event.stopPropagation(); advanceMarker(); }} aria-label={`照向${MARKER_POINTS[interactions.markerStep].label}`}><span /></button>
+
+        {node === "busStop" && womanShown && !flags.busAnswered && (
+          <img className="woman-prop" {...propProps({ yaw: 27, pitch: -19, distance: 12 })} src={`${import.meta.env.BASE_URL}sprites/woman-front.webp`} alt="走过来的女士" draggable={false} />
         )}
-        {phase === "roadBank" && interactions.bankStep < BANK_POINTS.length && (
-          <button className={`terrain-target night-target bank-target ${lightMode === "off" ? "unlit" : ""}`} style={{ left: `${BANK_POINTS[interactions.bankStep].x}%`, top: `${BANK_POINTS[interactions.bankStep].y}%` }} onPointerDown={(event) => { event.stopPropagation(); advanceBank(); }} aria-label="抓住下一处树根"><span /></button>
+        {node === "busStop" && flags.busAnswered && !flags.womanPhotographed && (
+          <img className="woman-prop woman-back" {...propProps({ yaw: 30, pitch: -17, distance: 13 })} src={`${import.meta.env.BASE_URL}sprites/woman-back.webp`} alt="跑开的女士" draggable={false} />
         )}
-        {phase === "rubbleSlope" && interactions.rubbleStep < RUBBLE_POINTS.length && (
-          <button className="terrain-target rubble-target" style={{ left: `${RUBBLE_POINTS[interactions.rubbleStep].x}%`, top: `${RUBBLE_POINTS[interactions.rubbleStep].y}%` }} onPointerDown={(event) => { event.stopPropagation(); advanceRubble(); }} aria-label="踩向下一块稳定石面"><span /></button>
+        {node === "busStop" && flags.womanPhotographed && (
+          <img className="bus-prop" {...propProps({ yaw: 30, pitch: -14, distance: 14 })} src={`${import.meta.env.BASE_URL}sprites/bus.webp`} alt="472 路公交车" draggable={false} />
         )}
-        {phase === "letterBox" && !interactions.letterRead && !letterOpen && (
-          <button className="letter-prop" onPointerDown={(event) => { event.stopPropagation(); readLetter(); }}><span>信箱里的一张纸</span></button>
-        )}
-        {((phase === "nightSlope" && interactions.callDone) || phase === "deepForest") && (() => {
-          const points = phase === "nightSlope" ? NIGHT_SLOPE_POINTS : DEEP_FOREST_POINTS;
-          const offset = phase === "nightSlope" ? 0 : NIGHT_SLOPE_POINTS.length;
-          const localStep = interactions.nightStep - offset;
-          const point = points[Math.max(0, Math.min(points.length - 1, localStep))];
-          return localStep >= 0 && localStep < points.length ? <button className={`terrain-target night-target ${lightMode === "off" ? "unlit" : ""}`} style={{ left: `${point.x}%`, top: `${point.y}%` }} onPointerDown={(event) => { event.stopPropagation(); advanceNight(phase); }} aria-label="确认下一处落脚点"><span /></button> : null;
-        })()}
-        {phase === "roadside" && <><div className="car-headlights" /><img className="rescue-car-prop" src={`${import.meta.env.BASE_URL}art/rescue-car-cutout-v2.webp`} alt="停在谷底公路边的蓝色旧车" /></>}
-        {phase === "sunsetFork" && deerState !== "hidden" && (
-          <img className={`deer-prop deer-${deerState}`} src={`${import.meta.env.BASE_URL}art/deer-v1.webp`} alt="林线边的一只鹿" draggable={false} />
-        )}
-        {phase === "searchRoad" && interactions.searchStep >= SEARCH_POINTS.length && (
-          <img className={`finder-prop ${interactions.phoneReturned ? "finder-leaving" : "finder-waiting"}`} src={`${import.meta.env.BASE_URL}art/finder-v1.webp`} alt="举着手机走来的人" draggable={false} onPointerDown={(event) => { event.stopPropagation(); acceptReturnedPhone(); }} />
-        )}
-        {phase === "searchRoad" && interactions.searchStep < SEARCH_POINTS.length && <button className="terrain-target search-target" style={{ left: `${SEARCH_POINTS[interactions.searchStep].x}%`, top: `${SEARCH_POINTS[interactions.searchStep].y}%` }} onPointerDown={(event) => { event.stopPropagation(); advanceSearch(); }} aria-label={`查看${SEARCH_POINTS[interactions.searchStep].label}`}><span /></button>}
       </div>
 
-      {phase === "nightSlope" && !interactions.callDone && !callActive && <button className="story-action call-action" onPointerDown={(event) => { event.stopPropagation(); startCall(); }}>拨打求助电话</button>}
-      {phase === "nightSlope" && callActive && !phoneOpen && <button className="story-action call-action" onPointerDown={(event) => { event.stopPropagation(); openPhone("call"); }}>回到通话</button>}
-      {phase === "roadside" && <button className="story-action rescue-action" onPointerDown={(event) => { event.stopPropagation(); meetRescuers(); }}>朝车灯挥手</button>}
-      {phase === "carInterior" && interactions.rescueStep < 6 && <button className="story-action conversation-action" onPointerDown={(event) => { event.stopPropagation(); advanceRescueConversation(); }}>{interactions.rescueStep === 0 ? "听他们说" : interactions.rescueStep === 1 ? "接过那瓶水" : "继续听"}</button>}
-      {phase === "police" && interactions.policeStep < 3 && <button className="story-action conversation-action" onPointerDown={(event) => { event.stopPropagation(); advancePolice(); }}>{interactions.policeStep === 0 ? "推门进去" : interactions.policeStep === 1 ? "描述那部手机" : "谢过他，出门"}</button>}
-      {phase === "searchRoad" && interactions.searchStep >= SEARCH_POINTS.length && !interactions.phoneReturned && <button className="story-action phone-return-action" onPointerDown={(event) => { event.stopPropagation(); acceptReturnedPhone(); }}>“是你吗？锁屏上的那个女孩。”</button>}
+      {node === "forestEdge" && !flags.callDone && overlay !== "call" && <button className="story-action call-action" {...act(startCall)}>拨打 112</button>}
+      {(node === "forest1" || node === "forest2") && forestStep < forestSteps.length && <button className={`story-action shout-action ${fear > 0.55 ? "urgent" : ""}`} {...act(shout)}>喊一声<kbd>空格</kbd></button>}
+      {node === "hairpin" && !flags.waved && <button className={`story-action wave-action ${carState === "first" || carState === "second" ? "lit" : "dim"}`} {...act(wave)}>{carState === "none" ? "听……" : "朝车灯挥手"}</button>}
+      {node === "car" && flags.carLine < CAR_LINES.length && <button className="story-action conversation-action" {...act(nextCarLine)}>{flags.carLine === 0 ? "上车" : flags.carLine === 1 ? "接过水" : "继续听"}</button>}
+      {node === "hotel" && flags.hotelCalls < HOTEL_CALLS.length && overlay !== "hotel" && <button className="story-action call-action" {...act(() => { setOverlay("hotel"); sfx("tick"); })}>打电话问</button>}
+      {node === "busStop" && womanShown && flags.busLine < BUS_STOP_LINES.length && <button className="story-action conversation-action" {...act(nextBusLine)}>{flags.busLine === 0 ? "有人走过来" : "她开口"}</button>}
+      {node === "busStop" && womanShown && flags.busLine >= BUS_STOP_LINES.length && !flags.busAnswered && <button className="story-action answer-action" {...act(answerYes)}>“Yes.”</button>}
+      {node === "busStop" && flags.busAnswered && !flags.womanPhotographed && <button className="story-action camera-action" {...act(photographWoman)}>举起相机</button>}
+      {node === "bench" && !flags.letterTranslated && !phoneOpen && <button className="story-action phone-return-action" {...act(() => openPhone("gallery"))}>打开相册</button>}
 
-      {letterOpen && (
-        <div className="letter-view" onPointerDown={(event) => { event.stopPropagation(); putLetterBack(); }} role="dialog" aria-label="信箱里的那张纸">
-          <div className="letter-view-paper" style={{ backgroundImage: `url("${import.meta.env.BASE_URL}art/letter-paper-v1.webp")` }}>
-            {LETTER_LINES_IT.map((line, index) => <p key={index}>{line || " "}</p>)}
+      {(node === "forest1" || node === "forest2") && <div className="fear-meter" aria-hidden="true"><i style={{ width: `${Math.round(fear * 100)}%` }} /><small>心跳</small></div>}
+
+      {overlay === "notebook" && (
+        <div className="paper-overlay" role="dialog" aria-modal="true" aria-label="信箱里的本子">
+          <div className="notebook">
+            <div className="notebook-page">
+              <header><span>Memo</span><span>28/07/2025</span></header>
+              {LETTER_LINES_IT.map((line, index) => <p key={index}>{line || " "}</p>)}
+            </div>
+            <div className="notebook-actions">
+              <button className={`primary-button ${notebookReady ? "" : "is-waiting"}`} disabled={!notebookReady} onClick={photographLetter}>拍下来</button>
+              <button className="secondary-button" autoFocus onClick={() => setOverlay("none")}>放回去</button>
+            </div>
+            <p className="overlay-hint">{notebookReady ? "意大利语。看不懂。" : "7 月 28 日。三天前。"}</p>
           </div>
-          <p className="letter-view-hint">读不懂。点一下，把它拍下来放回去</p>
         </div>
       )}
+      {overlay === "map" && (
+        <div className="paper-overlay" role="dialog" aria-modal="true" aria-label="地图">
+          <div className="map-sheet-overlay">
+            <header><strong>Gruppo del Sella · Tabacco 05</strong><span>把从这里到公路的每一段时间加起来</span></header>
+            <p className="map-lead">已经走了 {HOURS_ALREADY} 小时。教练说全程六七个小时。</p>
+            <ul className="map-legs">
+              {MAP_LEGS.map((leg, index) => (
+                <li key={leg.name}><button className={flags.mapLegs.includes(index) ? "checked" : ""} autoFocus={index === 0} onClick={() => toggleLeg(index)}><span>{leg.name}</span><b>{leg.hours} h</b></button></li>
+              ))}
+            </ul>
+            <div className="map-total"><span>下撤还要</span><b>{mapTotal.toFixed(1)} h</b>{flags.mapLegs.length === MAP_LEGS.length && <em>一共 {(HOURS_ALREADY + mapTotal).toFixed(1)} h · 天还剩 {DAYLIGHT_LEFT} 小时</em>}</div>
+            {flags.mapLegs.length === MAP_LEGS.length ? (
+              <div className="map-choice">
+                <button className="secondary-button" onClick={chooseHut}>往山屋走 · {HUT_HOURS} h</button>
+                <button className="primary-button" onClick={chooseRetreat}>紧急下撤 · {mapTotal.toFixed(1)} h</button>
+              </div>
+            ) : <button className="primary-button map-close" onClick={closeMap}>合上地图</button>}
+          </div>
+        </div>
+      )}
+      {overlay === "call" && (
+        <div className="paper-overlay" role="dialog" aria-modal="true" aria-label="通话">
+          <div className="call-sheet">
+            <div className="call-number">112</div>
+            <div className="call-status">{callStep === 0 ? "拨号中" : callStep >= CALL_LINES.length - 1 ? "通话结束" : "通话中 · 信号很差"}</div>
+            <div className="call-lines">{CALL_LINES.slice(0, callStep + 1).map((line, index) => <p key={index} className={index === 2 ? "mine" : ""}>{line}</p>)}</div>
+            {callStep > 0 && callStep < CALL_LINES.length - 1 && <button className="secondary-button call-next" autoFocus onClick={sayAgain}>{callStep === 1 ? "“I'm alone. Under the Sella.”" : callStep === 2 ? "再说一遍" : "“Hello? Hello?”"}</button>}
+            {callStep >= CALL_LINES.length - 1 && <button className="primary-button call-hangup" autoFocus onClick={hangUp}>挂断</button>}
+          </div>
+        </div>
+      )}
+      {overlay === "findmy" && (
+        <div className="paper-overlay" role="dialog" aria-modal="true" aria-label="Find My">
+          <div className="findmy-sheet">
+            <header><strong>Find My · 叉宝的 iPhone（酒店电脑上）</strong><span>最后定位 · 昨晚 {formatGameTime(flags.lostAt ?? 22 * 60 + 18)} · Val Lasties</span></header>
+            <div className="findmy-map"><div className="trail" /><div className="pin" /></div>
+            <p>定位停在森林小路上段，一片巨石和矮松之间。从那以后没有再更新。</p>
+            <button className="primary-button" autoFocus onClick={() => setOverlay("none")}>去那里看看</button>
+          </div>
+        </div>
+      )}
+      {overlay === "hotel" && (
+        <div className="paper-overlay" role="dialog" aria-modal="true" aria-label="打电话">
+          <div className="hotel-sheet">
+            <header><strong>附近的酒店与游客中心</strong><span>已打 {flags.hotelCalls} 个 · {displayTime}</span></header>
+            <ul>
+              {HOTEL_CALLS.map((name, index) => <li key={name}><button className={flags.hotelCalled.includes(index) ? "called" : ""} autoFocus={index === 0} onClick={() => callHotel(index)}><span>{name}</span><b>{flags.hotelCalled.includes(index) ? "没有" : "拨打"}</b></button></li>)}
+            </ul>
+            <button className="primary-button map-close" onClick={closeHotel}>放下电话</button>
+          </div>
+        </div>
+      )}
+      {overlay === "selfie" && (
+        <div className="selfie-flash" aria-hidden="true"><div className="selfie-planet" style={{ backgroundImage: `url("${import.meta.env.BASE_URL}${NODES.summit.asset}")` }} /></div>
+      )}
+
       {thought && <div className="thought-line">{thought}</div>}
       {feedback && <div className="world-feedback">{feedback}</div>}
 
       <div className="action-whisper">
-        {phase === "school" && !interactions.routeDrawn && "看看桌上的地图"}
-        {phase === "school" && interactions.routeDrawn && !moving && "推开右边的门，出去"}
-        {phase === "chainUpper" && "抓住发亮的上一级铁梯，一级一级往上"}
-        {phase === "summitRest" && !interactions.chocolateEaten && "坐一会儿。脚边有巧克力"}
-        {phase === "summitRest" && interactions.chocolateEaten && !moving && "想走的时候，点一下信箱那边"}
-        {phase === "nightSlope" && !interactions.callDone && !callActive && "先拨一次求助电话"}
-        {phase === "marker656" && lightMode === "off" && "打开补光灯或手机，一处一处地照"}
-        {phase === "marker656" && lightMode !== "off" && interactions.markerStep < MARKER_POINTS.length && `照向：${MARKER_POINTS[interactions.markerStep].label}`}
-        {phase === "roadBank" && lightMode === "off" && "打开光。上面就是公路"}
-        {phase === "roadBank" && lightMode !== "off" && "抓住发亮的树根，往上"}
-        {phase === "police" && "门口的灯还亮着"}
-        {phase === "arrival" && !bagTaken && "抓住背包，拖向画面下方"}
-        {phase === "arrival" && bagTaken && !moving && arrivalProgress < 1 && "看向山路，点击想走到的位置"}
-        {phase === "arrival" && moving && "走过去"}
-        {phase === "trail" && route === null && "看向并点击左侧山路，或直接踩右侧石头"}
-        {phase === "trail" && route === "open" && moving && "沿着这条路走"}
-        {phase === "trail" && route === "stream" && streamStep < STONES.length && "看准发亮的石面，逐块踩过去"}
-        {phase === "forestEntry" && !moving && "沿着林中透光的旧路继续走"}
-        {phase === "chainTraverse" && "抓住发亮的下一段铁索，逐步横移"}
-        {phase === "rubbleSlope" && "选择稳定的石面，一步一步向上"}
-        {phase === "viewpoint" && !stagePhotoTaken && "按 P 拿出手机，把这里拍下来 · 想继续走，点一下画面"}
-        {phase === "viewpoint" && stagePhotoTaken && "收起手机。记住这阵风 · 想走的时候，点一下画面"}
-        {phase === "letterBox" && !interactions.letterRead && "看看信箱里留下的那张纸"}
-        {phase === "letterBox" && interactions.letterRead && "已经拍下来了。想走的时候，点一下下山的路"}
-        {phase === "sunsetFork" && !moving && "趁最后的光，沿来路下山"}
-        {((phase === "nightSlope" && interactions.callDone) || phase === "deepForest") && lightMode === "off" && "打开补光灯或手机，再找下一块地面"}
-        {((phase === "nightSlope" && interactions.callDone) || phase === "deepForest") && lightMode !== "off" && "让光跟着视线走，踩向发亮的地面"}
-        {phase === "roadside" && !interactions.rescuersMet && "有车停在远处。朝它挥手"}
-        {phase === "carInterior" && "暖风很轻。听他们说话"}
-        {phase === "searchRoad" && interactions.searchStep < SEARCH_POINTS.length && `寻找记忆里的路标：${SEARCH_POINTS[interactions.searchStep].label}`}
-        {phase === "searchRoad" && interactions.searchStep >= SEARCH_POINTS.length && !interactions.phoneReturned && "谷口有人朝这边走来，手里举着一部手机"}
-        {phase === "valleyExit" && !moving && sceneProgress < 1 && "离开以前，再回头看一眼来路"}
-        {phase === "valleyExit" && sceneProgress >= 1 && !interactions.endingGallerySeen && "上车以前，打开相册，再看一眼那张纸"}
-        {phase === "valleyExit" && interactions.endingGallerySeen && "收起手机。该走了。"}
+        {node === "meadow" && !ready && "环视四周"}
+        {node === "plaque" && !flags.helmet && "岩壁下面，背包边上"}
+        {node === "plaque" && flags.helmet && !flags.clipped && "钢缆从哪里开始"}
+        {node === "cable" && !ready && "到锚点：先解开一把锁，挂到下一段，再换另一把"}
+        {node === "crack" && !ready && "没有钢缆。看岩壁，找能抓住的地方"}
+        {node === "mailbox" && !flags.letterPhotographed && "岩壁上有什么"}
+        {node === "summit" && !flags.summitSelfie && "看看四周"}
+        {node === "hutView" && !flags.mapDone && "山屋在对面。看看地图"}
+        {node === "hutView" && flags.mapDone && !flags.chocolate && "背包里还有吃的"}
+        {node === "signpost" && !flags.signChosen && "读路牌"}
+        {node === "scree" && !ready && "选一块能站住的石头"}
+        {node === "deer" && !flags.deerSeen && "前面有响动"}
+        {node === "forestEdge" && !flags.callDone && "手机还剩 9%。信号一格"}
+        {(node === "forest1" || node === "forest2") && !ready && "按住能抓住的东西，直到抓稳。害怕了就喊一声"}
+        {node === "hairpin" && !flags.waved && "最原始的方式"}
+        {node === "car" && !ready && "暖气开着"}
+        {node === "search" && !ready && "沿着 Find My 的最后定位找"}
+        {node === "hotel" && !ready && "附近所有的酒店和游客中心"}
+        {node === "busStop" && !flags.busAnswered && "等 472 路"}
+        {node === "busStop" && flags.busAnswered && !flags.womanPhotographed && "她跑开了"}
+        {node === "police" && !ready && "走到柜台前"}
+        {node === "bench" && !flags.letterTranslated && "只有这部手机拍下了那封信"}
+        {ready && info.next && !walking && "想走的时候，看向路，点亮起来的箭头"}
       </div>
 
       {phoneOpen && (
         <Phone
-          tab={phoneTab}
-          setTab={setPhoneTab}
-          close={closePhone}
-          phone={phone}
-          dispatch={dispatchPhone}
-          scene={scene}
-          place={info.place}
-          progress={progress}
-          cameraAim={cameraAim}
-          setCameraAim={setCameraAim}
-          cameraZoom={cameraZoom}
-          setCameraZoom={setCameraZoom}
-          lightMode={lightMode}
-          takePhoto={takePhoto}
-          requestReply={requestPhoneReply}
-          onGalleryViewed={markEndingGalleryViewed}
-          letterTranslated={interactions.phoneReturned}
-          call={callActive ? { lines: CALL_LINES, step: callStep, done: callStep >= CALL_LINES.length - 1, hangUp } : undefined}
+          tab={phoneTab} setTab={setPhoneTab} close={closePhone} phone={phone} dispatch={dispatchPhone}
+          node={node} place={info.place} night={night}
+          cameraAim={cameraAim} setCameraAim={setCameraAim} cameraZoom={cameraZoom} setCameraZoom={setCameraZoom}
+          takePhoto={takePhoto} requestReply={requestReply}
+          letterTranslated={flags.letterTranslated} translatedLines={flags.translatedLines} onTranslate={node === "bench" ? translateLine : undefined}
+          call={overlay === "call" ? { lines: CALL_LINES, step: callStep, done: callStep >= CALL_LINES.length - 1, hangUp } : undefined}
         />
       )}
       {menu}

@@ -1,5 +1,5 @@
 // Headless screenshot of one scene (dev server must be running):
-//   node tools/shot.mjs <sceneId> <out.png> [js-to-run-before-shot] [waitMs]
+//   node tools/shot.mjs <nodeId> <out.png> [js-to-run-before-shot] [waitMs]
 // Example: node tools/shot.mjs school school.png "document.querySelector('.map-prop').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}))" 4000
 import { spawn } from "node:child_process";
 import { existsSync, writeFileSync } from "node:fs";
@@ -8,7 +8,7 @@ import { join } from "node:path";
 
 const [scene, out, prelude = "", waitMs = "3000"] = process.argv.slice(2);
 if (!scene || !out) {
-  console.error("usage: node tools/shot.mjs <sceneId> <out.png> [js] [waitMs]");
+  console.error("usage: node tools/shot.mjs <nodeId> <out.png> [js] [waitMs]");
   process.exit(2);
 }
 const base = process.env.BLV_URL || "http://localhost:5174/agentGameGame/games/before-leaving-valley/";
@@ -34,7 +34,7 @@ try {
   const { result: { sessionId } } = await send("Target.attachToTarget", { targetId, flatten: true });
   await send("Page.enable", {}, sessionId);
   await send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false }, sessionId);
-  await send("Page.navigate", { url: `${base}?scene=${scene}` }, sessionId);
+  await send("Page.navigate", { url: `${base}?node=${scene}` }, sessionId);
   await sleep(4500);
   if (prelude) await send("Runtime.evaluate", { expression: prelude, awaitPromise: true }, sessionId);
   await sleep(Number(waitMs));

@@ -1,4 +1,4 @@
-import { JOURNEY_SCENE_INFO, type JourneyScene } from "./journeyModel";
+import { NODES, type NodeId } from "./story";
 
 export type ContactId = "xiaoyu" | "mama" | "asha";
 
@@ -56,9 +56,10 @@ export type PhoneAction =
   | { type: "reset" };
 
 /* 这一天，以及第二天清晨。 */
-const JOURNEY_DATE: GameDate = { year: 2026, month: 8, day: 20 };
-export const NEXT_MORNING_DATE: GameDate = { year: 2026, month: 8, day: 21 };
-const START_MINUTE = 15 * 60 + 12;
+const JOURNEY_DATE: GameDate = { year: 2025, month: 7, day: 30 };
+export const NEXT_MORNING_DATE: GameDate = { year: 2025, month: 7, day: 31 };
+export const THIRD_DAY_DATE: GameDate = { year: 2025, month: 8, day: 1 };
+const START_MINUTE = 9 * 60 + 40;
 
 export const CONTACTS: Record<ContactId, { name: string; avatar: string; relation: string }> = {
   xiaoyu: { name: "小鱼", avatar: "🐟", relation: "从小一起长大" },
@@ -117,20 +118,20 @@ const INITIAL_PHOTOS: PhonePhoto[] = [
 
 const makeInitialThreads = (): Record<ContactId, PhoneMessage[]> => ({
   xiaoyu: [
-    { id: "xy-1", direction: "incoming", text: "你真的一个人去爬山了？", minute: 14 * 60 + 31 },
-    { id: "xy-2", direction: "outgoing", text: "嗯！登山学校的教练给我画了路线，说两小时就能登顶", minute: 14 * 60 + 33 },
-    { id: "xy-3", direction: "outgoing", text: "看到好看的给你拍 📷", minute: 14 * 60 + 33 },
-    { id: "xy-4", direction: "incoming", text: "等你的照片。回国第一顿我请", minute: 14 * 60 + 35 },
+    { id: "xy-1", direction: "incoming", text: "你真的一个人去爬山了？", minute: 9 * 60 + 2 },
+    { id: "xy-2", direction: "outgoing", text: "嗯！问了当地登山学校的教练，他说是六七个小时的 easy 路线", minute: 9 * 60 + 4 },
+    { id: "xy-3", direction: "outgoing", text: "看到好看的给你拍 📷", minute: 9 * 60 + 4 },
+    { id: "xy-4", direction: "incoming", text: "等你的照片。回国第一顿我请", minute: 9 * 60 + 6 },
   ],
   mama: [
-    { id: "ma-1", direction: "incoming", text: "到了给我发个小树，不用打电话。", minute: 12 * 60 + 42 },
-    { id: "ma-2", direction: "outgoing", text: "🌲 到啦，天气很好。", minute: 14 * 60 + 58 },
-    { id: "ma-3", direction: "incoming", text: "好，玩开心。回来给我看照片。", minute: 14 * 60 + 59 },
+    { id: "ma-1", direction: "incoming", text: "到了给我发个小树，不用打电话。", minute: 8 * 60 + 12 },
+    { id: "ma-2", direction: "outgoing", text: "🌲 到啦，天气很好。", minute: 9 * 60 + 31 },
+    { id: "ma-3", direction: "incoming", text: "好，玩开心。回来给我看照片。", minute: 9 * 60 + 33 },
   ],
   asha: [
-    { id: "ax-1", direction: "incoming", text: "钥匙交了。站在空房间里，忽然有点想哭。", minute: 11 * 60 + 16 },
-    { id: "ax-2", direction: "outgoing", text: "我也是。行李都寄回去了，只背了一个包来意大利。", minute: 14 * 60 + 40 },
-    { id: "ax-3", direction: "incoming", text: "一年就这么过完了。多拍点，回国一起看。", minute: 14 * 60 + 41 },
+    { id: "ax-1", direction: "incoming", text: "钥匙交了。站在空房间里，忽然有点想哭。", minute: 8 * 60 + 40 },
+    { id: "ax-2", direction: "outgoing", text: "我也是。行李都寄回去了，只背了一个包来意大利。", minute: 9 * 60 + 20 },
+    { id: "ax-3", direction: "incoming", text: "一年就这么过完了。多拍点，回国一起看。", minute: 9 * 60 + 22 },
   ],
 });
 
@@ -159,8 +160,8 @@ export function formatGameDate(date: GameDate) {
   return `${date.month}月${date.day}日 · ${weekday}`;
 }
 
-export function sceneAsset(scene: JourneyScene) {
-  return JOURNEY_SCENE_INFO[scene].asset;
+export function nodeAsset(node: NodeId) {
+  return NODES[node].asset;
 }
 
 function messageId(prefix: string) {
@@ -251,7 +252,7 @@ export function phoneReducer(state: PhoneState, action: PhoneAction): PhoneState
         id: messageId("photo"),
         dateLabel: "今天",
         minute: state.minuteOfDay,
-        day: state.date.day,
+        day: action.photo.day ?? state.date.day,
         isNew: true,
       };
       return {

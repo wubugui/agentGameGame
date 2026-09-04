@@ -34,7 +34,7 @@ try {
   const { result: { sessionId } } = await send("Target.attachToTarget", { targetId, flatten: true });
   await send("Page.enable", {}, sessionId);
   await send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false }, sessionId);
-  await send("Page.navigate", { url: `${base}?scene=${scene}` }, sessionId);
+  await send("Page.navigate", { url: `${base}?node=${scene}` }, sessionId);
   await sleep(4500);
   if (prelude) await send("Runtime.evaluate", { expression: prelude, awaitPromise: true }, sessionId);
   await sleep(Number(waitMs));

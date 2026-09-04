@@ -16,13 +16,12 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type Dispatch, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
-import type { JourneyScene } from "./PixiJourney";
-import { journeySceneIndex, LETTER_LINES_IT, LETTER_LINES_ZH } from "./journeyModel";
+import { LETTER_LINES_IT, LETTER_LINES_ZH, NODES, nodeIndex, type NodeId } from "./story";
 import {
   CONTACTS,
   formatGameDate,
   formatGameTime,
-  sceneAsset,
+  nodeAsset,
   type ContactId,
   type PhoneAction,
   type PhonePhoto,
@@ -41,18 +40,19 @@ type Props = {
   close: () => void;
   phone: PhoneState;
   dispatch: Dispatch<PhoneAction>;
-  scene: JourneyScene;
+  node: NodeId;
   place: string;
-  progress: number;
+  night: boolean;
   cameraAim: Aim;
   setCameraAim: (aim: Aim) => void;
   cameraZoom: number;
   setCameraZoom: (zoom: number) => void;
-  lightMode: "off" | "phone" | "flashlight";
   takePhoto: (snapshot?: string) => void;
   requestReply: (contactId: ContactId, kind: "text" | "photo") => void;
   onGalleryViewed?: () => void;
   letterTranslated: boolean;
+  translatedLines?: number;
+  onTranslate?: () => void;
   call?: CallState;
 };
 
@@ -64,18 +64,19 @@ export default function Phone({
   close,
   phone,
   dispatch,
-  scene,
+  node,
   place,
-  progress,
+  night,
   cameraAim,
   setCameraAim,
   cameraZoom,
   setCameraZoom,
-  lightMode,
   takePhoto,
   requestReply,
   onGalleryViewed,
   letterTranslated,
+  translatedLines = 0,
+  onTranslate,
   call,
 }: Props) {
   const [activeContact, setActiveContact] = useState<ContactId>("xiaoyu");
@@ -89,22 +90,23 @@ export default function Phone({
   const cameraPreviewRef = useRef<HTMLDivElement>(null);
   const time = formatGameTime(phone.minuteOfDay);
   const totalUnread = Object.values(phone.unread).reduce((sum, count) => sum + count, 0);
-  const cameraAsset = `${import.meta.env.BASE_URL}${sceneAsset(scene)}`;
-  const sceneIndex = journeySceneIndex(scene);
-  const summitIndex = journeySceneIndex("viewpoint");
-  const descentEnd = journeySceneIndex("roadside");
-  const ascentProgress = Math.min(1, Math.max(0, (sceneIndex - 1 + progress) / (summitIndex - 1)));
-  const returnProgress = sceneIndex <= journeySceneIndex("letterBox")
-    ? ascentProgress
-    : sceneIndex <= descentEnd
-      ? Math.max(0, 1 - (sceneIndex - journeySceneIndex("letterBox") + progress) / (descentEnd - journeySceneIndex("letterBox")))
-      : scene === "searchRoad" ? .28 + progress * .18 : 0;
+  const cameraAsset = `${import.meta.env.BASE_URL}${nodeAsset(node)}`;
+  const index = nodeIndex(node);
+  const summitIndex = nodeIndex("summit");
+  const descentEnd = nodeIndex("hairpin");
+  const ascentProgress = Math.min(1, Math.max(0, index / summitIndex));
+  const returnProgress = index <= summitIndex ? ascentProgress : index <= descentEnd ? Math.max(0, 1 - (index - summitIndex) / (descentEnd - summitIndex)) : node === "search" ? .3 : 0;
   const mapX = 55 + returnProgress * 225;
   const mapY = 409 - returnProgress * 325;
 
   // 结尾要求她真的回看那张信的照片；若相册里没有信（开发预览），退回到“打开相册”即可。
   const hasLetterPhoto = phone.photos.some((photo) => photo.kind === "letter");
-  const dateLabelFor = (photo: PhonePhoto) => photo.isNew && photo.day !== undefined && photo.day !== phone.date.day ? "昨天" : photo.dateLabel;
+  // Photos taken on this trip carry the story day (1..3); the label is relative to the day she is in now.
+  const dateLabelFor = (photo: PhonePhoto) => {
+    if (!photo.isNew || photo.day === undefined) return photo.dateLabel;
+    const diff = NODES[node].day - photo.day;
+    return diff <= 0 ? "今天" : diff === 1 ? "昨天" : diff === 2 ? "前天" : photo.dateLabel;
+  };
   useEffect(() => {
     if (tab === "conversation") threadEndRef.current?.scrollIntoView({ block: "end" });
     if (tab === "gallery" && (!hasLetterPhoto || selectedPhoto?.kind === "letter")) onGalleryViewed?.();
@@ -146,7 +148,7 @@ export default function Phone({
     setCapturing(true);
     setShutterFlash(true);
     const preview = cameraPreviewRef.current;
-    const snapshot = preview ? await captureCameraFrame(cameraAsset, cameraAim, cameraZoom, preview.clientWidth, preview.clientHeight, scene, lightMode) : undefined;
+    const snapshot = preview ? await captureCameraFrame(cameraAsset, cameraAim, cameraZoom, preview.clientWidth, preview.clientHeight, night) : undefined;
     takePhoto(snapshot);
     window.setTimeout(() => setShutterFlash(false), 150);
     setCapturing(false);
@@ -157,7 +159,7 @@ export default function Phone({
   const activeInfo = CONTACTS[activeContact];
 
   return (
-    <div className="phone-overlay" role="dialog" aria-label="林知夏的手机" aria-modal="true">
+    <div className="phone-overlay" role="dialog" aria-label="叉宝的手机" aria-modal="true">
       <button className="phone-backdrop" onClick={close} aria-label="收起手机" />
       <div className="phone-case" aria-label="鼠尾草绿色透明手机壳，贴着山形贴纸和旧车票">
         <div className="case-side-button case-side-button-top" />
@@ -192,7 +194,7 @@ export default function Phone({
                   <PhoneApp icon={<Camera />} label="相机" tone="graphite" onClick={() => setTab("camera")} />
                   <PhoneApp icon={<ImageIcon />} label="相册" tone="sand" onClick={() => setTab("gallery")} />
                 </div>
-                <p className="wallpaper-signature">知夏 · 把偶然也拍下来</p>
+                <p className="wallpaper-signature">叉宝 · 把偶然也拍下来</p>
               </div>
             )}
 
@@ -276,12 +278,12 @@ export default function Phone({
                         <circle className="origin" cx="55" cy="409" r="5" />
                         <g className="you" transform={`translate(${mapX} ${mapY})`}><circle r="9" /><path d="M0 -4 L4 5 L0 3 L-4 5 Z" /></g>
                       </svg>
-                      <span className="map-name map-name-origin">登山学校</span>
-                      <span className="map-name map-name-fork">牧道岔口</span>
-                      <span className="map-name map-name-view">山顶信箱</span>
+                      <span className="map-name map-name-origin">Passo Sella 公交站</span>
+                      <span className="map-name map-name-fork">Val Lasties 岔口</span>
+                      <span className="map-name map-name-view">半途的信箱</span>
                     </div>
                   </div>
-                  <div className="map-location-card"><Navigation size={17} /><span><strong>{place}</strong><small>教练画的路线 · 已离线保存</small></span></div>
+                  <div className="map-location-card"><Navigation size={17} /><span><strong>{place}</strong><small>Pössnecker · 已离线保存</small></span></div>
                 </div>
               </PhonePage>
             )}
@@ -289,9 +291,7 @@ export default function Phone({
             {tab === "camera" && (
               <div className="camera-app">
                 <div className="camera-preview" ref={cameraPreviewRef} onPointerMove={aimCamera} style={{ backgroundImage: `url("${cameraAsset}")`, backgroundPosition: `${cameraAim.x}% ${cameraAim.y}%`, backgroundSize: `auto ${cameraZoom * 100}%` }}>
-                  {scene === "chainTraverse" && <img className="camera-scene-prop camera-chain-prop" src={`${import.meta.env.BASE_URL}art/chain-overlay-v1.webp`} alt="" />}
-                  {scene === "roadside" && <img className="camera-scene-prop camera-car-prop" src={`${import.meta.env.BASE_URL}art/rescue-car-cutout-v2.webp`} alt="" />}
-                  {(scene === "nightSlope" || scene === "deepForest" || scene === "roadside") && <div className={`camera-night-mask camera-light-${lightMode}`} style={{ "--camera-beam-x": `${cameraAim.x}%`, "--camera-beam-y": `${cameraAim.y}%` } as React.CSSProperties} />}
+                  {night && <div className="camera-night-mask" style={{ "--camera-beam-x": `${cameraAim.x}%`, "--camera-beam-y": `${cameraAim.y}%` } as React.CSSProperties} />}
                   <div className="camera-grid" />
                   <div className="focus-box" style={{ left: `${cameraAim.x}%`, top: `${cameraAim.y}%` }} />
                   {shutterFlash && <div className="shutter-flash" />}
@@ -316,9 +316,13 @@ export default function Phone({
                       {selectedPhoto.kind === "letter" && (
                         <div className="letter-paper" aria-label="信箱里的那张纸" style={{ backgroundImage: `url("${import.meta.env.BASE_URL}art/letter-paper-v1.webp")` }}>
                           {LETTER_LINES_IT.map((line, index) => <p key={`it-${index}`}>{line}</p>)}
-                          {letterTranslated
-                            ? <div className="letter-zh">{LETTER_LINES_ZH.map((line, index) => <p key={`zh-${index}`}>{line}</p>)}</div>
-                            : <div className="letter-note">看不懂。先留着。</div>}
+                          {(letterTranslated || translatedLines > 0) && (() => {
+                            let shown = 0;
+                            return <div className="letter-zh">{LETTER_LINES_ZH.map((line, index) => { if (!line) return <p key={`zh-${index}`}> </p>; shown += 1; return <p key={`zh-${index}`} className={letterTranslated || shown <= translatedLines ? "shown" : "pending"}>{letterTranslated || shown <= translatedLines ? line : " "}</p>; })}</div>;
+                          })()}
+                          {!letterTranslated && (onTranslate
+                            ? <button className="letter-translate" onClick={onTranslate}>{translatedLines === 0 ? "翻译这一页" : "下一句"}</button>
+                            : <div className="letter-note">看不懂。先留着。</div>)}
                         </div>
                       )}
                     </div>
@@ -379,7 +383,7 @@ async function loadCameraImage(asset: string) {
   return image;
 }
 
-async function captureCameraFrame(asset: string, aim: Aim, zoom: number, previewWidth: number, previewHeight: number, scene: JourneyScene, lightMode: "off" | "phone" | "flashlight") {
+async function captureCameraFrame(asset: string, aim: Aim, zoom: number, previewWidth: number, previewHeight: number, night: boolean) {
   try {
     const image = await loadCameraImage(asset);
 
@@ -397,28 +401,16 @@ async function captureCameraFrame(asset: string, aim: Aim, zoom: number, preview
     const offsetY = (outputHeight - drawnHeight) * aim.y / 100;
     context.drawImage(image, offsetX, offsetY, drawnWidth, drawnHeight);
 
-    if (scene === "chainTraverse") {
-      const chain = await loadCameraImage(`${import.meta.env.BASE_URL}art/chain-overlay-v1.webp`);
-      context.drawImage(chain, -outputWidth * .08, outputHeight * .19, outputWidth * .78, outputHeight * .28);
-    }
-    if (scene === "roadside") {
-      const car = await loadCameraImage(`${import.meta.env.BASE_URL}art/rescue-car-cutout-v2.webp`);
-      context.drawImage(car, outputWidth * .44, outputHeight * .45, outputWidth * .66, outputHeight * .45);
-    }
-    if (scene === "nightSlope" || scene === "deepForest" || scene === "roadside") {
+    if (night) {
       context.save();
-      if (lightMode === "off") {
-        context.fillStyle = "rgba(0,3,8,.94)";
-      } else {
-        const centerX = outputWidth * aim.x / 100;
-        const centerY = outputHeight * aim.y / 100;
-        const radius = outputWidth * (lightMode === "phone" ? .25 : .43);
-        const darkness = context.createRadialGradient(centerX, centerY, radius * .08, centerX, centerY, radius);
-        darkness.addColorStop(0, "rgba(0,3,8,.02)");
-        darkness.addColorStop(.42, lightMode === "phone" ? "rgba(4,10,15,.32)" : "rgba(5,9,11,.16)");
-        darkness.addColorStop(1, "rgba(0,3,8,.92)");
-        context.fillStyle = darkness;
-      }
+      const centerX = outputWidth * aim.x / 100;
+      const centerY = outputHeight * aim.y / 100;
+      const radius = outputWidth * .4;
+      const darkness = context.createRadialGradient(centerX, centerY, radius * .08, centerX, centerY, radius);
+      darkness.addColorStop(0, "rgba(0,3,8,.02)");
+      darkness.addColorStop(.42, "rgba(5,9,11,.2)");
+      darkness.addColorStop(1, "rgba(0,3,8,.92)");
+      context.fillStyle = darkness;
       context.fillRect(0, 0, outputWidth, outputHeight);
       context.restore();
     }

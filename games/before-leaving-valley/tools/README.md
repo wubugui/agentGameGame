@@ -2,6 +2,10 @@
 
 所有场景板与精灵由 Grok Build（`grokvpn`，走本机 7078 代理）的 `image_gen` / `image_edit` 生成，再用 ffmpeg 转 WebP。
 
+## 生成一张全景画（v3 节点形式）
+
+每个节点一张 16:9 宽幅画，从原视频对应截帧用 image_edit 重绘（保留同一地点、同一视角，去掉字幕、水印和博主本人）；夜景与室内没有对应截帧的，用文字描述生成。转换：`ffmpeg -i in.jpg -vf scale=2048:-2 -c:v libwebp -quality 86 public/pano/NN-name.webp`。
+
 ## 生成一张图
 
 ```bash
@@ -32,7 +36,7 @@ ffmpeg -y -i keyed.png -c:v libwebp -quality 92 public/art/name-v1.webp
 
 ## 自动通关冒烟测试
 
-把 `tools/autoplay.js` 整段粘进浏览器控制台（停在标题页），它会用合成事件从下车一路点到完成页，时间线写在 `window.__log`。2026-09-04 的结果：全程无卡点，纯操作路径 98 秒。
+把 `tools/autoplay.js` 整段粘进浏览器控制台（停在标题页），它会用合成事件从下车一路点到完成页（含一次故意的滑落、一次走错路牌、按住攀爬、两次挥手），时间线写在 `window.__log`。
 
 更稳的做法是用无头 Chrome 跑（不受浏览器面板隐藏时的定时器限制）：
 
@@ -44,15 +48,15 @@ node tools/smoke.mjs         # 输出时间线，最后打印 SMOKE PASS / FAIL�
 单场景无头截图（真实 1280×720 布局，不受面板影响）：
 
 ```bash
-node tools/shot.mjs school out.png "document.querySelector('.map-prop').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}))" 4000
+node tools/shot.mjs mailbox out.png "document.querySelectorAll('.hotspot').forEach(h=>{if(h.textContent.includes('信箱'))h.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}))})" 1500
 ```
 
-阅读节奏模式：`set PACED=1` 后运行 smoke.mjs，脚本会按每字约 0.18 秒读独白、在三个场景拍照并发给朋友、看消息、在山顶读信 9 秒、结尾读译文 14 秒，输出一次"像人一样玩"的实测时长。首屏测量：`node tools/perf.mjs`（先 `npx vite preview --port 5175`）。
+首屏测量：`node tools/perf.mjs`（先 `npx vite preview --port 5175`）。
 
 JS 探针（在真实布局下读取任意表达式的值）：
 
 ```bash
-EVAL="document.querySelector('.map-prop').getBoundingClientRect().toJSON()" node tools/probe.mjs school x "" 1500
+EVAL="document.querySelector('.go-hotspot').getBoundingClientRect().toJSON()" node tools/probe.mjs meadow x "" 1500
 ```
 
 QA 记录见 `docs/QA_REPORT.md`。
