@@ -54,10 +54,20 @@ const NIGHT_NODES: readonly NodeId[] = ["forestEdge", "forest1", "forest2", "hai
 /* Leaving these nodes she is running: the emergency descent. */
 const RUN_FROM: readonly NodeId[] = ["signpost", "scree", "deer"];
 /* What drifts in the air of a node: pollen in warm light, stone dust on the plateau, fireflies at dusk. */
-const MOTES: Partial<Record<NodeId, "pollen" | "dust" | "night">> = { meadow: "pollen", approach: "pollen", deer: "pollen", search: "pollen", bench: "pollen", busStop: "pollen", summit: "dust", plateau: "dust", hutView: "dust", scree: "dust", forestEdge: "night" };
+const MOTES: Partial<Record<NodeId, "pollen" | "dust" | "night" | "grit">> = { meadow: "pollen", approach: "pollen", deer: "pollen", search: "pollen", bench: "pollen", busStop: "pollen", summit: "grit", exit: "grit", plateau: "dust", hutView: "dust", scree: "dust", forestEdge: "night" };
 const MOTE_SPOTS = Array.from({ length: 14 }, (_, index) => ({ x: (index * 37 + 11) % 100, y: 20 + (index * 53 + 7) % 70, dur: 11 + (index * 7) % 9, delay: -(index * 1.7) }));
 /* Nodes where the wind comes in gusts strong enough to push the body. */
 const GUSTY: readonly NodeId[] = ["cable", "crack", "mailbox", "exit", "summit", "plateau", "hutView", "signpost"];
+/* Where the wind comes from in each place (-1 left .. 1 right); the wall channels it. */
+const WIND_PAN: Partial<Record<NodeId, number>> = { cable: 0.45, crack: 0.35, mailbox: -0.3, exit: 0.2, summit: -0.15, plateau: 0.1, hutView: 0.25, signpost: -0.2, scree: 0.15 };
+/* Places she stops to look: when the pointer rests, the gaze wanders on its own. */
+const IDLE_NODES: readonly NodeId[] = ["meadow", "mailbox", "summit", "plateau", "hutView", "deer", "search", "busStop", "bench"];
+/* Cloud shadows cross the open ground of the high nodes. */
+const CLOUDY: readonly NodeId[] = ["plateau", "hutView", "summit", "scree", "signpost", "exit"];
+/* How hard each ground hits back through the feet. */
+const STEP_KICK: Record<SoundMaterial, number> = { rock: 1.15, gravel: 0.95, soft: 0.6, road: 1 };
+const WALK_CADENCE = 560;
+const RUN_CADENCE = 300;
 const DAY_MUSIC_NODES: readonly NodeId[] = ["meadow", "approach", "plaque", "cable", "crack", "mailbox", "exit", "summit", "plateau"];
 
 type MusicKind = "day" | "warm" | "end";
@@ -290,10 +300,16 @@ export default function App() {
   const patch = useCallback((update: Partial<Flags> | ((current: Flags) => Partial<Flags>)) => {
     setFlags((current) => ({ ...current, ...(typeof update === "function" ? update(current) : update) }));
   }, []);
-  const sfx = useCallback((name: "step" | "shutter" | "tick" | "tock" | "clink" | "slip" | "door" | "breath" | "thud" | "slide" | "brake" | "grip") => {
+  const sfx = useCallback((name: "step" | "shutter" | "tick" | "tock" | "clink" | "slip" | "door" | "breath" | "thud" | "slide" | "brake" | "grip" | "helicopter" | "hooves" | "doorOpen" | "doorClose" | "wiper" | "exhale") => {
     const sound = soundRef.current;
     if (!sound || !soundOn) return;
     if (name === "step") sound.step(MATERIAL[node]);
+    else if (name === "helicopter") sound.helicopter();
+    else if (name === "hooves") sound.hooves(1);
+    else if (name === "doorOpen") sound.door(true);
+    else if (name === "doorClose") sound.door(false);
+    else if (name === "wiper") sound.wiper();
+    else if (name === "exhale") sound.exhale();
     else if (name === "thud") sound.thud();
     else if (name === "slide") sound.slide();
     else if (name === "brake") sound.brake();
@@ -307,7 +323,7 @@ export default function App() {
     else sound.breath({ duration: 0.9, gain: 0.5, cutoff: 900 });
   }, [node, soundOn]);
   /* A push on the body: the camera's springs react and settle. */
-  const kick = useCallback((kind: ImpulseKind, strength = 1) => { stageRef.current?.kick(kind, strength); }, []);
+  const kick = useCallback((kind: ImpulseKind, strength = 1, direction?: { yaw: number; pitch: number }) => { stageRef.current?.kick(kind, strength, direction); }, []);
   /* Her hand comes into view, reaching for what was just grabbed. */
   const reach = useCallback((anchor: Anchor, kind: "grip" | "carabiner" = "grip", hold = false) => { setHand({ key: Date.now(), anchor, kind, hold }); }, []);
   const spend = useCallback((minutes: number, battery = 0) => {
@@ -432,6 +448,7 @@ export default function App() {
     if (node === "search") schedule(() => setOverlay("findmy"), 2800);
     if (node === "busStop") schedule(() => setWomanShown(true), 3600);
     if (node === "car") sfx("door");
+    if (node === "hotel" || node === "police") { sfx("doorOpen"); schedule(() => sfx("doorClose"), 1500); }
     // A save written after the letter was translated resumes straight into the ending instead of a dead bench.
     if (node === "bench" && flagsRef.current.letterTranslated) schedule(() => { setPhase("complete"); setCreditLine(0); clearJourneySave(); setSavedJourney(null); }, 1200);
     const beats = PHONE_BEATS[node];
@@ -439,9 +456,9 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [node, phase]);
 
-  /* seconds spent standing in the current node (drives the fading light on the scree) */
+  /* seconds spent standing in the current node (drives the fading light of the descent) */
   useEffect(() => {
-    if (phase !== "play" || node !== "scree") return;
+    if (phase !== "play") return;
     const timer = window.setInterval(() => setNodeSeconds((value) => value + 1), 1000);
     return () => window.clearInterval(timer);
   }, [node, phase]);
@@ -509,6 +526,24 @@ export default function App() {
     return () => window.clearTimeout(timer);
   }, [carState, flags.waved, node, phase]);
 
+  /* the wind has a side: on the wall it comes across the face from the valley */
+  useEffect(() => { soundRef.current?.setWindPan(WIND_PAN[node] ?? 0); }, [audioReady, node]);
+
+  /* in the car the wipers keep time */
+  useEffect(() => {
+    if (phase !== "play" || node !== "car") return;
+    const timer = window.setInterval(() => { if (soundOn) soundRef.current?.wiper(); }, 2200);
+    return () => window.clearInterval(timer);
+  }, [node, phase, soundOn]);
+
+  /* at night every breath is visible; out of breath it comes faster */
+  const breathPeriod = breath === "recovery" ? 1.7 : 2.8;
+  useEffect(() => {
+    if (phase !== "play" || !night || phoneOpen) return;
+    const timer = window.setInterval(() => { if (soundOn) soundRef.current?.exhale(); }, breathPeriod * 1000);
+    return () => window.clearInterval(timer);
+  }, [breathPeriod, night, phase, phoneOpen, soundOn]);
+
   /* the heart in the forest: sound and vignette beat faster as fear rises */
   const beatPeriod = Math.round(1000 - fear * 520);
   useEffect(() => {
@@ -553,8 +588,14 @@ export default function App() {
     setPhoneOpen(false);
     // Footfalls at the gait's cadence; a run lands harder and leaves her out of breath.
     const duration = settings.motion ? (run ? 1500 : 1800) : 900;
-    const cadence = run ? 300 : 560;
-    for (let at = 0; at < duration - 120; at += cadence) schedule(() => { sfx("step"); if (run) sfx("thud"); }, at);
+    const cadence = run ? RUN_CADENCE : WALK_CADENCE;
+    const material = MATERIAL[node];
+    for (let at = 0; at < duration - 120; at += cadence) schedule(() => {
+      sfx("step");
+      kick("step", STEP_KICK[material] * (run ? 1.3 : 1));
+      if (material === "gravel") kick("turn", 0.12);
+      if (run) sfx("thud");
+    }, at);
     if (run) schedule(() => sfx("breath"), 700);
     const started = performance.now();
     const tick = () => {
@@ -647,6 +688,7 @@ export default function App() {
   const lookAtCross = () => say("木头十字架。对面是 Sassolungo，云压在它上面。往下看，就是早上出发的山口。");
   const takeSelfie = () => {
     sfx("shutter"); setOverlay("selfie");
+    schedule(() => sfx("helicopter"), 900);
     schedule(() => { setOverlay("none"); patch({ summitSelfie: true }); say("举起相机的时候，一架直升机从头顶飞过去。这一整天，山里就它和那两个人。"); }, 3200);
     schedule(() => say("我开心了一下。然后一整天，都没再笑出来。"), 9000);
     spend(6, 2);
@@ -679,18 +721,26 @@ export default function App() {
 
   const takeScreeStep = (safe: boolean) => {
     if (flags.screeStep >= SCREE_STEPS.length) return;
-    if (!safe) { sfx("slip"); sfx("slide"); kick("slip"); patch((current) => ({ slips: current.slips + 1 })); recover(3200); flash("石头从脚下滑走，一直滚到看不见。"); spend(4); return; }
+    if (!safe) {
+      const { safe: flat, loose } = SCREE_STEPS[flags.screeStep];
+      sfx("slip"); sfx("slide"); kick("slip", 0.7);
+      kick("glance", 1, { yaw: (loose.yaw - flat.yaw) * 1.1, pitch: -14 });
+      patch((current) => ({ slips: current.slips + 1 })); recover(3200); flash("石头从脚下滑走，一直滚到看不见。"); spend(4); return;
+    }
     sfx("step"); sfx("thud"); kick("land"); setDust((value) => value + 1); schedule(() => sfx("slide"), 90);
     const next = flags.screeStep + 1; patch({ screeStep: next }); spend(11, 0);
     if (next === 2) say("云在离我而去。");
     if (next === 4) say("最后的夕阳也在离我而去。我一直盯着脚下。");
     if (next === SCREE_STEPS.length) say("坡底了。林线就在前面。");
   };
-  const dusk = node === "scree" ? Math.min(0.85, flags.screeStep / SCREE_STEPS.length * 0.5 + Math.min(1, nodeSeconds / 240) * 0.35) : 0;
+  const dusk = node === "scree" ? Math.min(0.85, flags.screeStep / SCREE_STEPS.length * 0.5 + Math.min(1, nodeSeconds / 240) * 0.35)
+    : node === "deer" ? 0.22 + Math.min(1, nodeSeconds / 300) * 0.22
+    : node === "forestEdge" ? 0.42 + Math.min(1, nodeSeconds / 240) * 0.25
+    : 0;
 
   const scareDeer = () => {
     if (deerState !== "standing") return;
-    setDeerState("fleeing"); sfx("step");
+    setDeerState("fleeing"); sfx("hooves"); kick("glance", 0.6, { yaw: 6, pitch: 0 });
     schedule(() => { setDeerState("gone"); patch({ deerSeen: true }); say("十几只鹿，扭头跑回远处的森林。纪念品上除了鹿，还有熊、狼和野猪。"); }, 2600);
   };
 
@@ -938,16 +988,25 @@ export default function App() {
   const holdActive = holdRef.current !== null;
 
   return (
-    <main className={`game-shell node-${node} scene-light-${info.light} body-${bodyMode} ${walking ? "is-moving" : ""} ${walking && running ? "is-running" : ""} ${shouting ? "shouting" : ""} ${braking ? "car-braking" : ""} ${settings.motion ? "" : "reduce-motion"} breath-${breath} ${overlay !== "none" && overlay !== "selfie" ? "overlay-open" : ""} ${phoneOpen ? "phone-open" : ""}`}>
-      <PanoStage asset={info.asset} light={info.light} look={look} walking={walking} progress={walkProgress} breath={breath} mode={bodyMode} tension={fear} handleRef={stageRef} anchorLayerRef={anchorLayerRef} reduceMotion={!settings.motion} onReady={onCanvasReady} />
+    <main className={`game-shell node-${node} scene-light-${info.light} body-${bodyMode} ${walking ? "is-moving" : ""} ${walking && running ? "is-running" : ""} ${shouting ? "shouting" : ""} ${braking ? "car-braking" : ""} ${night && phoneOpen ? "night-phone" : ""} ${settings.motion ? "" : "reduce-motion"} breath-${breath} ${overlay !== "none" && overlay !== "selfie" ? "overlay-open" : ""} ${phoneOpen ? "phone-open" : ""}`}>
+      <PanoStage asset={info.asset} light={info.light} look={look} walking={walking} progress={walkProgress} breath={breath} mode={bodyMode} tension={fear} handleRef={stageRef} idle={IDLE_NODES.includes(node) && !walking && overlay === "none" && !phoneOpen && !menuOpen} anchorLayerRef={anchorLayerRef} reduceMotion={!settings.motion} onReady={onCanvasReady} />
       <div className="cinema-grade" />
       <div className="film-grain" />
-      <div className="scene-blink" key={`blink-${node}`} />
-      {node === "scree" && <div className="dusk-fall" style={{ opacity: dusk }} />}
+      <div className={`scene-blink ${info.light === "interior" && node !== "car" ? "warm" : ""}`} key={`blink-${node}`} />
+      {dusk > 0 && <div className="dusk-fall" style={{ opacity: dusk }} />}
+      {CLOUDY.includes(node) && <div className="cloud-shadows" aria-hidden="true" />}
+      <div className="breath-pulse" aria-hidden="true" />
+      {night && !phoneOpen && <div className="breath-fog" aria-hidden="true" style={{ "--breath": `${breathPeriod}s` } as React.CSSProperties} />}
+      {phoneOpen && night && <div className="phone-glow" aria-hidden="true" />}
       {MOTES[node] && <div className={`motes ${MOTES[node]}`} aria-hidden="true">{MOTE_SPOTS.map((spot, index) => <i key={index} style={{ "--x": `${spot.x}%`, "--y": `${spot.y}%`, "--dur": `${spot.dur}s`, "--delay": `${spot.delay}s` } as React.CSSProperties} />)}</div>}
-      {node === "car" && <div className="car-sweep" aria-hidden="true"><i /><i /></div>}
+      {node === "car" && <><div className="car-sweep" aria-hidden="true"><i /><i /><i /></div><div className="tree-flicker" aria-hidden="true" /><div className="dash-glow" aria-hidden="true" /><div className="wipers" aria-hidden="true"><i /><i /></div></>}
+      <div className="hands-layer" aria-hidden="true">
+        {walking && <img className="hand-walk" src={`${import.meta.env.BASE_URL}sprites/hand-walk.webp`} alt="" draggable={false} style={{ "--cadence": `${running ? RUN_CADENCE : WALK_CADENCE}ms` } as React.CSSProperties} />}
+        {node === "car" && <img className="hands-lap" src={`${import.meta.env.BASE_URL}sprites/hands-lap.webp`} alt="" draggable={false} />}
+      </div>
       {(node === "forest1" || node === "forest2") && <div className="fear-vignette" aria-hidden="true" style={{ "--beat": `${beatPeriod}ms`, "--beat-strength": (0.15 + fear * 0.55).toFixed(2) } as React.CSSProperties} />}
       {dust > 0 && <div key={dust} className="dust-puff" aria-hidden="true" onAnimationEnd={() => setDust(0)} />}
+      {(node === "forest1" || node === "forest2") && <div className="lamp-light" aria-hidden="true" style={{ "--beam-x": `${(look.x + 1) * 50}%`, "--beam-y": `${(look.y + 1) * 50}%` } as React.CSSProperties} />}
       {night && <div className={`night-darkness ${node === "forestEdge" ? "faint" : node === "hairpin" ? `road ${carState !== "none" ? "lit" : ""}` : ""}`} style={{ "--beam-x": `${(look.x + 1) * 50}%`, "--beam-y": `${(look.y + 1) * 50}%` } as React.CSSProperties} />}
       {info.chapter && chapterShown && (
         <div className="chapter-card" key={`chapter-${node}`} aria-hidden="true">
@@ -1173,6 +1232,7 @@ export default function App() {
         {ready && info.next && !walking && "想走的时候，看向路，点亮起来的箭头"}
       </div>
 
+      {phoneOpen && <img className="hand-phone" src={`${import.meta.env.BASE_URL}sprites/hand-phone.webp`} alt="" draggable={false} aria-hidden="true" />}
       {phoneOpen && (
         <Phone
           tab={phoneTab} setTab={setPhoneTab} close={closePhone} phone={phone} dispatch={dispatchPhone}

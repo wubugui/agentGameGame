@@ -14,8 +14,8 @@ import * as THREE from "three";
 export type LookPoint = { x: number; y: number };
 export type BreathState = "calm" | "walking" | "recovery";
 export type BodyMode = "stand" | "walk" | "run" | "climb" | "crawl" | "ride";
-export type ImpulseKind = "step" | "land" | "slip" | "pull" | "clink" | "jolt" | "brake" | "turn" | "shout" | "settle";
-export type StageHandle = { kick: (kind: ImpulseKind, strength?: number) => void };
+export type ImpulseKind = "step" | "land" | "slip" | "pull" | "clink" | "jolt" | "brake" | "turn" | "shout" | "settle" | "glance";
+export type StageHandle = { kick: (kind: ImpulseKind, strength?: number, direction?: { yaw: number; pitch: number }) => void };
 
 export const PANO_HFOV = 150;      // degrees of the cylinder covered by one image
 export const CAMERA_FOV = 60;      // vertical field of view in degrees
@@ -33,6 +33,7 @@ type Props = {
   mode?: BodyMode;                // what her body is doing in this node
   tension?: number;               // 0..1 shaking hands / racing heart (crawl and climb)
   handleRef?: { current: StageHandle | null };
+  idle?: boolean;                 // when true and the pointer rests, the gaze wanders slowly on its own
   anchorLayerRef: { current: HTMLDivElement | null };
   reduceMotion?: boolean;
   onReady?: () => void;
@@ -84,7 +85,7 @@ function makePanel(texture: THREE.Texture | null) {
   return mesh;
 }
 
-export default function PanoStage({ asset, light, look, walking, progress, breath, mode = "stand", tension = 0, handleRef, anchorLayerRef, reduceMotion = false, onReady, onGaze }: Props) {
+export default function PanoStage({ asset, light, look, walking, progress, breath, mode = "stand", tension = 0, handleRef, idle = false, anchorLayerRef, reduceMotion = false, onReady, onGaze }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const assetRef = useRef(asset);
   const lightRef = useRef(light);
@@ -94,13 +95,16 @@ export default function PanoStage({ asset, light, look, walking, progress, breat
   const breathRef = useRef(breath);
   const modeRef = useRef(mode);
   const tensionRef = useRef(tension);
+  const idleRef = useRef(idle);
+  const lookChangedAtRef = useRef(performance.now());
   const reduceRef = useRef(reduceMotion);
   const gazeRef = useRef(onGaze);
   const requestRef = useRef<{ asset: string; token: number }>({ asset, token: 0 });
   const springsRef = useRef({ pitch: spring(70, 9.5), yaw: spring(70, 9.5), roll: spring(90, 11), zoom: spring(60, 10) });
 
   useEffect(() => { lightRef.current = light; }, [light]);
-  useEffect(() => { lookRef.current = look; }, [look]);
+  useEffect(() => { lookRef.current = look; lookChangedAtRef.current = performance.now(); }, [look]);
+  useEffect(() => { idleRef.current = idle; if (!idle) lookChangedAtRef.current = performance.now(); }, [idle]);
   useEffect(() => { walkingRef.current = walking; }, [walking]);
   useEffect(() => { progressRef.current = progress; }, [progress]);
   useEffect(() => { breathRef.current = breath; }, [breath]);
@@ -116,7 +120,7 @@ export default function PanoStage({ asset, light, look, walking, progress, breat
   /* One-shot body impulses. Each kind pushes the springs a characteristic way. */
   useEffect(() => {
     if (!handleRef) return;
-    const kick = (kind: ImpulseKind, strength = 1) => {
+    const kick = (kind: ImpulseKind, strength = 1, direction?: { yaw: number; pitch: number }) => {
       const s = strength * (reduceRef.current ? 0.35 : 1);
       const { pitch, yaw, roll, zoom } = springsRef.current;
       switch (kind) {
@@ -130,6 +134,7 @@ export default function PanoStage({ asset, light, look, walking, progress, breat
         case "turn": roll.v += 0.12 * s * sign(); yaw.v += 8 * s * sign(); break;
         case "shout": zoom.v -= 0.16 * s; pitch.v += 8 * s; break;
         case "settle": pitch.v -= 4 * s; zoom.v += 0.05 * s; break;
+        case "glance": yaw.v += (direction?.yaw ?? 0) * s; pitch.v += (direction?.pitch ?? 0) * s; break;
         default: break;
       }
     };
@@ -193,6 +198,7 @@ export default function PanoStage({ asset, light, look, walking, progress, breat
     let modePitch = 0;     // eased pitch offset of the current body mode
     let modeZoom = 0;
     let lastStepSign = 1;
+    let drift = 0;         // 0..1 how much the idle wander is blended in
 
     const resize = () => {
       const width = host.clientWidth || window.innerWidth;
@@ -289,9 +295,15 @@ export default function PanoStage({ asset, light, look, walking, progress, breat
       const gait = GAIT[mode];
       const springs = springsRef.current;
 
-      const targetYaw = THREE.MathUtils.clamp(lookRef.current.x, -1, 1) * yawLimit;
-      const targetPitch = -THREE.MathUtils.clamp(lookRef.current.y, -1, 1) * pitchLimit;
-      const ease = 1 - Math.exp(-dt * (moving ? 3 : mode === "crawl" ? 4 : 5.5));
+      // Idle wander: after the pointer has rested a while in a "look at the view" node, the gaze drifts slowly.
+      const restingFor = (now - lookChangedAtRef.current) / 1000;
+      const wantDrift = idleRef.current && !moving && restingFor > 7 ? 1 : 0;
+      drift += (wantDrift - drift) * Math.min(1, dt * (wantDrift ? 0.35 : 2.5));
+      const wanderYaw = Math.sin(elapsed * Math.PI * 2 / 26) * 7 * drift * motion;
+      const wanderPitch = Math.sin(elapsed * Math.PI * 2 / 17 + 1.3) * 2.2 * drift * motion;
+      const targetYaw = THREE.MathUtils.clamp(THREE.MathUtils.clamp(lookRef.current.x, -1, 1) * yawLimit + wanderYaw, -yawLimit, yawLimit);
+      const targetPitch = THREE.MathUtils.clamp(-THREE.MathUtils.clamp(lookRef.current.y, -1, 1) * pitchLimit + wanderPitch, -pitchLimit, pitchLimit);
+      const ease = 1 - Math.exp(-dt * (moving ? 3 : mode === "crawl" ? 4 : drift > 0.5 ? 1.2 : 5.5));
       yaw += (targetYaw - yaw) * ease;
       pitch += (targetPitch - pitch) * ease;
 

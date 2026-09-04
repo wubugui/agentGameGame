@@ -101,7 +101,7 @@ button:focus-visible,input:focus-visible { outline:2px solid #f5d8a3; outline-of
 .phone-overlay { position:fixed; z-index:100; inset:0; display:grid; place-items:center; font-family:ui-sans-serif,system-ui,sans-serif; }
 .phone-backdrop { position:absolute; inset:0; border:0; background:rgba(2,6,8,.62); backdrop-filter:blur(9px); cursor:pointer; }
 .phone-case { position:relative; width:min(374px,calc(100vw - 28px)); height:min(734px,calc(100dvh - 24px)); padding:9px; border:2px solid rgba(188,211,194,.56); border-radius:53px; background:linear-gradient(145deg,rgba(119,154,135,.72),rgba(57,91,78,.82)); box-shadow:0 38px 120px rgba(0,0,0,.72),inset 0 0 0 3px rgba(230,245,232,.12),inset 0 -18px 38px rgba(30,58,48,.28); animation:phoneIn .34s cubic-bezier(.2,.8,.2,1) both; }
-@keyframes phoneIn { from { opacity:0; transform:translateY(36px) scale(.95) rotate(1deg); } }
+@keyframes phoneIn { from { opacity:0; transform:translateY(42vh) scale(.92) rotate(2deg); } 60% { opacity:1; } }
 .phone-frame { position:relative; width:100%; height:100%; overflow:hidden; border:3px solid #17221f; border-radius:44px; color:white; background:#0c1110; box-shadow:inset 0 0 0 2px rgba(255,255,255,.08); }
 .phone-island { position:absolute; z-index:30; left:50%; top:10px; width:94px; height:25px; transform:translateX(-50%); border-radius:16px; background:#030504; box-shadow:0 2px 5px rgba(0,0,0,.3); }
 .phone-island::after { content:""; position:absolute; right:12px; top:8px; width:8px; height:8px; border-radius:50%; background:#15251f; box-shadow:inset 0 0 0 2px #070a09; }

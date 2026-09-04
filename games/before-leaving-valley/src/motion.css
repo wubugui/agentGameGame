@@ -20,6 +20,26 @@
 }
 .reduce-motion .hand-reach { animation-duration:.5s; }
 
+/* ---------- her hands the rest of the time ---------- */
+.hands-layer { position:absolute; inset:0; z-index:11; pointer-events:none; overflow:hidden; }
+/* Walking: the right arm swings at the edge of sight. Cadence comes from the gait. */
+.hand-walk { position:absolute; right:-4vw; bottom:-8vh; width:min(34vh,280px); transform-origin:80% 100%; animation:armSwing var(--cadence,590ms) ease-in-out infinite alternate, armIn .5s ease both; filter:drop-shadow(0 6px 14px rgba(0,0,0,.3)); }
+@keyframes armSwing { from { rotate:-6deg; translate:0 1.5vh; } to { rotate:5deg; translate:-1.2vw -1vh; } }
+@keyframes armIn { from { opacity:0; translate:0 12vh; } to { opacity:1; } }
+.is-running .hand-walk { animation-name:armSwingRun, armIn; }
+@keyframes armSwingRun { from { rotate:-12deg; translate:1vw 3vh; } to { rotate:9deg; translate:-2.5vw -3vh; } }
+.hand-walk.leaving { animation:armOut .45s ease both; }
+@keyframes armOut { to { opacity:0; translate:0 14vh; } }
+/* Sitting in the car: hands on the knees, rocking with the road. */
+.hands-lap { position:absolute; left:50%; bottom:-36vh; width:min(58vw,620px); translate:-50% 0; animation:lapRock 2.6s ease-in-out infinite alternate; filter:drop-shadow(0 -4px 16px rgba(0,0,0,.35)); }
+@keyframes lapRock { from { translate:-50% 0; rotate:-.4deg; } to { translate:-49% .6vh; rotate:.5deg; } }
+/* Holding the phone: the left hand under the case. */
+.hand-phone { position:fixed; z-index:99; left:calc(50% - 335px); bottom:-9vh; width:min(46vh,340px); pointer-events:none; animation:phoneHandIn .38s cubic-bezier(.2,.8,.2,1) both; filter:drop-shadow(0 10px 24px rgba(0,0,0,.45)); }
+@keyframes phoneHandIn { from { opacity:0; translate:0 30vh; } to { opacity:1; translate:0 0; } }
+.night-phone .hand-phone { filter:drop-shadow(0 10px 24px rgba(0,0,0,.45)) brightness(1.15) sepia(.15); }
+/* The phone screen lights her up at night: a cool glow low on the picture. */
+.phone-glow { position:absolute; inset:0; z-index:10; pointer-events:none; background:radial-gradient(ellipse 34% 40% at 50% 92%,rgba(190,214,255,.32),rgba(190,214,255,.08) 50%,rgba(0,0,0,0) 75%); animation:letterViewIn .4s ease both; }
+
 /* Movement blur and the tunnel of a run. */
 .pano-canvas { transition:filter .35s ease; }
 .is-moving .pano-canvas { filter:blur(1.1px); }
@@ -34,16 +54,55 @@
 /* The heart at night: a vignette that beats with the fear meter. */
 .fear-vignette { position:absolute; inset:0; z-index:9; pointer-events:none; background:radial-gradient(ellipse at center,transparent 50%,rgba(60,8,8,.35) 100%); opacity:0; animation:heartbeat var(--beat,1000ms) ease-in-out infinite; }
 @keyframes heartbeat { 0%,100% { opacity:0; } 10% { opacity:var(--beat-strength,.5); } 22% { opacity:.05; } 32% { opacity:calc(var(--beat-strength,.5) * .6); } 50% { opacity:0; } }
-/* A shout: the fill light flares and the cone widens for a moment. */
-.night-darkness { transition:background-size .3s ease, filter .3s ease; }
-.shouting .night-darkness { filter:brightness(1.35); }
 
-/* Inside the car: headlights of oncoming cars sweep across, the wipers' rhythm on wet glass. */
+/* The fill light in her mouth: it sways with the head and the breath, and shakes when she shouts. */
+.night-darkness { inset:-7% !important; transition:filter .3s ease; animation:lampSway 3.4s ease-in-out infinite alternate; }
+.body-crawl .night-darkness { animation:lampCrawl 1.05s ease-in-out infinite alternate; }
+@keyframes lampSway { from { translate:-.6% .3%; } to { translate:.6% -.4%; } }
+@keyframes lampCrawl { from { translate:-1.1% .6%; rotate:-.3deg; } to { translate:1.1% -.9%; rotate:.3deg; } }
+.shouting .night-darkness { filter:brightness(1.35); animation:lampShake .38s ease-in-out; }
+@keyframes lampShake { 0%,100% { translate:0 0; } 25% { translate:1.4% .8%; } 50% { translate:-1.2% -.6%; } 75% { translate:.8% .5%; } }
+
+/* The lamp itself: real light where she looks, on top of the darkness, swaying with the crawl. */
+.lamp-light { position:absolute; inset:-7%; z-index:9; pointer-events:none; --beam-x:50%; --beam-y:55%; background:radial-gradient(ellipse 20% 28% at var(--beam-x) var(--beam-y),rgba(255,214,160,.5),rgba(255,196,130,.2) 45%,rgba(255,180,110,0) 72%); mix-blend-mode:screen; animation:lampCrawl 1.05s ease-in-out infinite alternate; }
+.shouting .lamp-light { filter:brightness(1.5); animation:lampShake .38s ease-in-out; }
+
+/* Breath: out of breath, the picture pulses with the chest; at night each breath is a puff of white. */
+.breath-recovery .breath-pulse { position:absolute; inset:0; z-index:8; pointer-events:none; background:radial-gradient(ellipse at center,transparent 58%,rgba(8,12,14,.28) 100%); animation:breathPulse 2.4s ease-in-out infinite; }
+@keyframes breathPulse { 0%,100% { opacity:.15; scale:1; } 45% { opacity:.6; scale:1.015; } }
+.breath-fog { position:absolute; z-index:10; left:50%; bottom:14vh; width:26vw; height:16vh; translate:-50% 0; pointer-events:none; background:radial-gradient(ellipse at 50% 100%,rgba(230,236,244,.28),rgba(230,236,244,.1) 45%,rgba(230,236,244,0) 72%); filter:blur(6px); animation:breathFog var(--breath,2.6s) ease-out infinite; }
+@keyframes breathFog { 0% { opacity:0; scale:.6 .5; } 20% { opacity:1; } 100% { opacity:0; scale:1.7 1.4; translate:-50% -16vh; } }
+
+/* Dusk: a continuous fall of light across the descent, and the last colour of the sky. */
+.dusk-fall { transition:opacity 2.5s linear; }
+
+/* Cloud shadows crossing the plateau, grit blown across the summit. */
+.cloud-shadows { position:absolute; inset:-20%; z-index:5; pointer-events:none; background:radial-gradient(ellipse 30% 22% at 20% 60%,rgba(10,14,22,.4),rgba(10,14,22,0) 70%),radial-gradient(ellipse 26% 18% at 70% 45%,rgba(10,14,22,.34),rgba(10,14,22,0) 70%),radial-gradient(ellipse 34% 20% at 45% 80%,rgba(10,14,22,.3),rgba(10,14,22,0) 70%); animation:cloudDrift 46s linear infinite; mix-blend-mode:multiply; }
+@keyframes cloudDrift { from { translate:-12% 0; } to { translate:12% 0; } }
+.motes.grit i { width:3px; height:1.5px; border-radius:1px; background:rgba(250,246,236,.75); box-shadow:none; animation-name:gritBlow; animation-duration:calc(var(--dur,14s) / 6); }
+@keyframes gritBlow { 0% { opacity:0; translate:0 0; } 10% { opacity:.9; } 100% { opacity:0; translate:38vw 5vh; } }
+
+/* Inside the car: wipers, the dashboard's glow, lights of the villages and shadows of trees across the cabin. */
 .car-sweep { position:absolute; inset:0; z-index:7; pointer-events:none; overflow:hidden; }
 .car-sweep i { position:absolute; top:-10%; bottom:-10%; width:26vw; left:-30vw; background:linear-gradient(90deg,rgba(255,240,210,0),rgba(255,240,210,.22) 45%,rgba(255,240,210,0)); filter:blur(14px); animation:carSweep 7.5s linear infinite; }
 .car-sweep i:nth-child(2) { animation-delay:3.4s; animation-duration:9s; width:18vw; }
+.car-sweep i:nth-child(3) { animation-delay:5.1s; animation-duration:11s; width:12vw; opacity:.7; }
 @keyframes carSweep { 0%,62% { left:-30vw; opacity:0; } 66% { opacity:1; } 80% { left:120vw; opacity:1; } 81%,100% { left:120vw; opacity:0; } }
+.tree-flicker { position:absolute; inset:0; z-index:7; pointer-events:none; background:repeating-linear-gradient(100deg,rgba(0,0,0,0) 0 9vw,rgba(4,8,12,.16) 9vw 12vw,rgba(0,0,0,0) 12vw 21vw); animation:treeFlicker 1.9s linear infinite; mix-blend-mode:multiply; opacity:.8; }
+@keyframes treeFlicker { from { translate:0 0; } to { translate:-21vw 0; } }
+.dash-glow { position:absolute; inset:0; z-index:7; pointer-events:none; background:radial-gradient(ellipse 40% 26% at 50% 100%,rgba(255,150,70,.22),rgba(255,150,70,0) 70%); animation:dashGlow 3.3s ease-in-out infinite alternate; }
+@keyframes dashGlow { from { opacity:.7; } to { opacity:1; } }
+.wipers { position:absolute; inset:0; z-index:7; pointer-events:none; overflow:hidden; }
+.wipers i { position:absolute; left:50%; bottom:22%; width:3px; height:46vh; border-radius:2px; filter:blur(1.2px); opacity:.42; background:linear-gradient(rgba(20,26,30,0),rgba(20,26,30,.5) 30%,rgba(20,26,30,.65)); transform-origin:50% 100%; animation:wipe 2.2s cubic-bezier(.45,.05,.55,.95) infinite alternate; }
+.wipers i::after { content:""; position:absolute; left:3px; top:0; bottom:0; width:30vw; background:linear-gradient(90deg,rgba(210,225,235,.07),rgba(210,225,235,0) 60%); }
+.wipers i:nth-child(1) { rotate:-40deg; translate:-14vw 0; }
+.wipers i:nth-child(2) { rotate:-40deg; translate:14vw 0; animation-delay:.08s; }
+@keyframes wipe { from { rotate:-42deg; } to { rotate:48deg; } }
 .car-braking .cinema-grade { transition:background .2s ease; }
+
+/* Entering a room: the door, and light that is suddenly warm. */
+.scene-blink.warm { background:#f2e6cf; animation:blinkWarm 1.3s ease-out both; }
+@keyframes blinkWarm { 0% { opacity:1; } 100% { opacity:0; } }
 
 /* Motes: pollen in the meadow light, dust on the plateau, fireflies at the forest edge. */
 .motes { position:absolute; inset:0; z-index:6; pointer-events:none; overflow:hidden; }
@@ -52,8 +111,8 @@
 .motes.dust i { width:3px; height:3px; background:rgba(240,236,226,.6); box-shadow:none; }
 @keyframes moteDrift { 0% { opacity:0; translate:0 0; } 15% { opacity:.9; } 50% { translate:6vw -8vh; } 85% { opacity:.7; } 100% { opacity:0; translate:12vw -16vh; } }
 @keyframes fireflyDrift { 0%,100% { opacity:0; translate:0 0; } 20% { opacity:1; } 35% { opacity:.2; } 50% { opacity:.9; translate:3vw -3vh; } 70% { opacity:.1; } 85% { opacity:.8; translate:-2vw -6vh; } }
-.reduce-motion .motes, .reduce-motion .car-sweep, .reduce-motion .dust-puff { display:none; }
+.reduce-motion .motes, .reduce-motion .car-sweep, .reduce-motion .dust-puff, .reduce-motion .cloud-shadows, .reduce-motion .tree-flicker, .reduce-motion .wipers, .reduce-motion .breath-fog, .reduce-motion .hand-walk, .reduce-motion .breath-pulse { display:none; }
 
-/* Wind: a gust bends the whisper text and the caption a hair. */
+/* Wind: a gust bends the whisper text a hair. */
 .gusting .thought-line { animation:gustLean 1.6s ease-in-out; }
 @keyframes gustLean { 0%,100% { translate:0 0; } 40% { translate:6px 0; } }

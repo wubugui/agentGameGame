@@ -46,7 +46,10 @@ export class Soundscape {
   private readonly streamGain: GainNode;
   private readonly engineGain: GainNode;
   private readonly heaterGain: GainNode;
+  private readonly windPanner: StereoPannerNode;
   private ambience: Ambience = { ...SILENCE };
+  private panValue = 0;      // stereo position for the next one-shots (-1 left .. 1 right)
+  private stepSide = 1;      // footsteps alternate left/right
   private gustTimer = 0;
   private birdTimer = 0;
   private disposed = false;
@@ -71,7 +74,9 @@ export class Soundscape {
     this.windFilter.frequency.value = 800;
     this.windGain = ctx.createGain();
     this.windGain.gain.value = 0;
-    wind.connect(this.windFilter).connect(this.windGain).connect(this.master);
+    this.windPanner = ctx.createStereoPanner();
+    this.windPanner.pan.value = 0;
+    wind.connect(this.windFilter).connect(this.windGain).connect(this.windPanner).connect(this.master);
     wind.start();
 
     // Crickets: narrow band of white noise pulsed at ~24 Hz.
@@ -185,6 +190,29 @@ export class Soundscape {
     });
   }
 
+  /* Where the wind comes from: -1 left .. 1 right. */
+  setWindPan(value: number, ramp = 1.2) {
+    const now = this.ctx.currentTime;
+    this.windPanner.pan.cancelScheduledValues(now);
+    this.windPanner.pan.setValueAtTime(this.windPanner.pan.value, now);
+    this.windPanner.pan.linearRampToValueAtTime(Math.max(-1, Math.min(1, value)), now + ramp);
+  }
+
+  /* Run a group of one-shots from one stereo position. */
+  panned(pan: number, fn: () => void) {
+    const previous = this.panValue;
+    this.panValue = Math.max(-1, Math.min(1, pan));
+    try { fn(); } finally { this.panValue = previous; }
+  }
+
+  private out(): AudioNode {
+    if (Math.abs(this.panValue) < 0.01) return this.master;
+    const panner = this.ctx.createStereoPanner();
+    panner.pan.value = this.panValue;
+    panner.connect(this.master);
+    return panner;
+  }
+
   private gust() {
     if (this.disposed || this.ctx.state !== "running") return;
     const base = this.ambience.wind * 0.075;
@@ -252,7 +280,7 @@ export class Soundscape {
     env.gain.setValueAtTime(0.0001, at);
     env.gain.exponentialRampToValueAtTime(gain, at + Math.min(0.012, duration * 0.2));
     env.gain.exponentialRampToValueAtTime(0.0001, at + duration);
-    source.connect(filter).connect(env).connect(this.master);
+    source.connect(filter).connect(env).connect(this.out());
     source.start(at);
     source.stop(at + duration + 0.03);
   }
@@ -267,13 +295,18 @@ export class Soundscape {
     osc.frequency.exponentialRampToValueAtTime(Math.max(20, endFrequency), at + duration);
     env.gain.setValueAtTime(gain, at);
     env.gain.exponentialRampToValueAtTime(0.0001, at + duration);
-    osc.connect(env).connect(this.master);
+    osc.connect(env).connect(this.out());
     osc.start(at);
     osc.stop(at + duration + 0.02);
   }
 
   step(material: SoundMaterial) {
     if (this.ctx.state !== "running") return;
+    this.stepSide = -this.stepSide;
+    this.panned(this.stepSide * 0.22, () => this.stepAt(material));
+  }
+
+  private stepAt(material: SoundMaterial) {
     switch (material) {
       case "rock":
         this.tone(96 + Math.random() * 24, 48, 0.13, 0.036);
@@ -381,5 +414,80 @@ export class Soundscape {
     if (this.ctx.state !== "running") return;
     this.noiseBurst(0.05, 0.02, "bandpass", 1600, 1.4);
     this.noiseBurst(0.09, 0.014, "highpass", 2800, 1, 0.03);
+  }
+
+  /* A helicopter crossing the sky: rotor thump that rises, passes overhead and fades to the other side. */
+  helicopter(seconds = 7) {
+    if (this.ctx.state !== "running") return;
+    const ctx = this.ctx;
+    const now = ctx.currentTime;
+    const source = ctx.createBufferSource();
+    source.buffer = this.brown;
+    source.loop = true;
+    const filter = ctx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.value = 260;
+    const chop = ctx.createGain();
+    chop.gain.value = 0.5;
+    const rotor = ctx.createOscillator();
+    rotor.type = "square";
+    rotor.frequency.value = 16;
+    const depth = ctx.createGain();
+    depth.gain.value = 0.5;
+    rotor.connect(depth).connect(chop.gain);
+    const drone = ctx.createOscillator();
+    drone.type = "sawtooth";
+    drone.frequency.value = 88;
+    const droneGain = ctx.createGain();
+    droneGain.gain.value = 0.35;
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.0001, now);
+    env.gain.exponentialRampToValueAtTime(0.09, now + seconds * 0.45);
+    env.gain.exponentialRampToValueAtTime(0.0001, now + seconds);
+    const pan = ctx.createStereoPanner();
+    pan.pan.setValueAtTime(-1, now);
+    pan.pan.linearRampToValueAtTime(1, now + seconds);
+    source.connect(filter).connect(chop).connect(env);
+    drone.connect(droneGain).connect(chop);
+    env.connect(pan).connect(this.master);
+    source.start(now); rotor.start(now); drone.start(now);
+    source.stop(now + seconds + 0.1); rotor.stop(now + seconds + 0.1); drone.stop(now + seconds + 0.1);
+  }
+
+  /* A herd bolting: many soft hoofbeats moving away to one side. */
+  hooves(direction = 1) {
+    if (this.ctx.state !== "running") return;
+    const count = 16;
+    for (let index = 0; index < count; index += 1) {
+      const t = index / count;
+      const when = t * 2.4 + Math.random() * 0.06;
+      const gain = (1 - t * 0.85) * 0.045;
+      this.panned(direction * (0.2 + t * 0.7), () => {
+        this.tone(62 + Math.random() * 18, 40, 0.09, gain, "triangle", when);
+        this.noiseBurst(0.05, gain * 0.5, "lowpass", 600, 1, when);
+      });
+    }
+  }
+
+  /* A door: the latch, the swing, the soft close. */
+  door(open = true) {
+    if (this.ctx.state !== "running") return;
+    this.noiseBurst(0.03, 0.03, "highpass", 2200, 1, 0);
+    this.tone(140, 90, 0.18, 0.02, "triangle", 0.05);
+    this.noiseBurst(0.25, 0.012, "lowpass", 500, 1, open ? 0.1 : 0.3);
+    if (!open) this.tone(80, 50, 0.16, 0.04, "triangle", 0.55);
+  }
+
+  /* A wiper blade crossing wet glass. */
+  wiper() {
+    if (this.ctx.state !== "running") return;
+    this.noiseBurst(0.42, 0.006, "bandpass", 900, 0.6);
+    this.tone(210, 260, 0.4, 0.004, "sine");
+  }
+
+  /* A breath out, seen in cold air. */
+  exhale() {
+    if (this.ctx.state !== "running") return;
+    this.breath({ duration: 1.4, gain: 0.22, cutoff: 700 });
   }
 }
