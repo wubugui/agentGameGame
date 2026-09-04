@@ -2,7 +2,7 @@
 //   node tools/shot.mjs <nodeId> <out.png> [js-to-run-before-shot] [waitMs]
 // Example: node tools/shot.mjs school school.png "document.querySelector('.map-prop').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}))" 4000
 import { spawn } from "node:child_process";
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -14,10 +14,11 @@ if (!scene || !out) {
 const base = process.env.BLV_URL || "http://localhost:5174/agentGameGame/games/before-leaving-valley/";
 const chrome = [process.env.CHROME, "C:/Program Files/Google/Chrome/Application/chrome.exe", "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", "/usr/bin/google-chrome"].filter(Boolean).find((path) => existsSync(path));
 const port = 9800 + Math.floor(Math.random() * 500);
+const profile = join(tmpdir(), `blv-profile-${process.pid}-${Date.now()}`);
 // A hard deadline so a wedged Chrome never hangs a batch.
 setTimeout(() => { try { proc.kill(); } catch {} process.exit(3); }, 70000).unref();
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-const proc = spawn(chrome, ["--headless=new", `--remote-debugging-port=${port}`, "--no-first-run", "--window-size=1280,720", `--user-data-dir=${join(tmpdir(), `blv-shot-profile-${port}`)}`, "--use-gl=angle", "--use-angle=swiftshader", "about:blank"], { stdio: "ignore" });
+const proc = spawn(chrome, ["--headless=new", `--remote-debugging-port=${port}`, "--no-first-run", "--window-size=1280,720", `--user-data-dir=${profile}`, "--use-gl=angle", "--use-angle=swiftshader", "about:blank"], { stdio: "ignore" });
 
 async function debuggerUrl() {
   for (let attempt = 0; attempt < 60; attempt += 1) {
@@ -47,5 +48,5 @@ try {
   console.log("saved", out);
 } finally {
   proc.kill();
-  process.exit(0);
+  setTimeout(() => { try { rmSync(profile, { recursive: true, force: true }); } catch {} process.exit(0); }, 300);
 }

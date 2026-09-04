@@ -147,6 +147,13 @@ export function createInitialPhoneState(): PhoneState {
   };
 }
 
+/** Move the phone clock without touching the battery (the engine owns power). */
+export function advanceClockOnly(state: PhoneState, minutes: number): PhoneState {
+  const current = new Date(state.date.year, state.date.month - 1, state.date.day, 0, state.minuteOfDay);
+  current.setMinutes(current.getMinutes() + Math.max(0, Math.round(minutes)));
+  return { ...state, date: { year: current.getFullYear(), month: current.getMonth() + 1, day: current.getDate() }, minuteOfDay: current.getHours() * 60 + current.getMinutes() };
+}
+
 export function formatGameTime(minuteOfDay: number) {
   const normalized = ((minuteOfDay % 1440) + 1440) % 1440;
   const hours = Math.floor(normalized / 60).toString().padStart(2, "0");

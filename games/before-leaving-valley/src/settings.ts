@@ -2,12 +2,13 @@ export type GameSettings = {
   master: number;   // 0..1 sound effects and ambience
   music: number;    // 0..1 background music
   motion: boolean;  // false = calmer camera, no drifting motes, shorter transitions
+  holdScale?: number; // multiplier on hold-to-climb durations (accessibility)
 };
 
 const KEY = "before-leaving-valley.settings.v1";
 
 const systemPrefersCalm = () => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-export const DEFAULT_SETTINGS: GameSettings = { master: 0.9, music: 0.85, motion: !systemPrefersCalm() };
+export const DEFAULT_SETTINGS: GameSettings = { master: 0.9, music: 0.85, motion: !systemPrefersCalm(), holdScale: 1 };
 
 export function loadSettings(): GameSettings {
   try {
@@ -18,6 +19,7 @@ export function loadSettings(): GameSettings {
       master: typeof parsed.master === "number" ? Math.min(1, Math.max(0, parsed.master)) : DEFAULT_SETTINGS.master,
       music: typeof parsed.music === "number" ? Math.min(1, Math.max(0, parsed.music)) : DEFAULT_SETTINGS.music,
       motion: typeof parsed.motion === "boolean" ? parsed.motion : !systemPrefersCalm(),
+      holdScale: typeof parsed.holdScale === "number" ? Math.min(2, Math.max(0.5, parsed.holdScale)) : 1,
     };
   } catch {
     return { ...DEFAULT_SETTINGS };

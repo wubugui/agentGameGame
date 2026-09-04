@@ -4,9 +4,10 @@ export type Light = "day" | "dusk" | "night" | "interior" | "dawn";
 export type Anchor = { yaw: number; pitch: number; distance?: number };
 
 export const NODE_IDS = [
-  "meadow", "approach", "plaque", "cable", "crack", "mailbox", "exit", "summit",
+  "roadside", "meadow", "approach", "plaque", "cable", "crack", "mailbox", "exit", "summit",
   "plateau", "hutView", "signpost", "scree", "deer", "forestEdge", "forest1", "forest2",
   "hairpin", "car", "search", "hotel", "busStop", "police", "bench",
+  "slab", "ledge", "hutTurn", "searchWall", "searchPath",
 ] as const;
 export type NodeId = typeof NODE_IDS[number];
 
@@ -170,6 +171,31 @@ export const NODES: Record<NodeId, NodeDef> = {
     photoTitle: "离开山谷以前",
     thoughts: ["等离开山谷的公交车。", "我突然想起了那封信。因为只有这部手机拍下了它。"],
     next: null,
+  },
+roadside: {
+    day: 1, place: "Passo Sella · 公路边", elevation: "2,240 m", asset: "pano/20-bus-stop.webp", light: "day", minutes: 10, battery: 1,
+    photoTitle: "出发前的山口", thoughts: ["山口。", "来都来了。"], next: "meadow", go: { yaw: -8, pitch: -6 },
+    chapter: { eyebrow: "多洛米蒂 · 七月 · 第一天", title: "来都来了" },
+  },
+  slab: {
+    day: 1, place: "飞拉达 · 走错的岩台", elevation: "2,372 m", asset: "pano/05b-slab.webp", light: "day", minutes: 20, battery: 0,
+    photoTitle: "岩台", thoughts: ["岩台。", "不是这条。"], next: "crack",
+  },
+  ledge: {
+    day: 1, place: "高原边缘 · 岩唇", elevation: "2,790 m", asset: "pano/09c-ledge.webp", light: "day", minutes: 12, battery: 0,
+    photoTitle: "整条下撤线", thoughts: ["岩唇。", "全在眼前。"], next: "plateau",
+  },
+  hutTurn: {
+    day: 1, place: "往山屋的路上", elevation: "2,720 m", asset: "pano/09d-hutturn.webp", light: "day", minutes: 23, battery: 0,
+    photoTitle: "山屋更近了", thoughts: ["近了一点。", "太阳低了。"], next: "hutView",
+  },
+  searchWall: {
+    day: 2, place: "Sassolungo 石墙下 · 第二天", elevation: "1,860 m", asset: "pano/18b-searchwall.webp", light: "day", minutes: 0, battery: 0,
+    photoTitle: "石墙下", thoughts: ["石墙下。", "没有。"], next: "search",
+  },
+  searchPath: {
+    day: 2, place: "昨晚的小路 · 第二天", elevation: "1,800 m", asset: "pano/18c-searchpath.webp", light: "day", minutes: 0, battery: 0,
+    photoTitle: "昨晚的小路", thoughts: ["小路。", "上午十点。"], next: "search",
   },
 };
 

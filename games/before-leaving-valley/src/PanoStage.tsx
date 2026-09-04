@@ -25,7 +25,7 @@ const PANO_VFOV = PANO_HFOV * 9 / 16; // degrees of the cylinder covered vertica
 
 type Props = {
   asset: string;
-  light: "day" | "dusk" | "night" | "interior" | "dawn";
+  light: "day" | "dusk" | "night" | "interior" | "dawn" | number;   // a number is daylight 0..1 (0 = after sunset)
   look: LookPoint;                // -1..1 pointer position, drives the gaze
   walking: boolean;
   progress: number;               // 0..1 walk progress toward the next node
@@ -39,6 +39,7 @@ type Props = {
   reduceMotion?: boolean;
   onReady?: () => void;
   onGaze?: (yaw: number, pitch: number) => void;
+  onFrame?: (dt: number, gaze: { yaw: number; pitch: number }) => void;   // the engine ticks in step with the renderer
 };
 
 const BREATH: Record<BreathState, { frequency: number; amplitude: number; roll: number }> = {
@@ -57,13 +58,23 @@ const GAIT: Record<BodyMode, { frequency: number; pitch: number; yaw: number; ro
   ride: { frequency: 0, pitch: 0, yaw: 0, roll: 0, zoom: 0, pitchOffset: 0 },
 };
 
-const TINT: Record<Props["light"], number> = {
+const TINT: Record<Exclude<Props["light"], number>, number> = {
   day: 0xffffff,
   dusk: 0xf6d9c4,
   night: 0x8a94a8,
   interior: 0xf3e6d6,
   dawn: 0xe7edf7,
 };
+const tintScratch = new THREE.Color();
+const tintA = new THREE.Color();
+const tintB = new THREE.Color();
+/** Continuous daylight tint: day (1) → dusk (0.35) → night (0). */
+function tintFor(light: Props["light"]): THREE.Color {
+  if (typeof light !== "number") return tintScratch.setHex(TINT[light]);
+  if (light >= 0.35) { const t = (light - 0.35) / 0.65; return tintScratch.copy(tintA.setHex(TINT.dusk)).lerp(tintB.setHex(TINT.day), t); }
+  const t = light / 0.35;
+  return tintScratch.copy(tintA.setHex(TINT.night)).lerp(tintB.setHex(TINT.dusk), t);
+}
 
 type Spring = { p: number; v: number; k: number; c: number };
 const spring = (k: number, c: number): Spring => ({ p: 0, v: 0, k, c });
@@ -86,7 +97,7 @@ function makePanel(texture: THREE.Texture | null) {
   return mesh;
 }
 
-export default function PanoStage({ asset, light, look, walking, progress, progressRef: liveProgress, breath, mode = "stand", tension = 0, handleRef, idle = false, anchorLayerRef, reduceMotion = false, onReady, onGaze }: Props) {
+export default function PanoStage({ asset, light, look, walking, progress, progressRef: liveProgress, breath, mode = "stand", tension = 0, handleRef, idle = false, anchorLayerRef, reduceMotion = false, onReady, onGaze, onFrame }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const assetRef = useRef(asset);
   const lightRef = useRef(light);
@@ -100,6 +111,7 @@ export default function PanoStage({ asset, light, look, walking, progress, progr
   const lookChangedAtRef = useRef(performance.now());
   const reduceRef = useRef(reduceMotion);
   const gazeRef = useRef(onGaze);
+  const frameRef = useRef(onFrame);
   const requestRef = useRef<{ asset: string; token: number }>({ asset, token: 0 });
   const springsRef = useRef({ pitch: spring(70, 9.5), yaw: spring(70, 9.5), roll: spring(90, 11), zoom: spring(60, 10) });
 
@@ -113,6 +125,7 @@ export default function PanoStage({ asset, light, look, walking, progress, progr
   useEffect(() => { tensionRef.current = tension; }, [tension]);
   useEffect(() => { reduceRef.current = reduceMotion; }, [reduceMotion]);
   useEffect(() => { gazeRef.current = onGaze; }, [onGaze]);
+  useEffect(() => { frameRef.current = onFrame; }, [onFrame]);
   useEffect(() => {
     assetRef.current = asset;
     requestRef.current = { asset, token: requestRef.current.token + 1 };
@@ -375,7 +388,7 @@ export default function PanoStage({ asset, light, look, walking, progress, progr
           previous = null;
         }
       }
-      (current.material as THREE.MeshBasicMaterial).color.setHex(TINT[lightRef.current]);
+      (current.material as THREE.MeshBasicMaterial).color.copy(tintFor(lightRef.current));
 
       renderer.render(scene, camera);
 
@@ -416,7 +429,10 @@ export default function PanoStage({ asset, light, look, walking, progress, progr
           }
         });
       }
+      const gazeYawNow = yaw + stepYaw + THREE.MathUtils.clamp(lookRef.current.x, -1, 1) * halfHfov * 0.9;
+      const gazePitchNow = pitch + breathPitch + stepPitch + modePitch - THREE.MathUtils.clamp(lookRef.current.y, -1, 1) * (camera.fov / 2) * 0.9;
       gazeRef.current?.(yaw + stepYaw, pitch + breathPitch + stepPitch + modePitch);
+      frameRef.current?.(dt, { yaw: gazeYawNow, pitch: gazePitchNow });
       requestAnimationFrame(frame);
     };
     requestAnimationFrame(frame);

@@ -485,6 +485,30 @@ export class Soundscape {
     this.tone(210, 260, 0.4, 0.004, "sine");
   }
 
+  /* Pencil on paper: a line written in the notebook. */
+  pencil() {
+    if (this.ctx.state !== "running") return;
+    this.noiseBurst(0.12, 0.012, "bandpass", 3200, 1.2);
+    this.noiseBurst(0.09, 0.008, "bandpass", 2600, 1.2, 0.14);
+  }
+  /* Paper unfolding or a page turning. */
+  paper() {
+    if (this.ctx.state !== "running") return;
+    this.noiseBurst(0.18, 0.02, "highpass", 1800, 0.8);
+    this.noiseBurst(0.12, 0.012, "bandpass", 2400, 1, 0.16);
+  }
+  /* A zip. */
+  zip() {
+    if (this.ctx.state !== "running") return;
+    this.noiseBurst(0.22, 0.018, "bandpass", 2800, 2.2);
+    this.tone(900, 1500, 0.2, 0.004, "sawtooth");
+  }
+  /* Cloth: something taken from or put into the pack. */
+  cloth() {
+    if (this.ctx.state !== "running") return;
+    this.noiseBurst(0.14, 0.016, "lowpass", 900);
+  }
+
   /* A breath out, seen in cold air. */
   exhale() {
     if (this.ctx.state !== "running") return;
