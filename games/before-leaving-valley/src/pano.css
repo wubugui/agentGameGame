@@ -154,3 +154,13 @@
 .credits-poem .credits-skip { position:fixed; bottom:4vh; left:50%; transform:translateX(-50%); margin:0; }
 .complete-card .credits-source { margin:14px 0 18px !important; }
 .counter-hotspot > em { padding:4px 8px; border-radius:4px; background:rgba(20,30,34,.55); }
+
+/* Things she can pick up are painted into the scene as small props; the hotspot ring sits on them. */
+/* The wrapper is what the renderer positions; only the image inside rotates, so the projection is never skewed. */
+.prop-item { pointer-events:none; display:block; }
+.prop-item img { display:block; width:100%; filter:drop-shadow(0 6px 10px rgba(0,0,0,.35)); }
+.prop-gear { width:min(16vh,150px); }
+.prop-camera { width:min(13vh,120px); } .prop-camera img { rotate:-12deg; }
+.prop-map { width:min(12vh,110px); } .prop-map img { rotate:8deg; }
+.prop-chocolate { width:min(9vh,86px); } .prop-chocolate img { rotate:-20deg; }
+.scene-light-dusk .prop-item img { filter:brightness(.75) sepia(.2) drop-shadow(0 6px 10px rgba(0,0,0,.35)); }

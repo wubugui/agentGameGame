@@ -101,8 +101,8 @@ const PHONE_REPLIES: Record<ContactId, { text: string; photo: string }> = {
 
 /* Places on the second-day slope that hold nothing. Looking there is still looking. */
 const EMPTY_SPOTS: Array<Anchor & { label: string; line: string }> = [
-  { yaw: -34, pitch: -14, label: "路边的水沟", line: "水沟里只有松针和别人的一个瓶盖。" },
-  { yaw: 34, pitch: 4, label: "倒木后面", line: "倒木后面是一窝露水。" },
+  { yaw: 11, pitch: -24, label: "路边的水沟", line: "水沟里只有松针和别人的一个瓶盖。" },
+  { yaw: 33, pitch: 8, label: "矮松后面", line: "矮松后面是一窝露水。" },
 ];
 
 const ZH_LINE_COUNT = LETTER_LINES_ZH.filter((line) => line.length > 0).length;
@@ -201,7 +201,9 @@ const DEV_NODE: NodeId | null = import.meta.env.DEV ? (() => {
 })() : null;
 
 /* Hotspots carry their place on the painting and how close the gaze must come before they show. */
-const anchorProps = (anchor: Anchor, reveal = 10) => ({ "data-yaw": anchor.yaw, "data-pitch": anchor.pitch, "data-distance": anchor.distance ?? 10, "data-reveal": reveal });
+// ?reveal=1 (development only) shows every hotspot at once so their placement on the painting can be reviewed.
+const DEV_REVEAL = import.meta.env.DEV && new URLSearchParams(window.location.search).get("reveal") === "1";
+const anchorProps = (anchor: Anchor, reveal = 10) => ({ "data-yaw": anchor.yaw, "data-pitch": anchor.pitch, "data-distance": anchor.distance ?? 10, "data-reveal": DEV_REVEAL ? 0 : reveal });
 const propProps = (anchor: Anchor) => ({ "data-yaw": anchor.yaw, "data-pitch": anchor.pitch, "data-distance": anchor.distance ?? 10 });
 /* Pointer and keyboard both trigger a world action; a keyboard "click" has detail 0 and would otherwise be ignored. */
 const act = (fn: () => void) => ({
@@ -1065,6 +1067,7 @@ export default function App() {
           <button className="hotspot go-hotspot" {...anchorProps(info.go, 24)} {...act(walkOn)} aria-label="继续往前"><span /><em>{node === "hutView" ? "下撤" : node === "car" ? "到酒店了" : node === "hotel" ? "第三天" : node === "police" ? "到长椅上等车" : "往前"}</em></button>
         )}
 
+        {node === "plaque" && !flags.helmet && <span className="prop-item prop-gear" {...propProps({ yaw: -18, pitch: -13, distance: 9 })} aria-hidden="true"><img src={`${import.meta.env.BASE_URL}sprites/gear.webp`} alt="" draggable={false} /></span>}
         {node === "plaque" && !flags.helmet && <button className="hotspot" {...anchorProps({ yaw: -18, pitch: -12 })} {...act(putOnHelmet)}><span /><em>头盔</em></button>}
         {node === "plaque" && flags.helmet && !flags.clipped && <button className="hotspot" {...anchorProps({ yaw: 18, pitch: 5 })} {...act(clipIn)}><span /><em>钢缆起点</em></button>}
 
@@ -1096,17 +1099,32 @@ export default function App() {
         {node === "mailbox" && !flags.letterPhotographed && <button className="hotspot" {...anchorProps(MAILBOX_ANCHOR, 14)} {...act(openMailbox)}><span /><em>信箱</em></button>}
 
         {node === "summit" && <button className="hotspot" {...anchorProps(SUMMIT_CROSS_ANCHOR, 12)} {...act(lookAtCross)}><span /><em>十字架</em></button>}
+        {node === "summit" && !flags.summitSelfie && <span className="prop-item prop-camera" {...propProps({ ...SUMMIT_CAMERA_ANCHOR, distance: 9 })} aria-hidden="true"><img src={`${import.meta.env.BASE_URL}sprites/camera360.webp`} alt="" draggable={false} /></span>}
         {node === "summit" && !flags.summitSelfie && <button className="hotspot" {...anchorProps(SUMMIT_CAMERA_ANCHOR, 12)} {...act(takeSelfie)}><span /><em>全景相机</em></button>}
 
         {node === "hutView" && flags.hutChoice !== "retreat" && <button className="hotspot" {...anchorProps(HUT_ANCHOR, 12)} {...act(lookAtHut)}><span /><em>山屋</em></button>}
-        {node === "hutView" && !flags.mapDone && <button className="hotspot" {...anchorProps(PLATEAU_MAP_ANCHOR, 12)} {...act(() => { setOverlay("map"); sfx("tick"); })}><span /><em>摊开地图</em></button>}
-        {node === "hutView" && flags.mapDone && !flags.chocolate && <button className="hotspot" {...anchorProps(CHOCOLATE_ANCHOR, 12)} {...act(eatChocolate)}><span /><em>巧克力</em></button>}
+        {node === "hutView" && (!flags.mapDone || DEV_REVEAL) && <span className="prop-item prop-map" {...propProps({ ...PLATEAU_MAP_ANCHOR, distance: 9 })} aria-hidden="true"><img src={`${import.meta.env.BASE_URL}sprites/map-folded.webp`} alt="" draggable={false} /></span>}
+        {node === "hutView" && ((flags.mapDone && !flags.chocolate) || DEV_REVEAL) && <span className="prop-item prop-chocolate" {...propProps({ ...CHOCOLATE_ANCHOR, distance: 9 })} aria-hidden="true"><img src={`${import.meta.env.BASE_URL}sprites/chocolate.webp`} alt="" draggable={false} /></span>}
+        {node === "hutView" && (!flags.mapDone || DEV_REVEAL) && <button className="hotspot" {...anchorProps(PLATEAU_MAP_ANCHOR, 12)} {...act(() => { setOverlay("map"); sfx("tick"); })}><span /><em>摊开地图</em></button>}
+        {node === "hutView" && ((flags.mapDone && !flags.chocolate) || DEV_REVEAL) && <button className="hotspot" {...anchorProps(CHOCOLATE_ANCHOR, 12)} {...act(eatChocolate)}><span /><em>巧克力</em></button>}
 
         {node === "signpost" && !flags.signChosen && SIGNPOST_ARMS.map((arm, index) => (
           <button key={arm.label} className="hotspot sign-arm" {...anchorProps(arm, 16)} {...act(() => chooseArm(index))}><em>{arm.label}</em></button>
         ))}
 
-        {node === "scree" && flags.screeStep < SCREE_STEPS.length && (
+        {DEV_REVEAL && node === "scree" && SCREE_STEPS.map((step, index) => (
+          <span key={`rv-${index}`}>
+            <span className="hotspot foot-hotspot foot-flat" {...anchorProps(step.safe)}><span /><em>{index + 1} 平</em></span>
+            <span className="hotspot foot-hotspot foot-loose" {...anchorProps(step.loose)}><span /><em>{index + 1} 斜</em></span>
+          </span>
+        ))}
+        {DEV_REVEAL && (node === "forest1" || node === "forest2") && forestSteps.map((step, index) => (
+          <span key={`rf-${index}`} className="hotspot climb-hotspot" {...anchorProps(step)}><span /><em>{index + 1} {step.kind}</em></span>
+        ))}
+        {DEV_REVEAL && node === "cable" && CABLE_ANCHORS.map((anchor, index) => (
+          <span key={`rc-${index}`} className="hotspot anchor-mark" {...anchorProps(anchor)}><span /><em>锚点 {index + 1}</em></span>
+        ))}
+        {!DEV_REVEAL && node === "scree" && flags.screeStep < SCREE_STEPS.length && (
           <>
             <button className="hotspot foot-hotspot foot-flat" {...anchorProps(SCREE_STEPS[flags.screeStep].safe, 14)} {...act(() => takeScreeStep(true))} aria-label="一块平的石面"><span /></button>
             <button className="hotspot foot-hotspot foot-loose" {...anchorProps(SCREE_STEPS[flags.screeStep].loose, 14)} {...act(() => takeScreeStep(false))} aria-label="一块斜的石面"><span /></button>
@@ -1118,7 +1136,7 @@ export default function App() {
         )}
         {node === "deer" && deerState === "standing" && <button className="hotspot" {...anchorProps({ yaw: DEER_ANCHOR.yaw, pitch: DEER_ANCHOR.pitch }, 28)} {...act(scareDeer)}><span /><em>鹿</em></button>}
 
-        {(node === "forest1" || node === "forest2") && forestStep < forestSteps.length && (
+        {!DEV_REVEAL && (node === "forest1" || node === "forest2") && forestStep < forestSteps.length && (
           <button className={`hotspot climb-hotspot ${holdActive ? "holding" : ""}`} {...anchorProps(forestSteps[forestStep], 16)} style={{ "--hold": climbHold } as React.CSSProperties}
             onPointerDown={(event) => { event.stopPropagation(); try { event.currentTarget.setPointerCapture(event.pointerId); } catch { /* synthetic pointer */ } beginClimb(); }}
             onPointerUp={endClimb} onPointerCancel={endClimb} onPointerLeave={endClimb}

@@ -96,7 +96,7 @@ async function climbAll() {
     for (let i = 0; i < 5; i += 1) await press(".conversation-action", `car line ${i}`);
     await go("search");
     await press(".findmy-sheet .primary-button", "find my");
-    await press(byText(".search-hotspot", "倒木后面"), "empty spot");
+    await press(byText(".search-hotspot", "矮松后面"), "empty spot");
     for (const label of ["巨石下面", "矮松丛", "石墙下", "最后定位的那块坡"]) await press(byText(".search-hotspot", label), `search ${label}`);
     await go("hotel");
     await press(".call-action", "open hotel list"); for (let i = 0; i < 30 && $(".hotel-sheet li button:not(.called)"); i += 1) await press(() => $$(".hotel-sheet li button:not(.called)")[0], `hotel ${i}`); await press(".hotel-sheet .map-close", "put phone down"); await go("busStop");

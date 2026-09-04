@@ -30,14 +30,14 @@ export const NODES: Record<NodeId, NodeDef> = {
     day: 1, place: "Passo Sella · 山口草甸", elevation: "2,240 m", asset: "pano/01-meadow.webp", light: "day", minutes: 30, battery: 2,
     photoTitle: "石墙从草地上拔起来",
     thoughts: ["山口公路边有两个中国面孔朝我笑，说看过我的视频。打了个招呼。教练说的那面墙，就在草地尽头。", "来都来了。教练说，六七个小时的 easy 路线。"],
-    next: "approach", go: { yaw: 4, pitch: -9 },
+    next: "approach", go: { yaw: 11, pitch: -18 },
     chapter: { eyebrow: "多洛米蒂 · 八月 · 第一天", title: "来都来了" },
   },
   approach: {
     day: 1, place: "Sella 石墙脚下 · 碎石路", elevation: "2,300 m", asset: "pano/02-approach.webp", light: "day", minutes: 10, battery: 1,
     photoTitle: "回头还能看见山口",
     thoughts: ["碎石在鞋底下轻轻滑开。回头，山口的木屋已经变成一个小点。", "墙越来越高，高到要仰着头才看得到顶。"],
-    next: "plaque", go: { yaw: 4, pitch: 13 },
+    next: "plaque", go: { yaw: -5, pitch: -7 },
   },
   plaque: {
     day: 1, place: "Pössnecker 飞拉达 · 起点", elevation: "2,340 m", asset: "pano/03-plaque.webp", light: "day", minutes: 5, battery: 1,
@@ -186,11 +186,11 @@ export const CABLE_ANCHORS: Anchor[] = [
 // The unprotected crack: the true sequence of holds plus decoys that slip.
 export const CRACK_HOLDS: Array<Anchor & { order: number | null; label: string }> = [
   { yaw: -16, pitch: -13, order: 0, label: "左脚 · 岩阶" },
-  { yaw: 18, pitch: -2, order: 1, label: "右手 · 裂缝边缘" },
+  { yaw: 21, pitch: -6, order: 1, label: "右手 · 裂缝边缘" },
   { yaw: 2, pitch: 2, order: 2, label: "左手 · 石突" },
-  { yaw: 14, pitch: 12, order: 3, label: "右脚 · 裂缝里" },
+  { yaw: 26, pitch: 12, order: 3, label: "右脚 · 裂缝里" },
   { yaw: -11, pitch: 19, order: null, label: "一片薄石" },
-  { yaw: -5, pitch: 7, order: null, label: "一道浅槽" },
+  { yaw: -18, pitch: 10, order: null, label: "一道浅槽" },
 ];
 
 export const MAILBOX_ANCHOR: Anchor = { yaw: 34, pitch: -20 };
@@ -220,13 +220,14 @@ export const SIGNPOST_ARMS = [
 ];
 
 // Scree descent: pairs of footings per step; the flatter stone is the safe one.
+// The flat stones follow the faint path painted up the slope; the loose ones sit off it on the smooth sand.
 export const SCREE_STEPS: Array<{ safe: Anchor; loose: Anchor }> = [
-  { safe: { yaw: -10, pitch: -12 }, loose: { yaw: 8, pitch: -13 } },
-  { safe: { yaw: 6, pitch: -9 }, loose: { yaw: -9, pitch: -8 } },
-  { safe: { yaw: -3, pitch: -6 }, loose: { yaw: 12, pitch: -5 } },
-  { safe: { yaw: 9, pitch: -3 }, loose: { yaw: -12, pitch: -2 } },
-  { safe: { yaw: -6, pitch: 0 }, loose: { yaw: 6, pitch: 1 } },
-  { safe: { yaw: 4, pitch: 3 }, loose: { yaw: -11, pitch: 4 } },
+  { safe: { yaw: 6, pitch: -27 }, loose: { yaw: -7, pitch: -26 } },
+  { safe: { yaw: 8, pitch: -19 }, loose: { yaw: 21, pitch: -19 } },
+  { safe: { yaw: 10, pitch: -12 }, loose: { yaw: -3, pitch: -12 } },
+  { safe: { yaw: 12, pitch: -7 }, loose: { yaw: 24, pitch: -8 } },
+  { safe: { yaw: 15, pitch: -3 }, loose: { yaw: 3, pitch: -2 } },
+  { safe: { yaw: 17, pitch: 0 }, loose: { yaw: 28, pitch: 1 } },
 ];
 
 export const POLICE_COUNTER_ANCHOR: Anchor = { yaw: 4, pitch: -13 };
@@ -234,18 +235,18 @@ export const DEER_ANCHOR: Anchor = { yaw: 16, pitch: -14, distance: 12 };
 
 export const FOREST_STEPS: Record<"forest1" | "forest2", Array<Anchor & { kind: "root" | "rock" | "log" }>> = {
   forest1: [
-    { yaw: -12, pitch: -10, kind: "root" }, { yaw: 6, pitch: -7, kind: "rock" }, { yaw: -3, pitch: -3, kind: "log" }, { yaw: 9, pitch: 1, kind: "root" },
+    { yaw: 29, pitch: -13, kind: "root" }, { yaw: -14, pitch: 1, kind: "rock" }, { yaw: 9, pitch: 3, kind: "rock" }, { yaw: 34, pitch: -6, kind: "root" },
   ],
   forest2: [
-    { yaw: 8, pitch: -11, kind: "rock" }, { yaw: -7, pitch: -7, kind: "root" }, { yaw: 3, pitch: -3, kind: "rock" }, { yaw: -6, pitch: 2, kind: "log" },
+    { yaw: -27, pitch: -21, kind: "root" }, { yaw: -15, pitch: -24, kind: "rock" }, { yaw: 22, pitch: -21, kind: "rock" }, { yaw: 11, pitch: 4, kind: "log" },
   ],
 };
 
 export const SEARCH_SPOTS: Array<Anchor & { label: string; line: string }> = [
-  { yaw: -22, pitch: -8, label: "巨石下面", line: "巨石下面只有碎石和露水。" },
-  { yaw: 10, pitch: -12, label: "矮松丛", line: "矮松丛里挂着一小片红色——是我冲锋衣的线头，不是手机。" },
-  { yaw: -4, pitch: 6, label: "石墙下", line: "对面就是 Sassolungo。石墙下面的灌木翻了一遍。没有。" },
-  { yaw: 24, pitch: -2, label: "最后定位的那块坡", line: "定位就停在这里。石头翻了个遍。没有。" },
+  { yaw: 11, pitch: -10, label: "巨石下面", line: "巨石下面只有碎石和露水。" },
+  { yaw: -28, pitch: 1, label: "矮松丛", line: "矮松丛里挂着一小片红色——是我冲锋衣的线头，不是手机。" },
+  { yaw: -3, pitch: 12, label: "石墙下", line: "对面就是 Sassolungo。石墙下面的灌木翻了一遍。没有。" },
+  { yaw: 26, pitch: -7, label: "最后定位的那块坡", line: "定位就停在这里。石头翻了个遍。没有。" },
 ];
 
 export const HOTEL_CALLS = [
