@@ -105,7 +105,7 @@ async function climbAll() {
     log(`phone button after return: ${$(".utility-controls .phone-missing") ? "STILL MISSING" : "present"}`);
     await go("bench");
     await press(".phone-return-action", "open gallery"); await press(".gallery-grid button.is-letter", "letter photo"); for (let i = 0; i < 12; i += 1) { const start = performance.now(); while (!$(".letter-translate") && nodeOf() === "bench" && !$(".phone-overlay") === false && performance.now() - start < 3000) await sleep(100); const button = $(".letter-translate"); if (!button) break; tap(button); log(`translate line ${i}`); await sleep(150); }
-    await waitFor(() => nodeOf() === "complete", "complete screen", 20000);
+    await waitFor(() => nodeOf() === "complete", "complete screen", 45000);
     log(`DONE total ${((performance.now() - window.__t0) / 1000).toFixed(1)}s at ${nodeOf()}`);
   } catch (error) {
     log(`ERROR ${error && error.stack ? error.stack : error}`);

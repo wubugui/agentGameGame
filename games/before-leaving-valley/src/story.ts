@@ -185,12 +185,12 @@ export const CABLE_ANCHORS: Anchor[] = [
 
 // The unprotected crack: the true sequence of holds plus decoys that slip.
 export const CRACK_HOLDS: Array<Anchor & { order: number | null; label: string }> = [
-  { yaw: 2, pitch: -22, order: 0, label: "左脚 · 岩阶" },
-  { yaw: 9, pitch: -12, order: 1, label: "右手 · 裂缝边缘" },
-  { yaw: 4, pitch: -4, order: 2, label: "左手 · 石突" },
-  { yaw: 8, pitch: 5, order: 3, label: "右脚 · 裂缝里" },
-  { yaw: 17, pitch: -7, order: null, label: "一片薄石" },
-  { yaw: -7, pitch: -14, order: null, label: "一道浅槽" },
+  { yaw: -16, pitch: -13, order: 0, label: "左脚 · 岩阶" },
+  { yaw: 18, pitch: -2, order: 1, label: "右手 · 裂缝边缘" },
+  { yaw: 2, pitch: 2, order: 2, label: "左手 · 石突" },
+  { yaw: 14, pitch: 12, order: 3, label: "右脚 · 裂缝里" },
+  { yaw: -11, pitch: 19, order: null, label: "一片薄石" },
+  { yaw: -5, pitch: 7, order: null, label: "一道浅槽" },
 ];
 
 export const MAILBOX_ANCHOR: Anchor = { yaw: 34, pitch: -20 };
