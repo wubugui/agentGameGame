@@ -247,6 +247,10 @@ export default function App() {
   const [shouting, setShouting] = useState(false);
   const [braking, setBraking] = useState(false);
   const [armLeaving, setArmLeaving] = useState(false);
+  const [hudAwake, setHudAwake] = useState(true);
+  const [captionFresh, setCaptionFresh] = useState(true);
+  const hudTimerRef = useRef(0);
+  const thoughtTimerRef = useRef(0);
   const [gusting, setGusting] = useState(false);
   const stageRef = useRef<StageHandle | null>(null);
   const walkProgressRef = useRef(0);
@@ -293,8 +297,13 @@ export default function App() {
   const say = useCallback((line: string, delay = 0) => {
     entryTimersRef.current.forEach((timer) => window.clearTimeout(timer));
     entryTimersRef.current = [];
-    if (delay <= 0) setThought(line);
-    else schedule(() => setThought(line), delay);
+    const show = () => {
+      window.clearTimeout(thoughtTimerRef.current);
+      setThought(line);
+      // A line stays about as long as it takes to say it, then leaves the picture alone.
+      thoughtTimerRef.current = window.setTimeout(() => setThought(""), Math.min(9000, 2600 + line.length * 120));
+    };
+    if (delay <= 0) show(); else schedule(show, delay);
   }, [schedule]);
   const recover = useCallback((duration = 4200) => {
     window.clearTimeout(recoveryTimerRef.current);
@@ -434,8 +443,11 @@ export default function App() {
     const chapter = Boolean(NODES[node].chapter);
     const firstAt = chapter ? 4600 : 0;            // the first line waits for the chapter card to clear
     const entry = (fn: () => void, delay: number) => { entryTimersRef.current.push(window.setTimeout(fn, delay)); };
-    if (firstAt === 0) setThought(NODES[node].thoughts[0]); else { setThought(""); entry(() => setThought(NODES[node].thoughts[0]), firstAt); }
-    entry(() => setThought(NODES[node].thoughts[1]), firstAt + 5200);
+    const line = NODES[node].thoughts[0];
+    const show = () => { window.clearTimeout(thoughtTimerRef.current); setThought(line); thoughtTimerRef.current = window.setTimeout(() => setThought(""), Math.min(9000, 2600 + line.length * 120)); };
+    if (firstAt === 0) show(); else { setThought(""); entry(show, firstAt); }
+    setCaptionFresh(true);
+    entry(() => setCaptionFresh(false), firstAt + 4200);
     setChapterShown(chapter);
     if (chapter) schedule(() => setChapterShown(false), 4600);
     setCarState("none");
@@ -481,7 +493,7 @@ export default function App() {
   /* ---------- keys ---------- */
   keyHandlerRef.current = (event: KeyboardEvent) => {
       if (event.key.toLowerCase() === "p" && phase === "play" && !menuOpen) {
-        if (flags.phoneLost) { flash("外套口袋是空的。手机不在身上。"); return; }
+        if (flags.phoneLost) { kick("glance", 0.6, { yaw: 0, pitch: -6 }); return; }
         sfx(phoneOpen ? "tock" : "tick");
         setPhoneOpen((value) => !value);
         setPhoneTab(overlay === "call" ? "call" : "home");
@@ -492,6 +504,10 @@ export default function App() {
         else if (phase !== "complete") setMenuOpen((value) => !value);
       }
       if (event.code === "Space" && phase === "play" && (node === "forest1" || node === "forest2") && !(event.target instanceof HTMLButtonElement)) { event.preventDefault(); shout(); }
+      if (event.key.toLowerCase() === "e" && phase === "play" && !phoneOpen && !menuOpen && overlay === "none") {
+        const action = document.querySelector<HTMLButtonElement>(".story-action");
+        if (action) { event.preventDefault(); action.click(); }
+      }
   };
   useEffect(() => {
     const keyDown = (event: KeyboardEvent) => keyHandlerRef.current(event);
@@ -630,12 +646,16 @@ export default function App() {
   const worldMove = (event: React.PointerEvent) => {
     const rect = event.currentTarget.getBoundingClientRect();
     setLook({ x: ((event.clientX - rect.left) / rect.width - 0.5) * 2, y: ((event.clientY - rect.top) / rect.height - 0.5) * 2 });
+    // The controls exist only while the hand moves; in a still picture there is no interface.
+    if (!hudAwake) setHudAwake(true);
+    window.clearTimeout(hudTimerRef.current);
+    hudTimerRef.current = window.setTimeout(() => setHudAwake(false), 2600);
   };
 
   /* ---------- node mechanics ---------- */
   const putOnHelmet = () => { patch({ helmet: true }); sfx("tick"); say("白色的头盔。扣好带子。"); };
   const clipIn = () => {
-    if (!flags.helmet) { flash("先戴头盔"); return; }
+    if (!flags.helmet) { kick("clink", 0.4); return; }
     patch({ clipped: true }); sfx("clink"); say("两把锁扣，一蓝一橙，都挂上钢缆。任何时候，至少一把在上面。");
   };
 
@@ -678,7 +698,7 @@ export default function App() {
       flash(index === 4 ? "石片松了，掉下去很久才听见响。" : "浅槽里全是草，抓不住。");
       return;
     }
-    if (hold.order !== flags.crackStep) { flash(hold.order < flags.crackStep ? "已经过了这一步" : "重心还没过去。先找下一个点"); return; }
+    if (hold.order !== flags.crackStep) { reach(hold, "grip"); kick("clink", 0.5); sfx("grip"); return; }
     reach(hold, "grip", true); sfx("grip"); schedule(() => { sfx("step"); kick("pull", 1.2); }, 420); patch({ crackStep: flags.crackStep + 1 }); spend(6);
     say(["左脚先站稳。", "右手抠住裂缝边缘。粗糙，扎手，但很牢。", "左手石突。重心移过去。", "右脚踩进裂缝。上面又有钢缆了。"][hold.order]);
   };
@@ -709,7 +729,7 @@ export default function App() {
   };
   const mapTotal = flags.mapLegs.reduce((sum, index) => sum + MAP_LEGS[index].hours, 0);
   const closeMap = () => {
-    if (flags.mapLegs.length < MAP_LEGS.length) { flash("把每一段都加起来"); return; }
+    if (flags.mapLegs.length < MAP_LEGS.length) { sfx("tock"); return; }
     setOverlay("none");
   };
   const lookAtHut = () => say("山屋就在对面。隔着一整个山谷。地图上写着两个半小时。");
@@ -818,7 +838,7 @@ export default function App() {
     if (node !== "hairpin" || flags.waved) return;
     if (carState === "first") { flash("第一辆车没有停。"); return; }
     if (carState === "second") { setCarState("stopped"); patch({ waved: true }); sfx("brake"); schedule(() => sfx("door"), 900); say("第二辆车停下来了。车窗降下来，一对特别可爱的情侣。"); return; }
-    flash("路上没有车。");
+    kick("glance", 0.8, { yaw: 10, pitch: 0 });
   };
   const nextCarLine = () => {
     if (flags.carLine >= CAR_LINES.length) return;
@@ -845,7 +865,7 @@ export default function App() {
     flash(["“No, sorry.”", "“Nessun telefono qui.”", "“没有人捡到。”", "“Non lo so.”", "“Mi dispiace.”"][index % 5]);
   };
   const closeHotel = () => {
-    if (flags.hotelCalls < HOTEL_CALLS.length) { flash("还有没打的"); return; }
+    if (flags.hotelCalls < HOTEL_CALLS.length) { sfx("tock"); return; }
     setOverlay("none"); say("二十多个电话。得到的答案都是没有。");
   };
 
@@ -882,7 +902,7 @@ export default function App() {
 
   /* ---------- phone ---------- */
   const openPhone = (tab: PhoneTab = "home") => {
-    if (flags.phoneLost) { flash("口袋是空的。手机在森林里。"); return; }
+    if (flags.phoneLost) { kick("glance", 0.6, { yaw: 0, pitch: -6 }); return; }
     setCameraAim({ x: 50 + look.x * 34, y: 50 + look.y * 28 });
     setPhoneTab(tab); sfx("tick"); setPhoneOpen(true);
   };
@@ -999,7 +1019,7 @@ export default function App() {
   const holdActive = holdRef.current !== null;
 
   return (
-    <main className={`game-shell node-${node} scene-light-${info.light} body-${bodyMode} ${walking ? "is-moving" : ""} ${walking && running ? "is-running" : ""} ${shouting ? "shouting" : ""} ${braking ? "car-braking" : ""} ${night && phoneOpen ? "night-phone" : ""} ${gusting ? "gusting" : ""} ${settings.motion ? "" : "reduce-motion"} breath-${breath} ${overlay !== "none" && overlay !== "selfie" ? "overlay-open" : ""} ${phoneOpen ? "phone-open" : ""}`}>
+    <main className={`game-shell node-${node} scene-light-${info.light} body-${bodyMode} ${walking ? "is-moving" : ""} ${walking && running ? "is-running" : ""} ${shouting ? "shouting" : ""} ${braking ? "car-braking" : ""} ${night && phoneOpen ? "night-phone" : ""} ${gusting ? "gusting" : ""} ${hudAwake ? "hud-awake" : "hud-asleep"} ${captionFresh ? "caption-fresh" : ""} ${settings.motion ? "" : "reduce-motion"} breath-${breath} ${overlay !== "none" && overlay !== "selfie" ? "overlay-open" : ""} ${phoneOpen ? "phone-open" : ""}`}>
       <PanoStage asset={info.asset} light={info.light} look={look} walking={walking} progress={walkProgress} progressRef={walkProgressRef} breath={breath} mode={bodyMode} tension={fear} handleRef={stageRef} idle={IDLE_NODES.includes(node) && !walking && overlay === "none" && !phoneOpen && !menuOpen} anchorLayerRef={anchorLayerRef} reduceMotion={!settings.motion} onReady={onCanvasReady} />
       <div className="cinema-grade" />
       <div className="film-grain" />
@@ -1217,31 +1237,7 @@ export default function App() {
       {thought && <div className="thought-line">{thought}</div>}
       {feedback && <div className="world-feedback">{feedback}</div>}
 
-      <div className="action-whisper">
-        {node === "meadow" && !ready && "环视四周"}
-        {node === "plaque" && !flags.helmet && "岩壁下面，背包边上"}
-        {node === "plaque" && flags.helmet && !flags.clipped && "钢缆从哪里开始"}
-        {node === "cable" && !ready && "到锚点：先解开一把锁，挂到下一段，再换另一把"}
-        {node === "crack" && !ready && "没有钢缆。看岩壁，找能抓住的地方"}
-        {node === "mailbox" && !flags.letterPhotographed && "岩壁上有什么"}
-        {node === "summit" && !flags.summitSelfie && "看看四周"}
-        {node === "hutView" && !flags.mapDone && "山屋在对面。看看地图"}
-        {node === "hutView" && flags.mapDone && !flags.chocolate && "背包里还有吃的"}
-        {node === "signpost" && !flags.signChosen && "读路牌"}
-        {node === "scree" && !ready && "选一块能站住的石头"}
-        {node === "deer" && !flags.deerSeen && "前面有响动"}
-        {node === "forestEdge" && !flags.callDone && "手机还剩 9%。信号一格"}
-        {(node === "forest1" || node === "forest2") && !ready && "按住能抓住的东西，直到抓稳。害怕了就喊一声"}
-        {node === "hairpin" && !flags.waved && "最原始的方式"}
-        {node === "car" && !ready && "暖气开着"}
-        {node === "search" && !ready && "沿着 Find My 的最后定位找"}
-        {node === "hotel" && !ready && "附近所有的酒店和游客中心"}
-        {node === "busStop" && !flags.busAnswered && "等 472 路"}
-        {node === "busStop" && flags.busAnswered && !flags.womanPhotographed && "她跑开了"}
-        {node === "police" && !ready && "走到柜台前"}
-        {node === "bench" && !flags.letterTranslated && "只有这部手机拍下了那封信"}
-        {ready && info.next && !walking && "想走的时候，看向路，点亮起来的箭头"}
-      </div>
+      {/* No hints. The picture itself is the interface: what she can touch lights up when she looks at it. */}
 
       {phoneOpen && <img className="hand-phone" src={`${import.meta.env.BASE_URL}sprites/hand-phone.webp`} alt="" draggable={false} aria-hidden="true" />}
       {phoneOpen && (
@@ -1252,6 +1248,7 @@ export default function App() {
           takePhoto={takePhoto} requestReply={requestReply}
           letterTranslated={flags.letterTranslated} translatedLines={flags.translatedLines} onTranslate={node === "bench" ? translateLine : undefined}
           call={overlay === "call" ? { lines: CALL_LINES, step: callStep, done: callStep >= CALL_LINES.length - 1, hangUp } : undefined}
+          onUi={(kind) => sfx(kind)}
         />
       )}
       {menu}

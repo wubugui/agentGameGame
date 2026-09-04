@@ -1,0 +1,23 @@
+/* The interface of a first-person game: almost nothing, and only while the hand moves. */
+.utility-controls { transition:opacity .5s ease, translate .5s ease; }
+.hud-asleep .utility-controls { opacity:0; translate:0 -8px; pointer-events:none; }
+.hud-asleep .gaze-dot { opacity:.45; }
+/* The place card: shown on arrival, then it leaves. */
+.scene-caption { transition:opacity .8s ease, translate .8s ease; opacity:0; translate:0 -6px; pointer-events:none; }
+.caption-fresh .scene-caption, .hud-awake .scene-caption { opacity:1; translate:0 0; }
+.hud-awake:not(.caption-fresh) .scene-caption { opacity:.55; }
+/* A spoken line: bottom-left, quiet, and it goes away. */
+.thought-line { animation:lineIn .5s ease both; }
+@keyframes lineIn { from { opacity:0; translate:0 6px; } to { opacity:1; translate:0 0; } }
+/* Feedback flashes are short, small and centred like a subtitle. */
+.world-feedback { font-size:13px; letter-spacing:.06em; }
+/* Hotspot labels: small, only when looked at (the renderer fades the whole hotspot with the gaze). */
+.hotspot > em { font-size:10px; letter-spacing:.1em; opacity:.8; }
+.hotspot > span { width:22px; height:22px; }
+.go-hotspot > span { width:30px; height:30px; }
+/* Actions read as a key prompt, the way a 3D game shows "E · interact". */
+.story-action { left:50%; right:auto; translate:-50% 0; bottom:9vh; padding:0 16px 0 10px; border-radius:10px; background:rgba(7,15,18,.55); font-size:11px; letter-spacing:.06em; display:flex; align-items:center; gap:10px; }
+.story-action::before { content:"E"; width:20px; height:20px; border:1px solid rgba(255,255,255,.55); border-radius:5px; display:grid; place-items:center; font:600 10px ui-sans-serif,system-ui,sans-serif; color:white; background:rgba(255,255,255,.08); }
+.story-action kbd { display:none; }
+.hud-asleep .story-action { opacity:.75; }
+.wave-action.lit::before { background:rgba(229,202,146,.9); color:#26302c; border-color:#e5ca92; }
