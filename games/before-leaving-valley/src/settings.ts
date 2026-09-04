@@ -6,7 +6,8 @@ export type GameSettings = {
 
 const KEY = "before-leaving-valley.settings.v1";
 
-export const DEFAULT_SETTINGS: GameSettings = { master: 0.9, music: 0.85, motion: true };
+const systemPrefersCalm = () => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+export const DEFAULT_SETTINGS: GameSettings = { master: 0.9, music: 0.85, motion: !systemPrefersCalm() };
 
 export function loadSettings(): GameSettings {
   try {
@@ -16,7 +17,7 @@ export function loadSettings(): GameSettings {
     return {
       master: typeof parsed.master === "number" ? Math.min(1, Math.max(0, parsed.master)) : DEFAULT_SETTINGS.master,
       music: typeof parsed.music === "number" ? Math.min(1, Math.max(0, parsed.music)) : DEFAULT_SETTINGS.music,
-      motion: typeof parsed.motion === "boolean" ? parsed.motion : DEFAULT_SETTINGS.motion,
+      motion: typeof parsed.motion === "boolean" ? parsed.motion : !systemPrefersCalm(),
     };
   } catch {
     return { ...DEFAULT_SETTINGS };

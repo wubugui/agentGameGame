@@ -246,7 +246,11 @@ export default function App() {
   const [dust, setDust] = useState(0);
   const [shouting, setShouting] = useState(false);
   const [braking, setBraking] = useState(false);
+  const [armLeaving, setArmLeaving] = useState(false);
+  const [gusting, setGusting] = useState(false);
   const stageRef = useRef<StageHandle | null>(null);
+  const walkProgressRef = useRef(0);
+  const keyHandlerRef = useRef<(event: KeyboardEvent) => void>(() => undefined);
 
   const soundRef = useRef<Soundscape | null>(null);
   const musicElsRef = useRef<Partial<Record<MusicKind, HTMLAudioElement>>>({});
@@ -458,7 +462,7 @@ export default function App() {
 
   /* seconds spent standing in the current node (drives the fading light of the descent) */
   useEffect(() => {
-    if (phase !== "play") return;
+    if (phase !== "play" || (node !== "scree" && node !== "deer" && node !== "forestEdge")) return;
     const timer = window.setInterval(() => setNodeSeconds((value) => value + 1), 1000);
     return () => window.clearInterval(timer);
   }, [node, phase]);
@@ -475,8 +479,7 @@ export default function App() {
   }, [cameraAim, cameraZoom, flags, node, phase, phone, walking]);
 
   /* ---------- keys ---------- */
-  useEffect(() => {
-    const keyDown = (event: KeyboardEvent) => {
+  keyHandlerRef.current = (event: KeyboardEvent) => {
       if (event.key.toLowerCase() === "p" && phase === "play" && !menuOpen) {
         if (flags.phoneLost) { flash("外套口袋是空的。手机不在身上。"); return; }
         sfx(phoneOpen ? "tock" : "tick");
@@ -489,10 +492,12 @@ export default function App() {
         else if (phase !== "complete") setMenuOpen((value) => !value);
       }
       if (event.code === "Space" && phase === "play" && (node === "forest1" || node === "forest2") && !(event.target instanceof HTMLButtonElement)) { event.preventDefault(); shout(); }
-    };
+  };
+  useEffect(() => {
+    const keyDown = (event: KeyboardEvent) => keyHandlerRef.current(event);
     window.addEventListener("keydown", keyDown);
     return () => window.removeEventListener("keydown", keyDown);
-  });
+  }, []);
 
   useEffect(() => {
     if (!phoneOpen || flags.phoneLost) return;
@@ -556,7 +561,7 @@ export default function App() {
   useEffect(() => {
     if (phase !== "play" || !GUSTY.includes(node)) return;
     let timer = 0;
-    const gust = () => { kick("turn", 0.25 + Math.random() * 0.3); timer = window.setTimeout(gust, 5000 + Math.random() * 9000); };
+    const gust = () => { kick("turn", 0.9 + Math.random() * 0.6); setGusting(true); window.setTimeout(() => setGusting(false), 1700); timer = window.setTimeout(gust, 5000 + Math.random() * 9000); };
     timer = window.setTimeout(gust, 3000 + Math.random() * 5000);
     return () => window.clearTimeout(timer);
   }, [kick, node, phase]);
@@ -598,10 +603,14 @@ export default function App() {
     }, at);
     if (run) schedule(() => sfx("breath"), 700);
     const started = performance.now();
+    walkProgressRef.current = 0;
+    setArmLeaving(false);
     const tick = () => {
       const progress = Math.min(1, (performance.now() - started) / duration);
-      setWalkProgress(progress);
+      walkProgressRef.current = progress;
       if (progress < 1) { walkFrameRef.current = requestAnimationFrame(tick); return; }
+      setWalkProgress(1);
+      setArmLeaving(true); schedule(() => setArmLeaving(false), 480);
       spend(info.minutes, info.battery);
       const clock = clockFor(target);
       if (clock && NODES[target].day !== info.day) dispatchPhone({ type: "set_clock", ...clock });
@@ -734,13 +743,13 @@ export default function App() {
     if (next === SCREE_STEPS.length) say("坡底了。林线就在前面。");
   };
   const dusk = node === "scree" ? Math.min(0.85, flags.screeStep / SCREE_STEPS.length * 0.5 + Math.min(1, nodeSeconds / 240) * 0.35)
-    : node === "deer" ? 0.22 + Math.min(1, nodeSeconds / 300) * 0.22
-    : node === "forestEdge" ? 0.42 + Math.min(1, nodeSeconds / 240) * 0.25
+    : node === "deer" ? 0.5 + Math.min(1, nodeSeconds / 300) * 0.17
+    : node === "forestEdge" ? 0.62 + Math.min(1, nodeSeconds / 240) * 0.15
     : 0;
 
   const scareDeer = () => {
     if (deerState !== "standing") return;
-    setDeerState("fleeing"); sfx("hooves"); kick("glance", 0.6, { yaw: 6, pitch: 0 });
+    setDeerState("fleeing"); sfx("hooves"); kick("glance", 2.6, { yaw: 9, pitch: -2.5 });
     schedule(() => { setDeerState("gone"); patch({ deerSeen: true }); say("十几只鹿，扭头跑回远处的森林。纪念品上除了鹿，还有熊、狼和野猪。"); }, 2600);
   };
 
@@ -893,7 +902,7 @@ export default function App() {
   /* ---------- flow ---------- */
   const resetRuntime = () => {
     clearTimers();
-    setOverlay("none"); setPhoneOpen(false); setMenuOpen(false); setFear(0); setCallStep(0); setCarState("none"); setCreditLine(0); setClimbHold(0); setWalking(false); setRunning(false); setWalkProgress(0); setHand(null); setDust(0); setShouting(false); setBraking(false);
+    setOverlay("none"); setPhoneOpen(false); setMenuOpen(false); setFear(0); setCallStep(0); setCarState("none"); setCreditLine(0); setClimbHold(0); setWalking(false); setRunning(false); setWalkProgress(0); setHand(null); setDust(0); setShouting(false); setBraking(false); setArmLeaving(false); setGusting(false);
     if (holdRef.current) { cancelAnimationFrame(holdRef.current.raf); holdRef.current = null; }
   };
   const begin = () => {
@@ -911,6 +920,8 @@ export default function App() {
   };
   const backToTitle = () => { resetRuntime(); setPhase("title"); setSavedJourney(loadJourneySave()); };
 
+  // The beam child is 3× the viewport; move it so its centre sits under the gaze. Translate is compositable, so no repaint per pointer move.
+  const beamStyle = { translate: `${((look.x + 1) * 50 - 150).toFixed(2)}vw ${((look.y + 1) * 50 - 150).toFixed(2)}vh` } as React.CSSProperties;
   const displayTime = formatGameTime(phone.minuteOfDay);
   const dayLabel = `${phone.date.month}月${phone.date.day}日`;
 
@@ -988,26 +999,26 @@ export default function App() {
   const holdActive = holdRef.current !== null;
 
   return (
-    <main className={`game-shell node-${node} scene-light-${info.light} body-${bodyMode} ${walking ? "is-moving" : ""} ${walking && running ? "is-running" : ""} ${shouting ? "shouting" : ""} ${braking ? "car-braking" : ""} ${night && phoneOpen ? "night-phone" : ""} ${settings.motion ? "" : "reduce-motion"} breath-${breath} ${overlay !== "none" && overlay !== "selfie" ? "overlay-open" : ""} ${phoneOpen ? "phone-open" : ""}`}>
-      <PanoStage asset={info.asset} light={info.light} look={look} walking={walking} progress={walkProgress} breath={breath} mode={bodyMode} tension={fear} handleRef={stageRef} idle={IDLE_NODES.includes(node) && !walking && overlay === "none" && !phoneOpen && !menuOpen} anchorLayerRef={anchorLayerRef} reduceMotion={!settings.motion} onReady={onCanvasReady} />
+    <main className={`game-shell node-${node} scene-light-${info.light} body-${bodyMode} ${walking ? "is-moving" : ""} ${walking && running ? "is-running" : ""} ${shouting ? "shouting" : ""} ${braking ? "car-braking" : ""} ${night && phoneOpen ? "night-phone" : ""} ${gusting ? "gusting" : ""} ${settings.motion ? "" : "reduce-motion"} breath-${breath} ${overlay !== "none" && overlay !== "selfie" ? "overlay-open" : ""} ${phoneOpen ? "phone-open" : ""}`}>
+      <PanoStage asset={info.asset} light={info.light} look={look} walking={walking} progress={walkProgress} progressRef={walkProgressRef} breath={breath} mode={bodyMode} tension={fear} handleRef={stageRef} idle={IDLE_NODES.includes(node) && !walking && overlay === "none" && !phoneOpen && !menuOpen} anchorLayerRef={anchorLayerRef} reduceMotion={!settings.motion} onReady={onCanvasReady} />
       <div className="cinema-grade" />
       <div className="film-grain" />
       <div className={`scene-blink ${info.light === "interior" && node !== "car" ? "warm" : ""}`} key={`blink-${node}`} />
-      {dusk > 0 && <div className="dusk-fall" style={{ opacity: dusk }} />}
+      {(node === "scree" || node === "deer" || node === "forestEdge") && <div className="dusk-fall" style={{ opacity: dusk }} />}
       {CLOUDY.includes(node) && <div className="cloud-shadows" aria-hidden="true" />}
       <div className="breath-pulse" aria-hidden="true" />
       {night && !phoneOpen && <div className="breath-fog" aria-hidden="true" style={{ "--breath": `${breathPeriod}s` } as React.CSSProperties} />}
       {phoneOpen && night && <div className="phone-glow" aria-hidden="true" />}
       {MOTES[node] && <div className={`motes ${MOTES[node]}`} aria-hidden="true">{MOTE_SPOTS.map((spot, index) => <i key={index} style={{ "--x": `${spot.x}%`, "--y": `${spot.y}%`, "--dur": `${spot.dur}s`, "--delay": `${spot.delay}s` } as React.CSSProperties} />)}</div>}
-      {node === "car" && <><div className="car-sweep" aria-hidden="true"><i /><i /><i /></div><div className="tree-flicker" aria-hidden="true" /><div className="dash-glow" aria-hidden="true" /><div className="wipers" aria-hidden="true"><i /><i /></div></>}
+      {node === "car" && <><div className="car-glass" aria-hidden="true"><div className="car-sweep"><i /><i /><i /></div><div className="tree-flicker" /><div className="wipers"><i /><i /></div></div><div className="dash-glow" aria-hidden="true" />{braking && <div className="brake-wash" aria-hidden="true" />}</>}
       <div className="hands-layer" aria-hidden="true">
-        {walking && <img className="hand-walk" src={`${import.meta.env.BASE_URL}sprites/hand-walk.webp`} alt="" draggable={false} style={{ "--cadence": `${running ? RUN_CADENCE : WALK_CADENCE}ms` } as React.CSSProperties} />}
+        {(walking || armLeaving) && <img className={`hand-walk ${!walking ? "leaving" : ""}`} src={`${import.meta.env.BASE_URL}sprites/hand-walk.webp`} alt="" draggable={false} style={{ "--cadence": `${running ? RUN_CADENCE : WALK_CADENCE}ms` } as React.CSSProperties} />}
         {node === "car" && <img className="hands-lap" src={`${import.meta.env.BASE_URL}sprites/hands-lap.webp`} alt="" draggable={false} />}
       </div>
       {(node === "forest1" || node === "forest2") && <div className="fear-vignette" aria-hidden="true" style={{ "--beat": `${beatPeriod}ms`, "--beat-strength": (0.15 + fear * 0.55).toFixed(2) } as React.CSSProperties} />}
       {dust > 0 && <div key={dust} className="dust-puff" aria-hidden="true" onAnimationEnd={() => setDust(0)} />}
-      {(node === "forest1" || node === "forest2") && <div className="lamp-light" aria-hidden="true" style={{ "--beam-x": `${(look.x + 1) * 50}%`, "--beam-y": `${(look.y + 1) * 50}%` } as React.CSSProperties} />}
-      {night && <div className={`night-darkness ${node === "forestEdge" ? "faint" : node === "hairpin" ? `road ${carState !== "none" ? "lit" : ""}` : ""}`} style={{ "--beam-x": `${(look.x + 1) * 50}%`, "--beam-y": `${(look.y + 1) * 50}%` } as React.CSSProperties} />}
+      {(node === "forest1" || node === "forest2") && <div className="lamp-light" aria-hidden="true"><i style={beamStyle} /></div>}
+      {night && <div className={`night-darkness ${node === "forestEdge" ? "faint" : node === "hairpin" ? `road ${carState !== "none" ? "lit" : ""}` : ""}`}>{node === "forest1" || node === "forest2" ? <i style={beamStyle} /> : null}</div>}
       {info.chapter && chapterShown && (
         <div className="chapter-card" key={`chapter-${node}`} aria-hidden="true">
           <small>{info.chapter.eyebrow}</small>

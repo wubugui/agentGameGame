@@ -7,21 +7,27 @@
 @keyframes handReach {
   0% { translate:0 60vh; scale:1.5; opacity:0; }
   18% { opacity:1; }
-  55% { translate:0 40%; scale:1; opacity:1; }
-  78% { translate:0 38%; scale:.98; opacity:1; }
-  100% { translate:0 48%; scale:1.1; opacity:0; }
+  55% { translate:0 26%; scale:1; opacity:1; }
+  78% { translate:0 24%; scale:.98; opacity:1; }
+  100% { translate:0 36%; scale:1.1; opacity:0; }
 }
 .hand-reach.hold { animation:handHold 1.6s cubic-bezier(.2,.75,.25,1) both; }
 @keyframes handHold {
   0% { translate:0 60vh; scale:1.5; opacity:0; }
-  25% { translate:0 39%; scale:1; opacity:1; }
-  85% { translate:0 38%; scale:.99; opacity:1; }
-  100% { translate:0 46%; scale:1.05; opacity:0; }
+  25% { translate:0 25%; scale:1; opacity:1; }
+  85% { translate:0 24%; scale:.99; opacity:1; }
+  100% { translate:0 34%; scale:1.05; opacity:0; }
 }
 .reduce-motion .hand-reach { animation-duration:.5s; }
 
+/* Hands and dust sit above the grade, so they take the light of the scene themselves. */
+.scene-light-dusk .hands-layer img, .scene-light-dusk .hand-reach, .scene-light-dusk .dust-puff { filter:brightness(.72) sepia(.25) saturate(.9) drop-shadow(0 6px 14px rgba(0,0,0,.3)); }
+.scene-light-night .hands-layer img, .scene-light-night .hand-reach { filter:brightness(.34) saturate(.6) drop-shadow(0 6px 14px rgba(0,0,0,.4)); }
+.body-crawl .hand-reach { filter:brightness(.62) sepia(.3) drop-shadow(0 6px 14px rgba(0,0,0,.4)); }
+.scene-light-interior .hands-layer img { filter:brightness(.78) sepia(.18) drop-shadow(0 -4px 16px rgba(0,0,0,.35)); }
+
 /* ---------- her hands the rest of the time ---------- */
-.hands-layer { position:absolute; inset:0; z-index:11; pointer-events:none; overflow:hidden; }
+.hands-layer { position:absolute; inset:0; z-index:9; pointer-events:none; overflow:hidden; }
 /* Walking: the right arm swings at the edge of sight. Cadence comes from the gait. */
 .hand-walk { position:absolute; right:-4vw; bottom:-8vh; width:min(34vh,280px); transform-origin:80% 100%; animation:armSwing var(--cadence,590ms) ease-in-out infinite alternate, armIn .5s ease both; filter:drop-shadow(0 6px 14px rgba(0,0,0,.3)); }
 @keyframes armSwing { from { rotate:-6deg; translate:0 1.5vh; } to { rotate:5deg; translate:-1.2vw -1vh; } }
@@ -31,14 +37,14 @@
 .hand-walk.leaving { animation:armOut .45s ease both; }
 @keyframes armOut { to { opacity:0; translate:0 14vh; } }
 /* Sitting in the car: hands on the knees, rocking with the road. */
-.hands-lap { position:absolute; left:50%; bottom:-36vh; width:min(58vw,620px); translate:-50% 0; animation:lapRock 2.6s ease-in-out infinite alternate; filter:drop-shadow(0 -4px 16px rgba(0,0,0,.35)); }
+.hands-lap { position:absolute; left:50%; bottom:-19vh; width:min(50vw,540px); translate:-50% 0; animation:lapRock 2.6s ease-in-out infinite alternate; filter:drop-shadow(0 -4px 16px rgba(0,0,0,.35)); }
 @keyframes lapRock { from { translate:-50% 0; rotate:-.4deg; } to { translate:-49% .6vh; rotate:.5deg; } }
 /* Holding the phone: the left hand under the case. */
-.hand-phone { position:fixed; z-index:99; left:calc(50% - 335px); bottom:-9vh; width:min(46vh,340px); pointer-events:none; animation:phoneHandIn .38s cubic-bezier(.2,.8,.2,1) both; filter:drop-shadow(0 10px 24px rgba(0,0,0,.45)); }
+.hand-phone { position:fixed; z-index:99; left:calc(50% - 187px - 205px); bottom:-9vh; width:300px; pointer-events:none; animation:phoneHandIn .38s cubic-bezier(.2,.8,.2,1) both; filter:drop-shadow(0 10px 24px rgba(0,0,0,.45)); }
 @keyframes phoneHandIn { from { opacity:0; translate:0 30vh; } to { opacity:1; translate:0 0; } }
 .night-phone .hand-phone { filter:drop-shadow(0 10px 24px rgba(0,0,0,.45)) brightness(1.15) sepia(.15); }
 /* The phone screen lights her up at night: a cool glow low on the picture. */
-.phone-glow { position:absolute; inset:0; z-index:10; pointer-events:none; background:radial-gradient(ellipse 34% 40% at 50% 92%,rgba(190,214,255,.32),rgba(190,214,255,.08) 50%,rgba(0,0,0,0) 75%); animation:letterViewIn .4s ease both; }
+.phone-glow { position:fixed; inset:0; z-index:101; pointer-events:none; background:radial-gradient(ellipse 22% 38% at 24% 96%,rgba(190,214,255,.34),rgba(190,214,255,.1) 50%,rgba(0,0,0,0) 78%),radial-gradient(ellipse 22% 38% at 76% 96%,rgba(190,214,255,.34),rgba(190,214,255,.1) 50%,rgba(0,0,0,0) 78%); animation:letterViewIn .4s ease both; }
 
 /* Movement blur and the tunnel of a run. */
 .pano-canvas { transition:filter .35s ease; }
@@ -56,7 +62,7 @@
 @keyframes heartbeat { 0%,100% { opacity:0; } 10% { opacity:var(--beat-strength,.5); } 22% { opacity:.05; } 32% { opacity:calc(var(--beat-strength,.5) * .6); } 50% { opacity:0; } }
 
 /* The fill light in her mouth: it sways with the head and the breath, and shakes when she shouts. */
-.night-darkness { inset:-7% !important; transition:filter .3s ease; animation:lampSway 3.4s ease-in-out infinite alternate; }
+.night-darkness { transition:filter .3s ease; animation:lampSway 3.4s ease-in-out infinite alternate; }
 .body-crawl .night-darkness { animation:lampCrawl 1.05s ease-in-out infinite alternate; }
 @keyframes lampSway { from { translate:-.6% .3%; } to { translate:.6% -.4%; } }
 @keyframes lampCrawl { from { translate:-1.1% .6%; rotate:-.3deg; } to { translate:1.1% -.9%; rotate:.3deg; } }
@@ -64,7 +70,8 @@
 @keyframes lampShake { 0%,100% { translate:0 0; } 25% { translate:1.4% .8%; } 50% { translate:-1.2% -.6%; } 75% { translate:.8% .5%; } }
 
 /* The lamp itself: real light where she looks, on top of the darkness, swaying with the crawl. */
-.lamp-light { position:absolute; inset:-7%; z-index:9; pointer-events:none; --beam-x:50%; --beam-y:55%; background:radial-gradient(ellipse 20% 28% at var(--beam-x) var(--beam-y),rgba(255,214,160,.5),rgba(255,196,130,.2) 45%,rgba(255,180,110,0) 72%); mix-blend-mode:screen; animation:lampCrawl 1.05s ease-in-out infinite alternate; }
+.lamp-light { position:absolute; inset:0; z-index:9; pointer-events:none; overflow:hidden; mix-blend-mode:screen; animation:lampCrawl 1.05s ease-in-out infinite alternate; }
+.lamp-light > i { position:absolute; left:0; top:0; width:300vw; height:300vh; will-change:translate; background:radial-gradient(ellipse 6.7% 9.3% at 50% 50%,rgba(255,214,160,.5),rgba(255,196,130,.2) 45%,rgba(255,180,110,0) 72%); }
 .shouting .lamp-light { filter:brightness(1.5); animation:lampShake .38s ease-in-out; }
 
 /* Breath: out of breath, the picture pulses with the chest; at night each breath is a puff of white. */
@@ -79,26 +86,29 @@
 /* Cloud shadows crossing the plateau, grit blown across the summit. */
 .cloud-shadows { position:absolute; inset:-20%; z-index:5; pointer-events:none; background:radial-gradient(ellipse 30% 22% at 20% 60%,rgba(10,14,22,.4),rgba(10,14,22,0) 70%),radial-gradient(ellipse 26% 18% at 70% 45%,rgba(10,14,22,.34),rgba(10,14,22,0) 70%),radial-gradient(ellipse 34% 20% at 45% 80%,rgba(10,14,22,.3),rgba(10,14,22,0) 70%); animation:cloudDrift 46s linear infinite; mix-blend-mode:multiply; }
 @keyframes cloudDrift { from { translate:-12% 0; } to { translate:12% 0; } }
-.motes.grit i { width:3px; height:1.5px; border-radius:1px; background:rgba(250,246,236,.75); box-shadow:none; animation-name:gritBlow; animation-duration:calc(var(--dur,14s) / 6); }
+.motes.grit i { width:3px; height:1.5px; border-radius:1px; background:rgba(250,246,236,.75); box-shadow:none; animation-name:gritBlow; animation-duration:calc(var(--dur,14s) / 2.5); }
 @keyframes gritBlow { 0% { opacity:0; translate:0 0; } 10% { opacity:.9; } 100% { opacity:0; translate:38vw 5vh; } }
 
 /* Inside the car: wipers, the dashboard's glow, lights of the villages and shadows of trees across the cabin. */
-.car-sweep { position:absolute; inset:0; z-index:7; pointer-events:none; overflow:hidden; }
+.car-glass { position:absolute; inset:0; z-index:7; pointer-events:none; overflow:hidden; clip-path:polygon(15% 9%, 85% 9%, 93% 57%, 7% 57%); }
+.car-sweep { position:absolute; inset:0; pointer-events:none; overflow:hidden; }
+.brake-wash { position:absolute; inset:0; z-index:7; pointer-events:none; background:radial-gradient(ellipse 50% 40% at 50% 42%,rgba(255,70,40,.28),rgba(255,70,40,0) 70%); animation:brakeWash .9s ease-out both; }
+@keyframes brakeWash { 0% { opacity:0; } 20% { opacity:1; } 100% { opacity:0; } }
 .car-sweep i { position:absolute; top:-10%; bottom:-10%; width:26vw; left:-30vw; background:linear-gradient(90deg,rgba(255,240,210,0),rgba(255,240,210,.22) 45%,rgba(255,240,210,0)); filter:blur(14px); animation:carSweep 7.5s linear infinite; }
 .car-sweep i:nth-child(2) { animation-delay:3.4s; animation-duration:9s; width:18vw; }
 .car-sweep i:nth-child(3) { animation-delay:5.1s; animation-duration:11s; width:12vw; opacity:.7; }
 @keyframes carSweep { 0%,62% { left:-30vw; opacity:0; } 66% { opacity:1; } 80% { left:120vw; opacity:1; } 81%,100% { left:120vw; opacity:0; } }
-.tree-flicker { position:absolute; inset:0; z-index:7; pointer-events:none; background:repeating-linear-gradient(100deg,rgba(0,0,0,0) 0 9vw,rgba(4,8,12,.16) 9vw 12vw,rgba(0,0,0,0) 12vw 21vw); animation:treeFlicker 1.9s linear infinite; mix-blend-mode:multiply; opacity:.8; }
+.tree-flicker { position:absolute; inset:0; pointer-events:none; background:repeating-linear-gradient(100deg,rgba(0,0,0,0) 0 9vw,rgba(4,8,12,.16) 9vw 12vw,rgba(0,0,0,0) 12vw 21vw); animation:treeFlicker 1.9s linear infinite; mix-blend-mode:multiply; opacity:.45; filter:blur(7px); }
 @keyframes treeFlicker { from { translate:0 0; } to { translate:-21vw 0; } }
 .dash-glow { position:absolute; inset:0; z-index:7; pointer-events:none; background:radial-gradient(ellipse 40% 26% at 50% 100%,rgba(255,150,70,.22),rgba(255,150,70,0) 70%); animation:dashGlow 3.3s ease-in-out infinite alternate; }
 @keyframes dashGlow { from { opacity:.7; } to { opacity:1; } }
-.wipers { position:absolute; inset:0; z-index:7; pointer-events:none; overflow:hidden; }
-.wipers i { position:absolute; left:50%; bottom:22%; width:3px; height:46vh; border-radius:2px; filter:blur(1.2px); opacity:.42; background:linear-gradient(rgba(20,26,30,0),rgba(20,26,30,.5) 30%,rgba(20,26,30,.65)); transform-origin:50% 100%; animation:wipe 2.2s cubic-bezier(.45,.05,.55,.95) infinite alternate; }
+.wipers { position:absolute; inset:0; pointer-events:none; overflow:hidden; }
+.wipers i { position:absolute; left:50%; bottom:43%; width:3px; height:30vh; border-radius:2px; filter:blur(1.2px); opacity:.42; background:linear-gradient(rgba(20,26,30,0),rgba(20,26,30,.5) 30%,rgba(20,26,30,.65)); transform-origin:50% 100%; animation:wipe 2.2s cubic-bezier(.45,.05,.55,.95) infinite alternate; }
 .wipers i::after { content:""; position:absolute; left:3px; top:0; bottom:0; width:30vw; background:linear-gradient(90deg,rgba(210,225,235,.07),rgba(210,225,235,0) 60%); }
 .wipers i:nth-child(1) { rotate:-40deg; translate:-14vw 0; }
 .wipers i:nth-child(2) { rotate:-40deg; translate:14vw 0; animation-delay:.08s; }
 @keyframes wipe { from { rotate:-42deg; } to { rotate:48deg; } }
-.car-braking .cinema-grade { transition:background .2s ease; }
+
 
 /* Entering a room: the door, and light that is suddenly warm. */
 .scene-blink.warm { background:#f2e6cf; animation:blinkWarm 1.3s ease-out both; }
@@ -111,7 +121,9 @@
 .motes.dust i { width:3px; height:3px; background:rgba(240,236,226,.6); box-shadow:none; }
 @keyframes moteDrift { 0% { opacity:0; translate:0 0; } 15% { opacity:.9; } 50% { translate:6vw -8vh; } 85% { opacity:.7; } 100% { opacity:0; translate:12vw -16vh; } }
 @keyframes fireflyDrift { 0%,100% { opacity:0; translate:0 0; } 20% { opacity:1; } 35% { opacity:.2; } 50% { opacity:.9; translate:3vw -3vh; } 70% { opacity:.1; } 85% { opacity:.8; translate:-2vw -6vh; } }
-.reduce-motion .motes, .reduce-motion .car-sweep, .reduce-motion .dust-puff, .reduce-motion .cloud-shadows, .reduce-motion .tree-flicker, .reduce-motion .wipers, .reduce-motion .breath-fog, .reduce-motion .hand-walk, .reduce-motion .breath-pulse { display:none; }
+.reduce-motion .motes, .reduce-motion .car-sweep, .reduce-motion .dust-puff, .reduce-motion .cloud-shadows, .reduce-motion .tree-flicker, .reduce-motion .wipers, .reduce-motion .breath-fog, .reduce-motion .breath-pulse { display:none; }
+.reduce-motion .hand-walk, .reduce-motion .hands-lap, .reduce-motion .night-darkness, .reduce-motion .lamp-light, .reduce-motion .fear-vignette, .reduce-motion .dash-glow, .reduce-motion .car-lights, .reduce-motion.is-running::after { animation:none !important; }
+.reduce-motion .fear-vignette { opacity:.25; }
 
 /* Wind: a gust bends the whisper text a hair. */
 .gusting .thought-line { animation:gustLean 1.6s ease-in-out; }

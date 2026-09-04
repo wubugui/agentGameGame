@@ -35,16 +35,19 @@
 .woman-prop { height:34vh; pointer-events:none; animation:propFadeIn 3.5s ease-out both; }
 .bus-prop { height:22vh; pointer-events:none; animation:busIn 3.5s ease-out both; }
 @keyframes busIn { from { opacity:0; margin-left:180px; } to { opacity:1; margin-left:0; } }
-.car-lights { width:120px; height:60px; border-radius:50%; background:radial-gradient(ellipse at center,rgba(255,244,214,.95),rgba(255,230,180,.3) 40%,rgba(255,220,160,0) 70%); opacity:0; pointer-events:none; transition:opacity .8s ease; filter:blur(2px); }
+.car-lights { width:150px; height:50px; opacity:0; pointer-events:none; transition:opacity .8s ease; filter:blur(1.5px); background:radial-gradient(ellipse 22% 60% at 28% 50%,rgba(255,244,214,.98),rgba(255,230,180,.35) 45%,rgba(255,220,160,0) 75%),radial-gradient(ellipse 22% 60% at 72% 50%,rgba(255,244,214,.98),rgba(255,230,180,.35) 45%,rgba(255,220,160,0) 75%),radial-gradient(ellipse 60% 90% at 50% 50%,rgba(255,236,200,.25),rgba(255,236,200,0) 70%); }
 .car-lights.on { opacity:1; animation:carSweep 5.2s ease-in-out both; }
 .car-lights.stopped { opacity:1; animation:none; }
 @keyframes carSweep { 0% { opacity:0; } 20% { opacity:1; } 100% { opacity:0; } }
 /* The fill light she holds in her mouth: a warm cone that follows the gaze, darkness beyond it. */
-.night-darkness { position:absolute; inset:0; z-index:8; pointer-events:none; --beam-x:50%; --beam-y:55%; background:radial-gradient(ellipse 30% 40% at var(--beam-x) var(--beam-y),rgba(255,214,150,.06) 0%,rgba(40,30,20,.12) 30%,rgba(2,4,8,.55) 62%,rgba(2,4,8,.9) 100%); }
+.night-darkness { position:absolute; inset:0; z-index:8; pointer-events:none; overflow:hidden; background:rgba(2,4,8,.9); }
+/* The cone of the fill light: a fixed gradient on a large child that is only ever translated. */
+.night-darkness > i { position:absolute; left:0; top:0; width:300vw; height:300vh; will-change:translate; background:radial-gradient(ellipse 10% 13.3% at 50% 50%,rgba(255,214,150,.06) 0%,rgba(40,30,20,.12) 30%,rgba(2,4,8,.55) 62%,rgba(2,4,8,.9) 100%); }
+.night-darkness:has(> i) { background:none; }
 .night-darkness.faint { background:radial-gradient(ellipse 48% 60% at 50% 50%,rgba(0,0,0,0),rgba(2,4,8,.5) 100%); }
 .night-darkness.road { background:linear-gradient(rgba(2,4,8,.4),rgba(2,4,8,.6)); transition:background .8s ease; }
 .night-darkness.road.lit { background:linear-gradient(rgba(2,4,8,.15),rgba(2,4,8,.45)); }
-.dusk-fall { position:absolute; inset:0; z-index:8; pointer-events:none; background:linear-gradient(rgba(20,16,40,.5),rgba(10,8,24,.75)); transition:opacity 1.2s ease; }
+.dusk-fall { position:absolute; inset:0; z-index:8; pointer-events:none; background:linear-gradient(rgba(20,16,40,.5),rgba(10,8,24,.75)); }
 .fear-meter { position:absolute; z-index:18; left:clamp(20px,5vw,72px); bottom:10vh; width:180px; height:6px; border-radius:3px; background:rgba(255,255,255,.14); }
 .fear-meter i { display:block; height:100%; border-radius:3px; background:linear-gradient(90deg,#b7c3d0,#d6553f); transition:width .5s ease; }
 .fear-meter small { position:absolute; left:0; top:10px; color:rgba(255,255,255,.55); font-size:10px; letter-spacing:.2em; }

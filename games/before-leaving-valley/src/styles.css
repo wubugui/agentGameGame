@@ -221,7 +221,7 @@ button:focus-visible,input:focus-visible { outline:2px solid #f5d8a3; outline-of
 .title-screen .cinema-grade { z-index:2; }
 
 /* ---------- eyelid open on every scene change ---------- */
-.scene-blink { position:absolute; inset:0; z-index:9; background:#050a0c; pointer-events:none; animation:blinkOpen 1.5s cubic-bezier(.3,.1,.2,1) both; }
+.scene-blink { position:absolute; inset:0; z-index:10; background:#050a0c; pointer-events:none; animation:blinkOpen 1.5s cubic-bezier(.3,.1,.2,1) both; }
 @keyframes blinkOpen { 0% { opacity:1; } 30% { opacity:.92; } 100% { opacity:0; } }
 
 /* ---------- the deer at the tree line (sunset shoulder) ---------- */

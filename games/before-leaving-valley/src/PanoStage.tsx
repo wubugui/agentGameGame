@@ -29,6 +29,7 @@ type Props = {
   look: LookPoint;                // -1..1 pointer position, drives the gaze
   walking: boolean;
   progress: number;               // 0..1 walk progress toward the next node
+  progressRef?: { current: number }; // live progress without re-rendering the app every frame
   breath: BreathState;
   mode?: BodyMode;                // what her body is doing in this node
   tension?: number;               // 0..1 shaking hands / racing heart (crawl and climb)
@@ -49,8 +50,8 @@ const BREATH: Record<BreathState, { frequency: number; amplitude: number; roll: 
 /* Gait: how the head bobs while moving in each mode (frequency in Hz, amplitudes in degrees / radians). */
 const GAIT: Record<BodyMode, { frequency: number; pitch: number; yaw: number; roll: number; zoom: number; pitchOffset: number }> = {
   stand: { frequency: 0, pitch: 0, yaw: 0, roll: 0, zoom: 0, pitchOffset: 0 },
-  walk: { frequency: 1.7, pitch: 0.6, yaw: 0.35, roll: 0.002, zoom: 0, pitchOffset: 0 },
-  run: { frequency: 2.7, pitch: 1.35, yaw: 0.7, roll: 0.006, zoom: -0.04, pitchOffset: -2.5 },
+  walk: { frequency: 1000 / 560, pitch: 0.6, yaw: 0.35, roll: 0.002, zoom: 0, pitchOffset: 0 },     // one bob per footfall (WALK_CADENCE)
+  run: { frequency: 1000 / 300, pitch: 1.35, yaw: 0.7, roll: 0.006, zoom: -0.04, pitchOffset: -2.5 }, // one thump per footfall (RUN_CADENCE)
   climb: { frequency: 0.35, pitch: 0.5, yaw: 0.25, roll: 0.0025, zoom: 0.02, pitchOffset: 3 },
   crawl: { frequency: 0.95, pitch: 1.3, yaw: 0.5, roll: 0.006, zoom: 0.03, pitchOffset: -6 },
   ride: { frequency: 0, pitch: 0, yaw: 0, roll: 0, zoom: 0, pitchOffset: 0 },
@@ -85,7 +86,7 @@ function makePanel(texture: THREE.Texture | null) {
   return mesh;
 }
 
-export default function PanoStage({ asset, light, look, walking, progress, breath, mode = "stand", tension = 0, handleRef, idle = false, anchorLayerRef, reduceMotion = false, onReady, onGaze }: Props) {
+export default function PanoStage({ asset, light, look, walking, progress, progressRef: liveProgress, breath, mode = "stand", tension = 0, handleRef, idle = false, anchorLayerRef, reduceMotion = false, onReady, onGaze }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const assetRef = useRef(asset);
   const lightRef = useRef(light);
@@ -357,7 +358,7 @@ export default function PanoStage({ asset, light, look, walking, progress, breat
       camera.rotateZ(roll + rideRoll + springs.roll.p);
 
       // Forward step: zoom the current panel slightly while walking, and settle after a swap.
-      const walkZoom = moving ? progressRef.current * (mode === "run" ? 0.12 : 0.09) : 0;
+      const walkZoom = moving ? (liveProgress ? liveProgress.current : progressRef.current) * (mode === "run" ? 0.12 : 0.09) : 0;
       stepZoom += (0 - stepZoom) * Math.min(1, dt * 2.2);
       const zoom = 1 + walkZoom + stepZoom * 0.06 + modeZoom + springs.zoom.p;
       camera.zoom += (zoom - camera.zoom) * Math.min(1, dt * 8);
