@@ -1,6 +1,6 @@
 import { RotateCcw, Settings as SettingsIcon, Smartphone, Volume2, VolumeX } from "lucide-react";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
-import PanoStage, { type BreathState, type LookPoint } from "./PanoStage";
+import PanoStage, { type BodyMode, type BreathState, type ImpulseKind, type LookPoint, type StageHandle } from "./PanoStage";
 import Phone, { type PhoneTab } from "./Phone";
 import { createInitialPhoneState, formatGameTime, NEXT_MORNING_DATE, nodeAsset, phoneReducer, THIRD_DAY_DATE, type ContactId } from "./phoneModel";
 import { loadSettings, saveSettings, type GameSettings } from "./settings";
@@ -51,6 +51,13 @@ const MATERIAL: Record<NodeId, SoundMaterial> = {
 };
 
 const NIGHT_NODES: readonly NodeId[] = ["forestEdge", "forest1", "forest2", "hairpin"];
+/* Leaving these nodes she is running: the emergency descent. */
+const RUN_FROM: readonly NodeId[] = ["signpost", "scree", "deer"];
+/* What drifts in the air of a node: pollen in warm light, stone dust on the plateau, fireflies at dusk. */
+const MOTES: Partial<Record<NodeId, "pollen" | "dust" | "night">> = { meadow: "pollen", approach: "pollen", deer: "pollen", search: "pollen", bench: "pollen", busStop: "pollen", summit: "dust", plateau: "dust", hutView: "dust", scree: "dust", forestEdge: "night" };
+const MOTE_SPOTS = Array.from({ length: 14 }, (_, index) => ({ x: (index * 37 + 11) % 100, y: 20 + (index * 53 + 7) % 70, dur: 11 + (index * 7) % 9, delay: -(index * 1.7) }));
+/* Nodes where the wind comes in gusts strong enough to push the body. */
+const GUSTY: readonly NodeId[] = ["cable", "crack", "mailbox", "exit", "summit", "plateau", "hutView", "signpost"];
 const DAY_MUSIC_NODES: readonly NodeId[] = ["meadow", "approach", "plaque", "cable", "crack", "mailbox", "exit", "summit", "plateau"];
 
 type MusicKind = "day" | "warm" | "end";
@@ -224,6 +231,12 @@ export default function App() {
   const [callStep, setCallStep] = useState(0);
   const [nodeSeconds, setNodeSeconds] = useState(0);
   const [creditLine, setCreditLine] = useState(0);
+  const [running, setRunning] = useState(false);
+  const [hand, setHand] = useState<{ key: number; anchor: Anchor; kind: "grip" | "carabiner"; hold: boolean } | null>(null);
+  const [dust, setDust] = useState(0);
+  const [shouting, setShouting] = useState(false);
+  const [braking, setBraking] = useState(false);
+  const stageRef = useRef<StageHandle | null>(null);
 
   const soundRef = useRef<Soundscape | null>(null);
   const musicElsRef = useRef<Partial<Record<MusicKind, HTMLAudioElement>>>({});
@@ -277,10 +290,14 @@ export default function App() {
   const patch = useCallback((update: Partial<Flags> | ((current: Flags) => Partial<Flags>)) => {
     setFlags((current) => ({ ...current, ...(typeof update === "function" ? update(current) : update) }));
   }, []);
-  const sfx = useCallback((name: "step" | "shutter" | "tick" | "tock" | "clink" | "slip" | "door" | "breath") => {
+  const sfx = useCallback((name: "step" | "shutter" | "tick" | "tock" | "clink" | "slip" | "door" | "breath" | "thud" | "slide" | "brake" | "grip") => {
     const sound = soundRef.current;
     if (!sound || !soundOn) return;
     if (name === "step") sound.step(MATERIAL[node]);
+    else if (name === "thud") sound.thud();
+    else if (name === "slide") sound.slide();
+    else if (name === "brake") sound.brake();
+    else if (name === "grip") sound.grip();
     else if (name === "shutter") sound.shutter();
     else if (name === "tick") sound.uiTick(true);
     else if (name === "tock") sound.uiTick(false);
@@ -289,6 +306,10 @@ export default function App() {
     else if (name === "door") sound.carDoor();
     else sound.breath({ duration: 0.9, gain: 0.5, cutoff: 900 });
   }, [node, soundOn]);
+  /* A push on the body: the camera's springs react and settle. */
+  const kick = useCallback((kind: ImpulseKind, strength = 1) => { stageRef.current?.kick(kind, strength); }, []);
+  /* Her hand comes into view, reaching for what was just grabbed. */
+  const reach = useCallback((anchor: Anchor, kind: "grip" | "carabiner" = "grip", hold = false) => { setHand({ key: Date.now(), anchor, kind, hold }); }, []);
   const spend = useCallback((minutes: number, battery = 0) => {
     if (flagsRef.current.phoneLost) return;
     dispatchPhone({ type: "advance_time", minutes, batteryCost: battery });
@@ -488,6 +509,23 @@ export default function App() {
     return () => window.clearTimeout(timer);
   }, [carState, flags.waved, node, phase]);
 
+  /* the heart in the forest: sound and vignette beat faster as fear rises */
+  const beatPeriod = Math.round(1000 - fear * 520);
+  useEffect(() => {
+    if (phase !== "play" || (node !== "forest1" && node !== "forest2")) return;
+    const timer = window.setInterval(() => { if (soundOn) soundRef.current?.heartbeat(fear); }, beatPeriod);
+    return () => window.clearInterval(timer);
+  }, [beatPeriod, fear, node, phase, soundOn]);
+
+  /* gusts on the wall and the plateau push the body a little */
+  useEffect(() => {
+    if (phase !== "play" || !GUSTY.includes(node)) return;
+    let timer = 0;
+    const gust = () => { kick("turn", 0.25 + Math.random() * 0.3); timer = window.setTimeout(gust, 5000 + Math.random() * 9000); };
+    timer = window.setTimeout(gust, 3000 + Math.random() * 5000);
+    return () => window.clearTimeout(timer);
+  }, [kick, node, phase]);
+
   /* credits: the letter first, alone; then her three lines; then the card */
   useEffect(() => {
     if (phase !== "complete" || creditLine > CREDIT_TOTAL) return;
@@ -507,15 +545,18 @@ export default function App() {
   const walkOn = () => {
     if (walking || !ready || !info.next) return;
     const target = info.next;
+    const run = RUN_FROM.includes(node);
+    setRunning(run);
     setWalking(true);
     setBreath("walking");
     setOverlay("none");
     setPhoneOpen(false);
-    sfx("step");
-    schedule(() => sfx("step"), 520);
-    schedule(() => sfx("step"), 1040);
+    // Footfalls at the gait's cadence; a run lands harder and leaves her out of breath.
+    const duration = settings.motion ? (run ? 1500 : 1800) : 900;
+    const cadence = run ? 300 : 560;
+    for (let at = 0; at < duration - 120; at += cadence) schedule(() => { sfx("step"); if (run) sfx("thud"); }, at);
+    if (run) schedule(() => sfx("breath"), 700);
     const started = performance.now();
-    const duration = settings.motion ? 1500 : 900;
     const tick = () => {
       const progress = Math.min(1, (performance.now() - started) / duration);
       setWalkProgress(progress);
@@ -525,12 +566,16 @@ export default function App() {
       if (clock && NODES[target].day !== info.day) dispatchPhone({ type: "set_clock", ...clock });
       setNode(target);
       setWalking(false);
+      setRunning(false);
       setWalkProgress(0);
+      kick("settle", run ? 1.6 : 1);
+      if (run) { sfx("breath"); schedule(() => sfx("breath"), 1100); }
       setBreath(nodeIndex(target) >= nodeIndex("scree") && nodeIndex(target) <= nodeIndex("hairpin") ? "recovery" : "calm");
-      schedule(() => setBreath("calm"), 5000);
+      schedule(() => setBreath("calm"), run ? 7000 : 5000);
     };
     walkFrameRef.current = requestAnimationFrame(tick);
   };
+  const bodyMode: BodyMode = walking ? (running ? "run" : "walk") : node === "cable" || node === "crack" ? "climb" : node === "forest1" || node === "forest2" ? "crawl" : node === "car" ? "ride" : "stand";
 
   const worldMove = (event: React.PointerEvent) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -551,7 +596,7 @@ export default function App() {
     if (step >= CABLE_ANCHORS.length) return;
     if (mine === step) {
       if (other === -1) {
-        sfx("slip");
+        sfx("slip"); kick("slip", 0.8);
         patch((current) => ({ slips: current.slips + 1, carabiner: { a: step, b: step } }));
         flash("两把锁都离开了钢缆。手心一凉，重新挂回去。");
         recover(3600);
@@ -559,16 +604,16 @@ export default function App() {
         return;
       }
       patch({ carabiner: { ...flags.carabiner, [which]: -1 } });
-      sfx("tock");
+      sfx("tock"); kick("clink", 0.6); reach({ yaw: CABLE_ANCHORS[step].yaw, pitch: CABLE_ANCHORS[step].pitch + 9 }, "carabiner");
       return;
     }
     if (mine === -1) {
       const next = step + 1;
       const carabiner = { ...flags.carabiner, [which]: next };
-      sfx("clink");
+      sfx("clink"); kick("clink");
       if (carabiner.a === next && carabiner.b === next) {
         patch({ carabiner, cableStep: next });
-        sfx("step");
+        sfx("step"); sfx("grip"); kick("pull", 1.1); reach(CABLE_ANCHORS[Math.min(next, CABLE_ANCHORS.length - 1)], "grip");
         spend(8, 0);
         if (next === CABLE_ANCHORS.length) say("最后一个锚点。上面是裂缝。");
         else say(["钢缆比看起来更凉。", "一步一步。风从右边来。", "越往上，人越小。"][next - 1] ?? "");
@@ -579,12 +624,12 @@ export default function App() {
   const grabHold = (index: number) => {
     const hold = CRACK_HOLDS[index];
     if (hold.order === null) {
-      sfx("slip"); patch((current) => ({ slips: current.slips + 1 })); recover(3600); spend(2);
+      reach(hold, "grip"); sfx("slip"); kick("slip", 0.9); patch((current) => ({ slips: current.slips + 1 })); recover(3600); spend(2);
       flash(index === 4 ? "石片松了，掉下去很久才听见响。" : "浅槽里全是草，抓不住。");
       return;
     }
     if (hold.order !== flags.crackStep) { flash(hold.order < flags.crackStep ? "已经过了这一步" : "重心还没过去。先找下一个点"); return; }
-    sfx("step"); patch({ crackStep: flags.crackStep + 1 }); spend(6);
+    reach(hold, "grip", true); sfx("grip"); schedule(() => { sfx("step"); kick("pull", 1.2); }, 420); patch({ crackStep: flags.crackStep + 1 }); spend(6);
     say(["左脚先站稳。", "右手抠住裂缝边缘。粗糙，扎手，但很牢。", "左手石突。重心移过去。", "右脚踩进裂缝。上面又有钢缆了。"][hold.order]);
   };
 
@@ -634,8 +679,9 @@ export default function App() {
 
   const takeScreeStep = (safe: boolean) => {
     if (flags.screeStep >= SCREE_STEPS.length) return;
-    if (!safe) { sfx("slip"); patch((current) => ({ slips: current.slips + 1 })); recover(3200); flash("石头从脚下滑走，一直滚到看不见。"); spend(4); return; }
-    sfx("step"); const next = flags.screeStep + 1; patch({ screeStep: next }); spend(11, 0);
+    if (!safe) { sfx("slip"); sfx("slide"); kick("slip"); patch((current) => ({ slips: current.slips + 1 })); recover(3200); flash("石头从脚下滑走，一直滚到看不见。"); spend(4); return; }
+    sfx("step"); sfx("thud"); kick("land"); setDust((value) => value + 1); schedule(() => sfx("slide"), 90);
+    const next = flags.screeStep + 1; patch({ screeStep: next }); spend(11, 0);
     if (next === 2) say("云在离我而去。");
     if (next === 4) say("最后的夕阳也在离我而去。我一直盯着脚下。");
     if (next === SCREE_STEPS.length) say("坡底了。林线就在前面。");
@@ -659,7 +705,8 @@ export default function App() {
 
   const shout = () => {
     if (node !== "forest1" && node !== "forest2") return;
-    sfx("breath"); setFear((value) => Math.max(0.12, value - 0.4));
+    sfx("breath"); kick("shout"); setShouting(true); schedule(() => setShouting(false), 380);
+    setFear((value) => Math.max(0.12, value - 0.4));
     flash(["呼——", "哈！", "走！", "啊——"][Math.floor(Math.random() * 4)]);
   };
   const forestStep = node === "forest1" ? flags.forestStep1 : flags.forestStep2;
@@ -668,6 +715,8 @@ export default function App() {
     if (holdRef.current || (node !== "forest1" && node !== "forest2")) return;
     const start = performance.now();
     const required = CLIMB_HOLD_MS * (1 + fear * 0.9);
+    reach(FOREST_STEPS[node][node === "forest1" ? flags.forestStep1 : flags.forestStep2] ?? { yaw: 0, pitch: -6 }, "grip", true);
+    sfx("grip");
     const loop = () => {
       const progress = Math.min(1, (performance.now() - start) / required);
       setClimbHold(progress);
@@ -682,14 +731,14 @@ export default function App() {
     if (!holdRef.current) return;
     cancelAnimationFrame(holdRef.current.raf);
     holdRef.current = null;
-    if (climbHold > 0.05 && climbHold < 1) { flash("手松了。再来。"); setFear((value) => Math.min(1, value + 0.08)); }
+    if (climbHold > 0.05 && climbHold < 1) { flash("手松了。再来。"); kick("slip", 0.5); sfx("slide"); setFear((value) => Math.min(1, value + 0.08)); }
     setClimbHold(0);
   };
   const completeClimbStep = () => {
     const id = node as "forest1" | "forest2";
     const current = id === "forest1" ? flagsRef.current.forestStep1 : flagsRef.current.forestStep2;
     const next = current + 1;
-    sfx("step"); setFear((value) => Math.min(1, value + 0.16)); spend(9);
+    sfx("step"); sfx("thud"); kick("pull", 1.15); setFear((value) => Math.min(1, value + 0.16)); spend(9);
     if (id === "forest1") patch({ forestStep1: next });
     else patch({ forestStep2: next, phoneLost: flagsRef.current.phoneLost || next >= 3, lostAt: flagsRef.current.lostAt ?? (next >= 3 ? phone.minuteOfDay : null) });
     if (id === "forest2" && next === 3 && !flagsRef.current.phoneLost) {
@@ -709,10 +758,17 @@ export default function App() {
   const wave = () => {
     if (node !== "hairpin" || flags.waved) return;
     if (carState === "first") { flash("第一辆车没有停。"); return; }
-    if (carState === "second") { setCarState("stopped"); patch({ waved: true }); sfx("door"); say("第二辆车停下来了。车窗降下来，一对特别可爱的情侣。"); return; }
+    if (carState === "second") { setCarState("stopped"); patch({ waved: true }); sfx("brake"); schedule(() => sfx("door"), 900); say("第二辆车停下来了。车窗降下来，一对特别可爱的情侣。"); return; }
     flash("路上没有车。");
   };
-  const nextCarLine = () => { if (flags.carLine >= CAR_LINES.length) return; say(CAR_LINES[flags.carLine]); patch({ carLine: flags.carLine + 1 }); sfx("tick"); };
+  const nextCarLine = () => {
+    if (flags.carLine >= CAR_LINES.length) return;
+    const index = flags.carLine;
+    say(CAR_LINES[index]); patch({ carLine: index + 1 });
+    if (index === 0) { sfx("door"); kick("jolt", 1.2); schedule(() => kick("settle", 0.8), 600); }
+    else if (index === CAR_LINES.length - 1) { sfx("brake"); kick("brake", 1.1); setBraking(true); schedule(() => setBraking(false), 900); schedule(() => sfx("door"), 1400); }
+    else { sfx("tick"); kick("jolt", 0.5); }
+  };
 
   const searchSpot = (index: number) => {
     if (flags.searched.includes(index)) return;
@@ -787,7 +843,7 @@ export default function App() {
   /* ---------- flow ---------- */
   const resetRuntime = () => {
     clearTimers();
-    setOverlay("none"); setPhoneOpen(false); setMenuOpen(false); setFear(0); setCallStep(0); setCarState("none"); setCreditLine(0); setClimbHold(0); setWalking(false); setWalkProgress(0);
+    setOverlay("none"); setPhoneOpen(false); setMenuOpen(false); setFear(0); setCallStep(0); setCarState("none"); setCreditLine(0); setClimbHold(0); setWalking(false); setRunning(false); setWalkProgress(0); setHand(null); setDust(0); setShouting(false); setBraking(false);
     if (holdRef.current) { cancelAnimationFrame(holdRef.current.raf); holdRef.current = null; }
   };
   const begin = () => {
@@ -882,12 +938,16 @@ export default function App() {
   const holdActive = holdRef.current !== null;
 
   return (
-    <main className={`game-shell node-${node} scene-light-${info.light} ${walking ? "is-moving" : ""} ${settings.motion ? "" : "reduce-motion"} breath-${breath} ${overlay !== "none" && overlay !== "selfie" ? "overlay-open" : ""} ${phoneOpen ? "phone-open" : ""}`}>
-      <PanoStage asset={info.asset} light={info.light} look={look} walking={walking} progress={walkProgress} breath={breath} anchorLayerRef={anchorLayerRef} reduceMotion={!settings.motion} onReady={onCanvasReady} />
+    <main className={`game-shell node-${node} scene-light-${info.light} body-${bodyMode} ${walking ? "is-moving" : ""} ${walking && running ? "is-running" : ""} ${shouting ? "shouting" : ""} ${braking ? "car-braking" : ""} ${settings.motion ? "" : "reduce-motion"} breath-${breath} ${overlay !== "none" && overlay !== "selfie" ? "overlay-open" : ""} ${phoneOpen ? "phone-open" : ""}`}>
+      <PanoStage asset={info.asset} light={info.light} look={look} walking={walking} progress={walkProgress} breath={breath} mode={bodyMode} tension={fear} handleRef={stageRef} anchorLayerRef={anchorLayerRef} reduceMotion={!settings.motion} onReady={onCanvasReady} />
       <div className="cinema-grade" />
       <div className="film-grain" />
       <div className="scene-blink" key={`blink-${node}`} />
       {node === "scree" && <div className="dusk-fall" style={{ opacity: dusk }} />}
+      {MOTES[node] && <div className={`motes ${MOTES[node]}`} aria-hidden="true">{MOTE_SPOTS.map((spot, index) => <i key={index} style={{ "--x": `${spot.x}%`, "--y": `${spot.y}%`, "--dur": `${spot.dur}s`, "--delay": `${spot.delay}s` } as React.CSSProperties} />)}</div>}
+      {node === "car" && <div className="car-sweep" aria-hidden="true"><i /><i /></div>}
+      {(node === "forest1" || node === "forest2") && <div className="fear-vignette" aria-hidden="true" style={{ "--beat": `${beatPeriod}ms`, "--beat-strength": (0.15 + fear * 0.55).toFixed(2) } as React.CSSProperties} />}
+      {dust > 0 && <div key={dust} className="dust-puff" aria-hidden="true" onAnimationEnd={() => setDust(0)} />}
       {night && <div className={`night-darkness ${node === "forestEdge" ? "faint" : node === "hairpin" ? `road ${carState !== "none" ? "lit" : ""}` : ""}`} style={{ "--beam-x": `${(look.x + 1) * 50}%`, "--beam-y": `${(look.y + 1) * 50}%` } as React.CSSProperties} />}
       {info.chapter && chapterShown && (
         <div className="chapter-card" key={`chapter-${node}`} aria-hidden="true">
@@ -908,6 +968,9 @@ export default function App() {
       </div>
 
       <div className="anchor-layer" ref={anchorLayerRef}>
+        {hand && (
+          <img key={hand.key} className={`hand-reach ${hand.kind} ${hand.hold ? "hold" : ""}`} {...propProps({ yaw: hand.anchor.yaw, pitch: hand.anchor.pitch, distance: 8 })} src={`${import.meta.env.BASE_URL}sprites/hand-${hand.kind}.webp`} alt="" draggable={false} onAnimationEnd={() => setHand((current) => current && current.key === hand.key ? null : current)} />
+        )}
         {ready && info.go && info.next && !walking && (
           <button className="hotspot go-hotspot" {...anchorProps(info.go, 24)} {...act(walkOn)} aria-label="继续往前"><span /><em>{node === "hutView" ? "下撤" : node === "car" ? "到酒店了" : node === "hotel" ? "第三天" : node === "police" ? "到长椅上等车" : "往前"}</em></button>
         )}

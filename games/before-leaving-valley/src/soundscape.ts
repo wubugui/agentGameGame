@@ -344,4 +344,42 @@ export class Soundscape {
     this.tone(120, 50, 0.16, 0.05);
     this.noiseBurst(0.06, 0.03, "lowpass", 600);
   }
+
+  /* A body landing: a foot on scree, the car dropping into a pothole. */
+  thud(strength = 1) {
+    if (this.ctx.state !== "running") return;
+    this.tone(58 + Math.random() * 8, 30, 0.22, 0.05 * strength);
+    this.noiseBurst(0.07, 0.022 * strength, "lowpass", 420);
+  }
+
+  /* Stones sliding away under a foot. */
+  slide() {
+    if (this.ctx.state !== "running") return;
+    this.noiseBurst(0.34, 0.03, "bandpass", 2600, 0.7);
+    this.noiseBurst(0.22, 0.02, "bandpass", 3600, 1, 0.16);
+    this.noiseBurst(0.18, 0.012, "bandpass", 1800, 1, 0.3);
+  }
+
+  /* Brakes: a soft hiss and the body pressing forward. */
+  brake() {
+    if (this.ctx.state !== "running") return;
+    this.noiseBurst(0.55, 0.026, "bandpass", 2400, 2.2);
+    this.tone(190, 120, 0.45, 0.012, "sine");
+    this.tone(64, 40, 0.3, 0.03, "triangle", 0.05);
+  }
+
+  /* Two beats of a heart; louder and tighter as fear rises. */
+  heartbeat(intensity = 0.5) {
+    if (this.ctx.state !== "running") return;
+    const gain = 0.03 + 0.05 * intensity;
+    this.tone(54, 38, 0.14, gain, "sine");
+    this.tone(50, 34, 0.12, gain * 0.7, "sine", 0.16);
+  }
+
+  /* A gloved hand closing on rock. */
+  grip() {
+    if (this.ctx.state !== "running") return;
+    this.noiseBurst(0.05, 0.02, "bandpass", 1600, 1.4);
+    this.noiseBurst(0.09, 0.014, "highpass", 2800, 1, 0.03);
+  }
 }

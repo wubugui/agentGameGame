@@ -14,6 +14,8 @@ if (!scene || !out) {
 const base = process.env.BLV_URL || "http://localhost:5174/agentGameGame/games/before-leaving-valley/";
 const chrome = [process.env.CHROME, "C:/Program Files/Google/Chrome/Application/chrome.exe", "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", "/usr/bin/google-chrome"].filter(Boolean).find((path) => existsSync(path));
 const port = 9800 + Math.floor(Math.random() * 500);
+// A hard deadline so a wedged Chrome never hangs a batch.
+setTimeout(() => { try { proc.kill(); } catch {} process.exit(3); }, 70000).unref();
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const proc = spawn(chrome, ["--headless=new", `--remote-debugging-port=${port}`, "--no-first-run", "--window-size=1280,720", `--user-data-dir=${join(tmpdir(), `blv-shot-profile-${port}`)}`, "--use-gl=angle", "--use-angle=swiftshader", "about:blank"], { stdio: "ignore" });
 
@@ -34,6 +36,8 @@ try {
   const { result: { sessionId } } = await send("Target.attachToTarget", { targetId, flatten: true });
   await send("Page.enable", {}, sessionId);
   await send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false }, sessionId);
+  // Headless Chrome reports prefers-reduced-motion: reduce, which collapses every animation; emulate a normal viewer.
+  await send("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "no-preference" }] }, sessionId);
   await send("Page.navigate", { url: `${base}?node=${scene}` }, sessionId);
   await sleep(4500);
   if (prelude) await send("Runtime.evaluate", { expression: prelude, awaitPromise: true }, sessionId);

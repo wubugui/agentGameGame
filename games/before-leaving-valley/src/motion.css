@@ -1,0 +1,59 @@
+/* Body feedback: hands, footfalls, the car, the heart, the air. */
+
+/* Her hand reaching for whatever was just grabbed. Positioned by the renderer through `transform`;
+   the reach itself uses the separate translate/scale properties so both compose. */
+.hand-reach { width:min(36vh,300px); pointer-events:none; z-index:14; transform-origin:50% 100%; translate:0 60vh; scale:1.5; opacity:0; animation:handReach .95s cubic-bezier(.2,.75,.25,1) both; filter:drop-shadow(0 8px 18px rgba(0,0,0,.35)); }
+.hand-reach.carabiner { width:min(30vh,240px); }
+@keyframes handReach {
+  0% { translate:0 60vh; scale:1.5; opacity:0; }
+  18% { opacity:1; }
+  55% { translate:0 40%; scale:1; opacity:1; }
+  78% { translate:0 38%; scale:.98; opacity:1; }
+  100% { translate:0 48%; scale:1.1; opacity:0; }
+}
+.hand-reach.hold { animation:handHold 1.6s cubic-bezier(.2,.75,.25,1) both; }
+@keyframes handHold {
+  0% { translate:0 60vh; scale:1.5; opacity:0; }
+  25% { translate:0 39%; scale:1; opacity:1; }
+  85% { translate:0 38%; scale:.99; opacity:1; }
+  100% { translate:0 46%; scale:1.05; opacity:0; }
+}
+.reduce-motion .hand-reach { animation-duration:.5s; }
+
+/* Movement blur and the tunnel of a run. */
+.pano-canvas { transition:filter .35s ease; }
+.is-moving .pano-canvas { filter:blur(1.1px); }
+.is-running .pano-canvas { filter:blur(1.6px) saturate(1.05); }
+.is-running::after { content:""; position:absolute; z-index:4; inset:0; pointer-events:none; background:radial-gradient(ellipse at center,transparent 44%,rgba(6,11,12,.32)); animation:runShade .22s ease-in-out infinite alternate; }
+@keyframes runShade { to { opacity:.5; } }
+
+/* Dust kicked up when a foot lands on scree. */
+.dust-puff { position:absolute; z-index:11; width:22vw; height:12vh; left:50%; bottom:6vh; translate:-50% 0; pointer-events:none; background:radial-gradient(ellipse at 50% 100%,rgba(232,220,196,.55),rgba(232,220,196,0) 70%); animation:dustPuff 1.3s ease-out both; }
+@keyframes dustPuff { 0% { opacity:0; scale:.5 1; } 15% { opacity:1; } 100% { opacity:0; scale:1.8 1.4; translate:-50% -10vh; } }
+
+/* The heart at night: a vignette that beats with the fear meter. */
+.fear-vignette { position:absolute; inset:0; z-index:9; pointer-events:none; background:radial-gradient(ellipse at center,transparent 50%,rgba(60,8,8,.35) 100%); opacity:0; animation:heartbeat var(--beat,1000ms) ease-in-out infinite; }
+@keyframes heartbeat { 0%,100% { opacity:0; } 10% { opacity:var(--beat-strength,.5); } 22% { opacity:.05; } 32% { opacity:calc(var(--beat-strength,.5) * .6); } 50% { opacity:0; } }
+/* A shout: the fill light flares and the cone widens for a moment. */
+.night-darkness { transition:background-size .3s ease, filter .3s ease; }
+.shouting .night-darkness { filter:brightness(1.35); }
+
+/* Inside the car: headlights of oncoming cars sweep across, the wipers' rhythm on wet glass. */
+.car-sweep { position:absolute; inset:0; z-index:7; pointer-events:none; overflow:hidden; }
+.car-sweep i { position:absolute; top:-10%; bottom:-10%; width:26vw; left:-30vw; background:linear-gradient(90deg,rgba(255,240,210,0),rgba(255,240,210,.22) 45%,rgba(255,240,210,0)); filter:blur(14px); animation:carSweep 7.5s linear infinite; }
+.car-sweep i:nth-child(2) { animation-delay:3.4s; animation-duration:9s; width:18vw; }
+@keyframes carSweep { 0%,62% { left:-30vw; opacity:0; } 66% { opacity:1; } 80% { left:120vw; opacity:1; } 81%,100% { left:120vw; opacity:0; } }
+.car-braking .cinema-grade { transition:background .2s ease; }
+
+/* Motes: pollen in the meadow light, dust on the plateau, fireflies at the forest edge. */
+.motes { position:absolute; inset:0; z-index:6; pointer-events:none; overflow:hidden; }
+.motes i { position:absolute; width:5px; height:5px; border-radius:50%; background:rgba(255,246,220,.7); box-shadow:0 0 10px rgba(255,246,220,.6); opacity:0; animation:moteDrift var(--dur,14s) linear infinite; animation-delay:var(--delay,0s); left:var(--x,50%); top:var(--y,50%); }
+.motes.night i { background:rgba(214,255,170,.85); box-shadow:0 0 12px rgba(190,255,140,.8); animation-name:fireflyDrift; }
+.motes.dust i { width:3px; height:3px; background:rgba(240,236,226,.6); box-shadow:none; }
+@keyframes moteDrift { 0% { opacity:0; translate:0 0; } 15% { opacity:.9; } 50% { translate:6vw -8vh; } 85% { opacity:.7; } 100% { opacity:0; translate:12vw -16vh; } }
+@keyframes fireflyDrift { 0%,100% { opacity:0; translate:0 0; } 20% { opacity:1; } 35% { opacity:.2; } 50% { opacity:.9; translate:3vw -3vh; } 70% { opacity:.1; } 85% { opacity:.8; translate:-2vw -6vh; } }
+.reduce-motion .motes, .reduce-motion .car-sweep, .reduce-motion .dust-puff { display:none; }
+
+/* Wind: a gust bends the whisper text and the caption a hair. */
+.gusting .thought-line { animation:gustLean 1.6s ease-in-out; }
+@keyframes gustLean { 0%,100% { translate:0 0; } 40% { translate:6px 0; } }
