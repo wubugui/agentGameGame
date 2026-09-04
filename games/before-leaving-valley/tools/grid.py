@@ -36,7 +36,7 @@ for m in markers:
     col = COLORS.get(m.get("kind", "interact"), (255, 255, 255))
     size = m.get("sizeVh"); dist = m.get("distance") or 10
     if size:
-        hpx = H * (size / 100.0) * (60.0 / 84.0) * (10.0 / dist); wpx = hpx * 0.8
+        hpx = H * (size / 100.0) * (60.0 / 84.0); wpx = hpx * 0.8; dist = dist
     else:
         hpx = wpx = 22
     d.rectangle([x - wpx / 2, y - hpx / 2, x + wpx / 2, y + hpx / 2], outline=col + (255,), width=2)

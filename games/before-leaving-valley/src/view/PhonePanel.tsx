@@ -21,7 +21,7 @@ export function PhonePanel() {
   return (
     <Phone
       tab={tab}
-      setTab={(next) => world.patch("ui", { phoneTab: next })}
+      setTab={(next) => { world.patch("ui", { phoneTab: next }); world.dispatch({ type: "ui:action", id: "phone:tab", value: next }); }}
       close={() => world.dispatch({ type: "phone:close" })}
       phone={phone}
       dispatch={(action) => phoneDispatch(world, action)}
@@ -33,7 +33,7 @@ export function PhonePanel() {
       cameraZoom={camera.zoom}
       setCameraZoom={(zoom) => world.patch("camera", { zoom })}
       takePhoto={(snapshot) => world.dispatch({ type: "phone:shoot", snapshot })}
-      requestReply={(contactId, kind) => world.dispatch({ type: "phone:send", contact: contactId, text: kind === "text" ? undefined : undefined })}
+      requestReply={(contactId, kind) => world.dispatch({ type: "phone:send", contact: contactId, kind })}
       letterTranslated={translated}
       translatedLines={translatedLines}
       onTranslate={sceneId === "bench" ? () => world.dispatch({ type: "ui:action", id: "bench:translate" }) : undefined}

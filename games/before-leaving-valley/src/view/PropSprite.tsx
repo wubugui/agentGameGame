@@ -6,7 +6,7 @@ export function PropSprite({ view }: { view: EntityView }) {
   const height = view.sprite.sizeVh ? `${view.sprite.sizeVh * (view.transform.distance ?? 10) / 10}vh` : undefined;
   return (
     <span className={`prop-item ${view.sprite.className} ${view.className ?? ""}`} data-yaw={view.transform.yaw} data-pitch={view.transform.pitch} data-distance={view.transform.distance ?? 10} data-entity={view.id} aria-hidden="true" style={height ? { height } : undefined}>
-      <img src={`${import.meta.env.BASE_URL}${view.sprite.src}`} alt="" draggable={false} style={height ? { height } : undefined} />
+      <img src={`${import.meta.env.BASE_URL}${view.sprite.src}`} alt="" draggable={false} onError={(event) => { event.currentTarget.style.visibility = "hidden"; }} style={height ? { height } : undefined} />
     </span>
   );
 }

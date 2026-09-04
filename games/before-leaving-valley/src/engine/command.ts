@@ -15,7 +15,7 @@ export type Command =
   | { type: "lamp:mode"; mode: "wide" | "narrow" }
   | { type: "phone:open"; tab?: PhoneTab } | { type: "phone:close" }
   | { type: "phone:shoot"; snapshot?: string }
-  | { type: "phone:send"; contact: ContactId; text?: string; photoId?: string }
+  | { type: "phone:send"; contact: ContactId; text?: string; photoId?: string; kind?: "text" | "photo" }
   | { type: "overlay:open"; id: OverlayId; data?: Record<string, FlagValue> } | { type: "overlay:close" }
   | { type: "ui:action"; id: string; value?: FlagValue }
   | { type: "shout" } | { type: "growl:start" } | { type: "growl:end" }

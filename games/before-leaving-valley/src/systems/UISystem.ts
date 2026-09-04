@@ -34,16 +34,21 @@ export const UISystem: System = {
       world.emit("clock:advance", { minutes: 1, reason: "拍照" });
       world.emit("power:drain", { source: "phone", value: 1, reason: "拍照" });
     }));
-    offs.push(world.handle("phone:send", ({ contact, text, photoId }) => {
+    offs.push(world.handle("phone:send", ({ contact, text, photoId, kind }) => {
       if (photoId) phoneDispatch(world, { type: "send_photo", contactId: contact, photoId, text });
       else if (text) phoneDispatch(world, { type: "send_message", contactId: contact, text });
+      const replyKind = kind ?? (photoId ? "photo" : "text");
+      world.setFlag(`summit.sent.${contact}`, true);
       phoneDispatch(world, { type: "set_typing", contactId: contact, value: true });
-      const reply = REPLIES[contact][photoId ? "photo" : "text"];
-      world.after(photoId ? 1850 : 1350, () => { phoneDispatch(world, { type: "set_typing", contactId: contact, value: false }); phoneDispatch(world, { type: "receive_message", contactId: contact, text: reply }); });
+      const reply = REPLIES[contact][replyKind];
+      world.after(replyKind === "photo" ? 1850 : 1350, () => { phoneDispatch(world, { type: "set_typing", contactId: contact, value: false }); phoneDispatch(world, { type: "receive_message", contactId: contact, text: reply }); });
     }));
     offs.push(world.handle("menu", ({ open }) => { world.patch("ui", { menuOpen: open }); }));
     offs.push(world.handle("settings", ({ patch }) => { const next = { ...world.state.settings, ...patch }; saveSettings(next); world.set("settings", next); }));
-    offs.push(world.handle("ui:action", ({ id, value }) => { world.emit("ui:action", { id, value }); }));
+    offs.push(world.handle("ui:action", ({ id, value }) => {
+      if (id === "phone:tab" && value === "conversation" && !world.state.journal.entries.includes("E-coach")) world.emit("journal:entry", { entry: "E-coach", source: null });
+      world.emit("ui:action", { id, value });
+    }));
     offs.push(world.handle("shout", () => {
       if (!["forestEdge", "forest1", "forest2"].includes(world.state.sceneId)) return;
       if (world.rt.now - Number(world.flag("shout.at", -99999)) < 4000) return;

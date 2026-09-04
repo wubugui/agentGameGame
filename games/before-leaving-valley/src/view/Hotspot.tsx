@@ -36,7 +36,7 @@ export function Hotspot({ view }: { view: EntityView }) {
   };
   return (
     <button ref={ref} className={className} data-yaw={view.transform.yaw} data-pitch={view.transform.pitch} data-distance={view.transform.distance ?? 10} data-reveal={view.reveal || 0} data-entity={view.id} aria-label={view.label} {...holdHandlers}>
-      {view.sprite && <img className="hotspot-sprite" src={`${import.meta.env.BASE_URL}${view.sprite.src}`} alt="" draggable={false} style={view.sprite.sizeVh ? { height: `${view.sprite.sizeVh * (view.transform.distance ?? 10) / 10}vh` } : undefined} />}
+      {view.sprite && <img className="hotspot-sprite" src={`${import.meta.env.BASE_URL}${view.sprite.src}`} alt="" draggable={false} onError={(event) => { event.currentTarget.style.visibility = "hidden"; }} style={view.sprite.sizeVh ? { height: `${view.sprite.sizeVh * (view.transform.distance ?? 10) / 10}vh` } : undefined} />}
       <span />
       {view.label && <em>{view.label}{view.keyHint ? ` · ${view.keyHint}` : ""}</em>}
     </button>

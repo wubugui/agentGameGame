@@ -38,7 +38,7 @@ export const JournalSystem: System = {
         world.setFlag("map.legsChecked", Object.keys(world.state.journal.mapLegs).length);
       }
       if (id === "map:objective" && typeof value === "string") { world.patch("journal", { objective: value }); world.emit("journal:objective", { text: value }); world.emit("sfx", { name: "pencil" }); }
-      world.emit("ui:action", { id, value });
+      // UISystem re-emits every ui:action as an event; emitting here too would fire scene handlers twice.
     }));
     return () => offs.forEach((off) => off());
   },
