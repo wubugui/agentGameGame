@@ -1,7 +1,20 @@
-/* The Pössnecker start: four plates on the rock, the cloth spread for the gear, the first cable. */
-import { all, has, knows, not, worn } from "../engine/condition";
+/* The Pössnecker start, 10:25. Four plates on the wall to the right (three bronze, one white sheet under glass),
+   an older plate below them with its lettering gone, the first cable running up from the lower ring anchor past
+   the plates to the two pegs where it goes over the edge, the gear on the gravel at her feet, the red paint on
+   the pale rock below the cable, and the pass far behind her on the left.
+   Coordinates read off the 150°×84° grid of 03-plaque (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84). */
+import { all, flag, not, worn } from "../engine/condition";
 import { defineScene } from "../engine/scene";
+import type { EntityId, Transform } from "../engine/types";
 import { blaze, goArrow, prop, readable } from "./_shared";
+
+const BLUE = "plaque.blue", ORANGE = "plaque.orange", CLIPPED = "plaque.clipped";
+const ANCHOR: Transform = { yaw: 13, pitch: -14 };                // the lower ring anchor the cable starts from (752, 482)
+const CABLE_GO: Transform = { yaw: 23, pitch: 7 };                // on the cable between the orange carabiner and the upper ring (836, 300)
+const CABLE_TOP: Transform = { yaw: 17, pitch: 20 };              // the two pegs where the cable goes over the edge (770–803, 165–193)
+const PASS: Transform = { yaw: -58, pitch: 3, distance: 30 };     // the meadow and the pass, far left behind her (145, 334)
+const GEAR: Transform = { yaw: -22, pitch: -33 };                 // the gravel and white stones at her feet (452, 643)
+const dressed = all(worn("helmet"), worn("lanyard"));
 
 export default defineScene({
   id: "plaque",
@@ -12,38 +25,210 @@ export default defineScene({
   weather: { gusty: false },
   arriveAt: 10 * 60 + 25,
   fallback: "从这里开始，就是天然岩壁了。",
+  // v4 §8: helmet && clipped. Clipping needs the lanyard, the lanyard needs the helmet; the helmet has to stay on.
+  exitWhen: all(worn("helmet"), flag(CLIPPED)),
   entities: [
-    readable("plate-name", { yaw: 14, pitch: 8 }, "铜牌", { kind: "plaque", title: "VIA FERRATA PÖSSNECKER", lines: ["Via ferrata Pössnecker", "Sez. Pössneck del D.u.Ö.A.V. · 1912", "Piz Selva 2941 m"], entry: "E-possnecker", minutes: 1 }),
-    readable("plate-grade", { yaw: 20, pitch: 4 }, "第二块牌子", { kind: "plaque", title: "Difficoltà", lines: ["Difficoltà: C / D", "Tratto in fessura: II grado UIAA, non attrezzato", "Tenere sempre almeno un moschettone agganciato al cavo"], entry: "E-carabinerRule", minutes: 1 }),
-    readable("plate-route", { yaw: 24, pitch: 10 }, "路线图", { kind: "plaque", title: "Schizzo", lines: ["起点 2,340 m → 出口 2,860 m → Piz Selva 2,941 m", "在路线图的尽头画着一个小小的十字架"], entry: "E-summit", minutes: 1 }),
-    readable("plate-hut", { yaw: 22, pitch: -3 }, "玻璃下的告示", { kind: "note", title: "Rifugio Boè", lines: ["Rifugio Boè 2871 m · punto di appoggio", "Ricarica · pasti caldi · pernottamento", "Dal Piz Selva: 2 h 30"], entry: "E-hutTime", minutes: 1 }),
-    prop("gear-cloth", { yaw: -18, pitch: -13, distance: 9 }, "sprites/gear.webp", 15, { visible: not(all(worn("helmet"), worn("lanyard"))), interactable: { verbs: ["use"], label: "背包", reveal: 12 } }),
-    prop("cable-start", { yaw: 18, pitch: 5, distance: 9 }, "sprites/carabiner-pair.webp", 10, {
-      interactable: { verbs: ["clip"], label: "钢缆起点", reveal: 12, cost: { minutes: 1 }, requires: all(worn("helmet"), worn("lanyard")) },
-      visible: not({ kind: "flag", key: "plaque.clipped" }),
+    // The four plates (v4 §6): ① name and 1912, ② grade and the rule, ③ the sketch and 2941 m, ④ the white sheet under glass.
+    readable("plate-name", { yaw: 33, pitch: 11 }, "铜牌", {                       // top-left bronze plate with the badge (918, 263)
+      kind: "plaque", title: "VIA FERRATA PÖSSNECKER",
+      lines: ["Via ferrata Pössnecker", "Sez. Pössneck del D.u.Ö.A.V. · 1912", "Piz Selva 2941 m"],
+      entry: "E-possnecker", minutes: 1,
     }),
-    blaze("blaze-plaque", { yaw: -24, pitch: -8 }, true),
-    { id: "compare-note", transform: { yaw: 21, pitch: 0 }, interactable: { verbs: ["inspect"], label: "和备忘录对一眼", reveal: 12, cost: { minutes: 0.3 }, once: true }, visible: all(knows("E-grade"), knows("E-coach")) },
-    goArrow("go", { yaw: 18, pitch: 10 }, { to: "cable", minutes: 5, label: "上墙", kind: "walk" }),
+    readable("plate-grade", { yaw: 41, pitch: 11 }, "第二块牌子", {                 // top-right bronze plate, the wide one (990, 265)
+      kind: "plaque", title: "Difficoltà",
+      lines: ["Difficoltà: C / D", "Tratto in fessura: II grado UIAA, non attrezzato", "Tenere sempre almeno un moschettone agganciato al cavo"],
+      entry: "E-carabinerRule", minutes: 1,
+    }),
+    readable("plate-route", { yaw: 33, pitch: 7 }, "路线图", {                     // bronze plate under ① (918, 300)
+      kind: "plaque", title: "Schizzo",
+      lines: ["一条刻出来的线：钢缆、裂缝、出口", "线的尽头：Piz Selva 2941 m", "旁边刻着一个小小的十字架"],
+      entry: "E-summit", minutes: 1,
+    }),
+    readable("plate-hut", { yaw: 38, pitch: 1.5 }, "玻璃下的告示", {               // the white sheet under glass (963, 347)
+      kind: "note", title: "Rifugio Boè",
+      lines: ["Rifugio Boè · punto di appoggio", "Ricarica · pasti caldi · pernottamento", "Dall'altopiano: 2 h 30"],
+      entry: "E-hutTime", minutes: 1,
+    }),
+    // The fifth plate, lower and alone: two bolts and a streak of rust, the lettering worn flat. Scenery only.
+    { id: "plate-old", transform: { yaw: 26, pitch: 0 },                             // (862, 363)
+      interactable: { verbs: ["inspect"], label: "旧牌子", reveal: 12, cost: { minutes: 0 } } },
+    // The lower anchor: where the cable starts. She can take hold of it and pull — the cable answers, nothing more.
+    { id: "anchor-start", transform: ANCHOR, className: "hold-hotspot",
+      interactable: { verbs: ["hold"], label: "钢缆起点", reveal: 13, cost: { minutes: 0.5 } },
+      hold: { ms: 500, scaleWith: ["fatigue"] } },
+    // The two carabiners, hanging on the cable above the anchor. They only appear once helmet and lanyard are on (v4 §4: she would not go to clip otherwise).
+    { id: "carabiner-blue", transform: { yaw: 15, pitch: -10.5 },                    // on the cable just above the ring (768, 450)
+      sprite: { src: "sprites/carabiner-blue.webp", layer: "hand", sizeVh: 6 }, className: "carabiner-hotspot",
+      interactable: { verbs: ["clip"], label: "蓝锁", reveal: 14, cost: { minutes: 0.5 }, requires: dressed }, visible: dressed, enabled: not(flag(BLUE)) },
+    { id: "carabiner-orange", transform: { yaw: 19, pitch: -2.5 },                   // on the cable halfway to the plates (802, 381)
+      sprite: { src: "sprites/carabiner-orange.webp", layer: "hand", sizeVh: 6 }, className: "carabiner-hotspot",
+      interactable: { verbs: ["clip"], label: "橙锁", reveal: 14, cost: { minutes: 0.5 }, requires: dressed }, visible: dressed, enabled: not(flag(ORANGE)) },
+    // The gear on the gravel at her feet. Opens the cloth; gone from the ground once helmet and lanyard are on her.
+    prop("gear-cloth", GEAR, "sprites/gear.webp", 16, {
+      interactable: { verbs: ["use"], label: "装备", reveal: 14, cost: { minutes: 0 } },
+      visible: not(dressed),
+    }),
+    // Two candidate marks: the red paint on the pale rock below the cable, and the green lichen on the face right of the gully.
+    blaze("blaze-plaque", { yaw: 4, pitch: -33 }, true),                             // the orange-red paint (677, 645)
+    blaze("lichen-plaque", { yaw: 5.5, pitch: 13.5 }, false),                        // the green patch on the slab (687, 243)
+    // Where the cable goes over the edge, and the pass behind her. Looking is free (gaze); a 360 shot costs a minute, or three from the pack.
+    { id: "cable-up", transform: { ...CABLE_TOP, distance: 14 }, interactable: { verbs: ["photograph"], label: "往上的钢缆", reveal: 14, cost: { minutes: 1 } }, gaze: { radius: 12, dwell: 900 } },
+    { id: "pass-view", transform: PASS, interactable: { verbs: ["photograph"], label: "山口草甸", reveal: 14, cost: { minutes: 1 } }, gaze: { radius: 12, dwell: 900 } },
+    goArrow("go", CABLE_GO, { to: "cable", minutes: 5, label: "上墙", kind: "walk" }),
   ],
-  exitWhen: { kind: "flag", key: "plaque.clipped" },
-  seed: (w) => { w.patch("inventory", { worn: Array.from(new Set([...w.state.inventory.worn, "helmet", "lanyard", "gloves"])) as typeof w.state.inventory.worn }); w.setFlag("plaque.clipped", true); w.setFlag("plaque.certain", true); },
+  seed: (w) => {
+    w.patch("inventory", { worn: Array.from(new Set([...w.state.inventory.worn, "helmet", "lanyard", "gloves"])) as typeof w.state.inventory.worn });
+    w.setFlag(BLUE, true); w.setFlag(ORANGE, true); w.setFlag(CLIPPED, true); w.setFlag("plaque.certain", true);
+    // What the plates give downstream: the rule for the cable's carabiner panel, the hut leg for the map on the plateau edge.
+    w.patch("journal", {
+      entries: Array.from(new Set([...w.state.journal.entries, "E-carabinerRule", "E-hutTime"])),
+      mapLegs: { ...w.state.journal.mapLegs, toHut: 2.5 },
+    });
+  },
+  walkthrough: [
+    { type: "pack:open" },
+    { type: "pack:equip", item: "helmet" },
+    { type: "pack:equip", item: "lanyard" },
+    { type: "pack:close" },
+    { wait: 300 },
+    { type: "interact", entity: "carabiner-blue", verb: "clip" },
+    { wait: 300 },
+    { type: "interact", entity: "carabiner-orange", verb: "clip" },
+    { wait: 300 },
+    { type: "travel", entity: "go" },
+  ],
+  variants: {
+    // Everything the start offers: gloves and the camera on the strap, the mark, all four plates, the memo beside the grade, the cable in her hand, two shots.
+    thorough: [
+      { type: "pack:open" },
+      { type: "pack:equip", item: "helmet" },
+      { type: "pack:equip", item: "lanyard" },
+      { type: "pack:equip", item: "gloves" },
+      { type: "pack:equip", item: "camera360" },
+      { type: "pack:close" },
+      { type: "interact", entity: "blaze-plaque", verb: "inspect" },
+      { type: "interact", entity: "plate-name", verb: "read" }, { type: "overlay:close" },
+      { type: "interact", entity: "plate-grade", verb: "read" }, { type: "overlay:close" },
+      { type: "interact", entity: "plate-route", verb: "read" }, { type: "overlay:close" },
+      { type: "interact", entity: "plate-hut", verb: "read" }, { type: "overlay:close" },
+      { type: "phone:open", tab: "conversation" }, { type: "ui:action", id: "phone:tab", value: "conversation" }, { type: "phone:close" },
+      { type: "hold:start", entity: "anchor-start" }, { wait: 1200 }, { type: "hold:end" },
+      { type: "interact", entity: "pass-view", verb: "photograph" },
+      { type: "interact", entity: "cable-up", verb: "photograph" },
+      { type: "interact", entity: "carabiner-blue", verb: "clip" },
+      { type: "interact", entity: "carabiner-orange", verb: "clip" },
+      { type: "travel", entity: "go" },
+    ],
+    // The wrong order: lanyard before helmet (her hand comes back), the lichen for a mark, the camera left in the pack.
+    fumble: [
+      { type: "pack:open" },
+      { type: "pack:equip", item: "lanyard" },
+      { type: "pack:equip", item: "helmet" },
+      { type: "pack:equip", item: "lanyard" },
+      { type: "pack:close" },
+      { type: "interact", entity: "lichen-plaque", verb: "inspect" },
+      { type: "interact", entity: "pass-view", verb: "photograph" },
+      { type: "interact", entity: "carabiner-orange", verb: "clip" },
+      { type: "interact", entity: "carabiner-blue", verb: "clip" },
+      { type: "travel", entity: "go" },
+    ],
+  },
   script: (ctx) => {
-    ctx.onInteract("gear-cloth", () => { ctx.open("pack"); });
-    ctx.onInteract("cable-start", () => {
-      ctx.setFlag("plaque.clipped", true);
-      ctx.sfx("clink"); ctx.kick("clink"); ctx.hand(ctx.transformOf("cable-start"), "carabiner");
-      ctx.say("两把锁扣，一蓝一橙，都挂上钢缆。", { tag: "plaque-clip" });
+    const inv = () => ctx.world.state.inventory;
+    const glance = (pitch: number, strength = 0.4) => ctx.kick("glance", strength, { yaw: 0, pitch });
+
+    // Reading a plate: her hand goes to it, the camera dips. The plates themselves say everything; she says nothing.
+    for (const id of ["plate-name", "plate-grade", "plate-route", "plate-hut"]) {
+      ctx.onInteract(id, (verb) => {
+        if (verb !== "read") return;
+        ctx.hand(ctx.transformOf(id)); glance(2, 0.3);
+        if (id === "plate-grade") ctx.learn("E-grade", id);
+        if (id === "plate-hut") ctx.learn("E-hut", id);
+      });
+    }
+    // The old plate: she wipes it, there is nothing left to read.
+    ctx.onInteract("plate-old", () => { ctx.hand(ctx.transformOf("plate-old")); ctx.sfx("cloth", 0.3, 0.5); glance(-1, 0.3); });
+    // The anchor: a hand on the cable, a pull, and the cable answers off the rock. Letting go early is just a hand coming back.
+    ctx.onHold("anchor-start", () => {
+      ctx.hand(ANCHOR, "grip", true); ctx.kick("pull", 0.6); ctx.sfx("clink", 0.2, 0.5);
+      ctx.bump("plaque.pulled", 1);
     });
-    ctx.on("interact:done", ({ entity, verb }) => {
-      if (entity === "plate-grade" && verb === "read") ctx.learn("E-grade");
+    ctx.onRelease("anchor-start", (progress) => { if (progress > 0.2) { ctx.sfx("tock", 0.2, 0.3); glance(-2, 0.3); } });
+
+    // The gear: her hand goes down to it and the cloth opens. Dressing is the pack's business (helmet before lanyard, else her hand comes back — no text).
+    ctx.onInteract("gear-cloth", () => {
+      ctx.hand(GEAR, "grip"); glance(-5, 0.5);
+      ctx.world.dispatch({ type: "pack:open" });
     });
-    ctx.onInteract("compare-note", () => { ctx.say("C 到 D。教练说的是 easy。", { tag: "plaque-compare", priority: 1 }); ctx.world.emit("body:rest", { seconds: 2 }); });
     ctx.on("item:equip", ({ item }) => {
-      if (item === "helmet") ctx.say("白色的头盔。扣好带子。", { tag: "plaque-helmet" });
-      if (item === "lanyard") ctx.sfx("clink");
-      if (item === "gloves") ctx.say("手套。", { tag: "plaque-gloves" });
+      if (ctx.world.state.sceneId !== "plaque") return;
+      if (item === "helmet") { ctx.kick("settle", 0.6); ctx.sfx("tick", 0, 0.5); }
+      if (item === "lanyard") { ctx.hand({ yaw: 0, pitch: -18 }, "carabiner"); ctx.kick("clink", 0.5); }
+      if (item === "gloves") { ctx.hand({ yaw: 4, pitch: -16 }, "grip"); ctx.kick("settle", 0.3); }
+      if (item === "camera360") { ctx.setFlag("plaque.cameraOnStrap", true); ctx.sfx("clink", -0.3, 0.4); ctx.kick("clink", 0.3); }
     });
-    void has;
+
+    // The two carabiners. Each one is a clink and a hand; the second closes the scene's gate.
+    const clip = (which: string, id: EntityId) => {
+      if (ctx.flag(which, false)) return;
+      ctx.setFlag(which, true);
+      ctx.sfx("clink", 0.25); ctx.kick("clink"); ctx.hand(ctx.transformOf(id), "carabiner");
+      if (ctx.flag(BLUE, false) && ctx.flag(ORANGE, false)) {
+        ctx.setFlag(CLIPPED, true);
+        ctx.kick("settle", 0.5);
+        ctx.say("两把锁都在缆上了。", { tag: "plaque-clipped" });
+      }
+    };
+    ctx.onInteract("carabiner-blue", () => clip(BLUE, "carabiner-blue"));
+    ctx.onInteract("carabiner-orange", () => clip(ORANGE, "carabiner-orange"));
+
+    // The marks. The real one is settled by the journal (hand, cloth, the lesson if it is her first); the lichen costs a minute.
+    ctx.on("blaze:confirm", ({ entity, real }) => {
+      if (entity === "blaze-plaque" && real) { glance(-3, 0.5); ctx.sfx("step", 0.1, 0.4); return; }
+      if (entity === "lichen-plaque") { ctx.hand(ctx.transformOf(entity)); glance(2, 0.4); ctx.say("地衣，绿的。", { tag: "plaque-lichen" }); }
+    });
+
+    // Looking up the cable and back at the pass: free, and she only breathes at one of them.
+    ctx.onGaze("cable-up", () => {
+      if (ctx.flag("plaque.lookedUp", false)) return;
+      ctx.setFlag("plaque.lookedUp", true);
+      ctx.sfx("exhale", 0.1, 0.6); glance(3, 0.5);
+    });
+    ctx.onGaze("pass-view", () => {
+      if (ctx.flag("plaque.lookedBack", false)) return;
+      ctx.setFlag("plaque.lookedBack", true);
+      ctx.sfx("breath", -0.5, 0.5); ctx.kick("turn", 0.4, { yaw: -1, pitch: 0 });
+      ctx.say("山口已经在下面了。", { tag: "plaque-back" });
+    });
+    // A 360 shot: one minute with the camera on the strap, three if it has to come out of the pack (v4 §7).
+    const shoot = (id: EntityId) => {
+      if (!inv().hands.includes("camera360")) { ctx.spend({ minutes: 2 }, "从包里翻出相机"); ctx.sfx("zip", 0, 0.6); glance(-6, 0.5); }
+      ctx.spend({ camera: 1 }, "全景相机");
+      ctx.sfx("shutter", id === "pass-view" ? -0.4 : 0.2); ctx.kick("glance", 0.35, { yaw: 0, pitch: id === "cable-up" ? 3 : -1 });
+      ctx.bump("plaque.shots", 1);
+    };
+    ctx.onInteract("cable-up", (verb) => { if (verb === "photograph") shoot("cable-up"); });
+    ctx.onInteract("pass-view", (verb) => { if (verb === "photograph") shoot("pass-view"); });
+
+    // The grade beside the memo: her one hesitation. A line, a breath, twenty seconds. Nothing else happens; she does not turn round.
+    const compare = () => {
+      if (ctx.flag("plaque.compared", false)) return;
+      const entries = ctx.world.state.journal.entries;
+      if (!entries.includes("E-grade") || !entries.includes("E-coach")) return;
+      ctx.setFlag("plaque.compared", true);
+      ctx.spend({ minutes: 0.3 }, "把 C/D 和备忘录并排看了一眼");
+      ctx.world.emit("body:rest", { seconds: 2 });
+      ctx.kick("settle", 0.5); ctx.sfx("exhale", 0, 0.7);
+      ctx.say("C 到 D。教练说的是 easy。", { tag: "plaque-compare", priority: 1 });
+    };
+    ctx.on("journal:entry", ({ entry }) => { if (entry === "E-grade" || entry === "E-coach") compare(); });
+    ctx.onAction("phone:tab", (value) => { if (value === "conversation") compare(); });
+
+    // Standing still under the start: once, the cable ticks against the rock off to the right, and a gust comes down.
+    ctx.onWait(() => {
+      if (ctx.flag("plaque.stillness", false)) return;
+      ctx.setFlag("plaque.stillness", true);
+      ctx.sfx("clink", 0.45, 0.3); ctx.fx("gust", 0.4); ctx.kick("turn", 0.3, { yaw: 1, pitch: 0 });
+    });
   },
 });

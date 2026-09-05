@@ -1,18 +1,188 @@
-/* STUB — replace with the full scene per docs/GAME_DESIGN_v4.md §8 (plateau). */
+/* The Sella plateau, 15:35. A karst sea with no path: pale limestone ribs at her feet, a stepped slab with a small
+   ometto behind it, a big split boulder on the right, snow lying in the hollows, three flat-topped towers on the
+   skyline and a dark cloud bank coming over from the right. Nobody. Four marks on the stones (two are not paint),
+   two ways across, the plateau's lip off to the right, and the twenty seconds the wind stops.
+   Coordinates read off the 150°×84° grid of 09-plateau (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84). */
+import { has } from "../engine/condition";
 import { defineScene } from "../engine/scene";
-import { backArrow, goArrow } from "./_shared";
+import type { Transform } from "../engine/types";
+import { blaze, goArrow, lookAt, prop, windy, wrongWay } from "./_shared";
+
+const CERTAIN = "plateau.certain";
+const ROUTE = "plateau.route";
+const STILL = "plateau.stillness";
+const MARKS = "plateau.marks";
+const SLIP_FATIGUE = 0.45;          // the snow shortcut slides once under tired legs (v4 §7)
+const LOST_MINUTES = 15;            // going by the general direction across the karst (v4 §3.5: plateau = 15)
+const STILL_WAITS = 3;              // 4 s + 8 s + 8 s of standing still = twenty seconds
+const STILL_MS = 19000;             // how long the wind stays down
+
+/* Every candidate mark costs a minute here: there is no path between them, only stone (v4 §6 "各 1 分"). */
+const markCost = { verbs: ["inspect"] as const, label: "石头上的记号", reveal: 12, cost: { minutes: 1 } };
+const mark = (id: string, t: Transform, real: boolean, sprite?: string) =>
+  blaze(id, t, real, { interactable: { ...markCost, verbs: ["inspect"] }, ...(sprite ? { sprite: { src: sprite, layer: "prop" as const, sizeVh: 3 } } : {}) });
+
+const TOWERS: Transform = { yaw: -30, pitch: 15, distance: 25 };   // the left flat-topped tower (x≈385, y≈230)
+const CAIRN: Transform = { yaw: -2, pitch: -4, distance: 14 };     // the little stack behind the stepped slab (x≈625, y≈395)
 
 export default defineScene({
   id: "plateau",
   day: 1, place: "Sella 高原", elevation: "2,800 m",
   painting: "pano/09-plateau.webp",
   body: "stand", material: "gravel",
-  ambience: { wind: 0.6, windTone: 1100, birds: 0.3, crickets: 0, stream: 0, engine: 0, heater: 0 },
+  ambience: { wind: 0.75, windTone: 1300, birds: 0.1, crickets: 0, stream: 0, engine: 0, heater: 0 },
+  weather: { motes: "dust", clouds: true, gusty: true, windPan: 0.3 },
   arriveAt: 15 * 60 + 35,
+  idleLook: true,
+  fallback: "灰白的石头一直铺到天边。",
   entities: [
-    goArrow("go", { yaw: 12, pitch: -4 }, { to: "hutView", minutes: 25, label: "往前", kind: "walk" }),
+    // Four candidates, all labelled the same (v4 §6): two paint stripes, a lichen rosette on the big boulder, an old survey mark on a rib.
+    mark("blaze-plateau-a", { yaw: -4, pitch: -8 }, true),                       // front face of the stepped slab's top step (x≈606, y≈428)
+    mark("blaze-plateau-b", { yaw: 38, pitch: -13 }, true),                      // the left lobe of the big boulder (x≈964, y≈471)
+    mark("lichen-plateau", { yaw: 50, pitch: -14.5 }, false),                    // the pale patch on the boulder's right lobe (x≈1065, y≈485)
+    mark("survey-plateau", { yaw: -24, pitch: -22, distance: 8 }, false, "sprites/survey-mark.webp"),   // the top of the second rib at her feet (x≈435, y≈548)
+    // Things to look at: the ometto somebody built, the towers with nobody under them, the cloud coming over.
+    { id: "cairn", transform: CAIRN, interactable: { verbs: ["inspect"], label: "石堆", reveal: 12, cost: { minutes: 1 } } },
+    lookAt("towers-far", TOWERS, "远处的石塔", 1),
+    { id: "cloud-bank", transform: { yaw: 42, pitch: 32, distance: 30 }, gaze: { radius: 14, dwell: 1200 } },
+    // The map, folded on the rib at her feet: a windy node, so a stone on each corner (v4 §3.7).
+    prop("paper-map", { yaw: -12, pitch: -26, distance: 8 }, "sprites/map-folded.webp", 10, {   // on the top of the rib at her feet (x≈538, y≈583)
+      interactable: { verbs: ["use"], label: "摊开地图", reveal: 12, cost: { minutes: 0 }, requires: has("paperMap") },
+    }),
+    // The flat bench on the left looks like a walkway. Ten minutes to nowhere.
+    wrongWay("bench-west", { yaw: -48, pitch: -12 }, "左边的平石台", 10, "石台走到头，下面是空的。不是这条。"),
+    // The lip of the plateau, off to the right: six minutes there, six back, nothing but the view (ledge is its own scene).
+    { id: "ledge-route", transform: { yaw: 62, pitch: 1 }, className: "go-hotspot", tags: ["exit"],
+      exit: { to: "ledge", kind: "detour", label: "右边的高原边缘", minutes: 6 },
+      interactable: { verbs: ["inspect"], label: "右边的高原边缘", reveal: 20 } },
+    // Two ways across, both always open (D6): along the stone rib is slow and sure; over the snow is faster and, tired, slides once.
+    goArrow("ridge-route", { yaw: 12, pitch: -10 }, { to: "hutView", minutes: 35, label: "沿岩脊横切", kind: "walk" }),
+    goArrow("snow-route", { yaw: 25, pitch: -20 }, { to: "hutView", minutes: 28, label: "从雪斑上抄过去", kind: "run" }),
   ],
-  seed: () => undefined,
-  script: () => undefined,
+  seed: (w) => { w.setFlag(CERTAIN, true); w.setFlag(ROUTE, "ridge"); w.setFlag(MARKS, 1); },
+  script: (ctx) => {
+    const w = ctx.world;
+    const rt = w.rt as typeof w.rt & { gustT?: number; nextGust?: number };
+    const glance = (dir: { yaw: number; pitch: number }, strength = 0.4) => ctx.kick("glance", strength, dir);
+    const shoot = () => w.dispatch({ type: "phone:shoot" });
+
+    // --- The stillness. Stand without moving for twenty seconds and the wind stops: no words, no gusts, one breath. Once a game. ---
+    let waits = 0, lastWaitAt = -Infinity, stillSince = 0, still = false;
+    const windStops = () => {
+      still = true; stillSince = rt.now;
+      ctx.setFlag(STILL, true);
+      w.emit("ambience", { overrides: { wind: 0, birds: 0 } });
+      rt.gustT = 0; rt.nextGust = 600;                 // no gust while it lasts
+      ctx.kick("settle", 0.35);
+      ctx.sfx("exhale", 0, 0.5);
+    };
+    const windReturns = () => {
+      if (!still) return;
+      still = false;
+      w.emit("ambience", { overrides: {} });
+      rt.gustT = 0; rt.nextGust = 1.5;                 // the first gust back is what ends it
+    };
+    ctx.onWait(() => {
+      const now = rt.now;
+      waits = now - lastWaitAt > 9500 ? 1 : waits + 1;   // waits come every 8 s while she stands; a longer gap means she moved
+      lastWaitAt = now;
+      if (still) { if (now - stillSince >= STILL_MS) windReturns(); return; }
+      if (waits >= STILL_WAITS && !ctx.flag(STILL, false)) windStops();
+    });
+    ctx.on("interact:attempt", () => { waits = 0; windReturns(); });
+    ctx.on("gaze:enter", windReturns);
+    ctx.on("gaze:leave", windReturns);
+    ctx.on("phone:open", windReturns);
+    ctx.on("overlay", ({ id }) => { if (id) windReturns(); });
+
+    // --- Marks on the stones. Real ones are settled by the journal (hand, cloth, certain); she counts them. False ones: a hand, a look, a minute. ---
+    ctx.on("blaze:confirm", ({ entity, real }) => {
+      if (real) { ctx.bump(MARKS, 1); glance({ yaw: 0, pitch: -3 }, 0.4); ctx.sfx("step", 0, 0.4); return; }
+      ctx.hand(ctx.transformOf(entity)); glance({ yaw: 0, pitch: -2 }, 0.4);
+      if (entity === "lichen-plateau") ctx.say("地衣。不是漆。", { tag: "plateau-lichen" });
+      if (entity === "survey-plateau") ctx.say("旧的测量点。不是漆。", { tag: "plateau-survey" });
+    });
+
+    // --- Looking. The ometto: someone was here once. The towers: nobody now. The cloud: only if her eyes rest on it. ---
+    ctx.onInteract("cairn", () => {
+      glance({ yaw: 0, pitch: 2 }, 0.5); ctx.sfx("step", -0.1, 0.5); ctx.fx("dust", 0.3);
+      ctx.say("有人垒的。", { tag: "plateau-cairn" });
+    });
+    ctx.onInteract("towers-far", (verb) => {
+      if (verb === "photograph") { shoot(); ctx.setFlag("plateau.photo", true); glance({ yaw: -2, pitch: 3 }, 0.35); return; }
+      glance({ yaw: -3, pitch: 3 }, 0.5); ctx.sfx("breath", -0.3, 0.5);
+      w.emit("body:rest", { seconds: 2 });
+      ctx.say("一个人都没有。", { tag: "plateau-towers" });
+    });
+    ctx.onGaze("cloud-bank", () => {
+      ctx.setFlag("plateau.cloud", true);
+      ctx.fx("gust", 0.8); ctx.kick("turn", 0.7);
+      ctx.say("云压下来了。", { tag: "plateau-cloud" });
+    });
+
+    // --- The map on the rib: a stone on each corner before it will stay open. The paper says what it says; she says nothing. ---
+    ctx.onInteract("paper-map", () => {
+      ctx.bump("plateau.mapSpread", 1);
+      if (windy(w)) ctx.spend({ minutes: 0.5 }, "用石头压住地图角");
+      ctx.hand(ctx.transformOf("paper-map")); glance({ yaw: 0, pitch: -4 }, 0.4);
+      w.dispatch({ type: "item:use", item: "paperMap" });
+    });
+
+    // --- The bench: she walks it, it ends above nothing, she comes back. Ten minutes and a little dust. ---
+    ctx.onInteract("bench-west", () => {
+      ctx.setFlag("plateau.wrong", true);
+      ctx.kick("step", 0.8); ctx.sfx("step", -0.4); ctx.fx("dust", 0.3);
+      w.emit("body:fatigue", { delta: 0.03, reason: "平石台往返" });
+      ctx.after(600, () => { ctx.kick("settle", 0.6); ctx.sfx("step", -0.2); });
+      ctx.say("石台走到头，下面是空的。不是这条。", { tag: "plateau-bench" });
+    });
+
+    // --- Back from the lip: the plateau settles under her again. ---
+    ctx.onEnter((from) => { if (from === "ledge") ctx.kick("settle", 0.5); });
+
+    // --- Leaving: the route she took, the slide on the snow, and the fifteen minutes of a karst sea without a confirmed mark (v4 §3.5). ---
+    ctx.on("travel:begin", ({ from, to, run }) => {
+      if (from !== "plateau") return;
+      windReturns();
+      if (to !== "hutView") return;
+      ctx.setFlag(ROUTE, run ? "snow" : "ridge");
+      if (run && w.state.body.fatigue >= SLIP_FATIGUE) {
+        w.emit("body:slip", { entity: "snow-route", severity: 1 });
+        ctx.sfx("slip", 0.2, 1); ctx.sfx("slide", 0.2, 0.7);
+        ctx.spend({ minutes: 4 }, "雪斑上滑了一下");
+      }
+      if (!ctx.flag(CERTAIN, false)) {
+        ctx.spend({ minutes: LOST_MINUTES }, "没认记号，在石海上找了一段路");
+        ctx.kick("turn", 0.5);
+        ctx.say("走错了一小段。", { tag: "plateau-lost", priority: 1 });
+      }
+    });
+
+    return () => { if (still) windReturns(); };
+  },
+  walkthrough: [
+    { type: "interact", entity: "blaze-plateau-a", verb: "inspect" },
+    { wait: 400 },
+    { type: "travel", entity: "snow-route" },
+  ],
+  variants: {
+    // The lip: six minutes out, the view, six minutes back (ledge's own back arrow).
+    detour: [{ type: "travel", entity: "ledge-route" }],
+    // The bench, the lichen and the survey mark first, then the stone rib.
+    wrong: [
+      { type: "interact", entity: "bench-west", verb: "inspect" }, { wait: 800 },
+      { type: "interact", entity: "lichen-plateau", verb: "inspect" }, { wait: 400 },
+      { type: "interact", entity: "survey-plateau", verb: "inspect" }, { wait: 400 },
+      { type: "interact", entity: "blaze-plateau-b", verb: "inspect" }, { wait: 400 },
+      { type: "travel", entity: "ridge-route" },
+    ],
+    // Twenty seconds without moving: the wind stops. Then the far mark, then the rib.
+    still: [
+      { type: "wait" }, { wait: 200 }, { type: "wait" }, { wait: 200 }, { type: "wait" }, { wait: 600 },
+      { type: "interact", entity: "blaze-plateau-b", verb: "inspect" }, { wait: 400 },
+      { type: "travel", entity: "ridge-route" },
+    ],
+    // No mark at all: fifteen minutes of looking for the line on the way out.
+    blind: [{ type: "travel", entity: "ridge-route" }],
+  },
 });
-void backArrow; void goArrow;

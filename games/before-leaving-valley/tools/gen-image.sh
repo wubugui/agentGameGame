@@ -9,7 +9,7 @@ OUTWIN=$(cygpath -w "$OUT")
 MSG="$WORK/msg.txt"
 if [ "$#" -gt 0 ]; then
   REFS=""
-  for r in "$@"; do REFS="$REFS\"$(cygpath -w "$r")\", "; done
+  for r in "$@"; do REFS="$REFS\"$(cygpath -w -a "$r")\", "; done   # absolute: the worker runs in its own cwd
   cat > "$MSG" <<MSGEOF
 Call the image_edit tool exactly once. Use aspect_ratio "$ASPECT". Pass these reference image path(s) as the image input: [${REFS%, }]. Use this prompt VERBATIM, do not rewrite it:
 
