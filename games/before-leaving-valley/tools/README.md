@@ -60,3 +60,13 @@ EVAL="document.querySelector('.go-hotspot').getBoundingClientRect().toJSON()" no
 ```
 
 QA 记录见 `docs/QA_REPORT.md`。
+
+## 引擎版工具（2026-09-05）
+
+- `node tools/drive.mjs "<node>&reveal=1&nosave=1" script.js [waitMs] [out.png]`：无头驱动引擎。脚本里可用 `__world`、`__cmd`、`__scenes`、`__resolve`，顶层 `await` 可用；打印状态摘要、`window.__trace`、console 与异常。
+- `node tools/placement.mjs <scene> out.png`：把场景全部实体（含不可见的）画到该画的 yaw/pitch 网格图上，核对热点是否压在画着的东西上。
+- `python tools/grid.py painting.webp out.png [markers.json]`：网格图（画是 150°×84° 的球面片，`yaw = (x/W − 0.5) × 150`，`pitch = (0.5 − y/H) × 84`）。
+- `node tools/replay.mjs [fastest|detour|wrong|all] [--shots DIR]`：从标题页起按各场景 `walkthrough` / `variants` 全程回放，打印每场进出时刻与 `REPLAY PASS/FAIL`。
+- `python tools/key-sprite.py in.jpg out.png [--magenta]`：绿幕/品红幕抠图（腐蚀边缘、去黄绿溢色、向外补色、留 3% 边）。
+- `python tools/sprite-fit.py keyed.png out.png public/pano/<目标画>.webp`：把精灵的饱和度与对比拉到目标画板的水平。
+- `tools/gen-image.sh` 现在把参考图路径转成绝对路径（grokvpn 在自己的工作目录里跑）。
