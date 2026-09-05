@@ -6,7 +6,7 @@
    no completion threshold at all); the two other footholds (the wall, the upper path) hang off this one.
    Every coordinate was read off the 150°×84° grid of 18-search (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84);
    the pixel it came from (1280×720) is noted beside it. */
-import { any, entityIs, not } from "../engine/condition";
+import { any, entityIs } from "../engine/condition";
 import type { EntityDef } from "../engine/entity";
 import { defineScene } from "../engine/scene";
 import type { EntityId, SfxName, Transform } from "../engine/types";
@@ -27,12 +27,12 @@ const SPOTS: Spot[] = [
 
 const THREAD: Transform = { yaw: -8, pitch: -19 };             // a sprig higher up the same creeping pine (572, 523)
 const MOVED_STONE: Transform = { yaw: 19.5, pitch: -17 };      // the bare ground right of the heap (806, 506)
-const PACK_DOWN: Transform = { yaw: 16, pitch: -30 };          // the sand at her feet, left of the standing stone (777, 617)
+const PACK_DOWN: Transform = { yaw: 13, pitch: -33 };          // clear sand below the standing stone, clear of it (751, 643)
 const STANDING_STONE: Transform = { yaw: 21, pitch: -26 };     // the upright stone in the middle of the sand (819, 583)
 const SASSOLUNGO: Transform = { yaw: 6, pitch: 19, distance: 30 };  // the jagged wall across the valley (691, 205)
 const WALL_FOOT: Transform = { yaw: 13, pitch: 5 };            // the dark green scrub belt under the wall (751, 318)
 const UPPER_PATH: Transform = { yaw: 39, pitch: -9.5 };        // the sand running on up between the rocks (973, 441)
-const DOWN_PATH: Transform = { yaw: 13, pitch: -33 };          // the sand going out of the picture at her feet (751, 643)
+const DOWN_PATH: Transform = { yaw: 8, pitch: -27 };           // the sand at her feet, going out of the picture (708, 591)
 
 const searched = (id: EntityId) => entityIs(id, "used");
 
@@ -50,11 +50,11 @@ export default defineScene({
   // Day two has no gate: every exit, the way home included, is open from the first minute (v4 §8).
   exitWhen: undefined,
   entities: [
-    // The three places. Turned over once, then grey: the picture keeps the record of what she has already done.
+    /* The three places. Once each: a second click still reaches the engine (no `enabled` guard, so the hotspot is
+       never a dead button) and comes back as interact:refused — her hand goes out to it and comes back. */
     ...SPOTS.map((spot): EntityDef => ({
       id: spot.id, transform: spot.transform, className: "search-hotspot",
       interactable: { verbs: ["inspect"], label: spot.label, reveal: 13, cost: { minutes: 12 }, once: true },
-      enabled: not(searched(spot.id)),
     })),
     // What the dwarf pines give up: a thread off her own jacket, on a sprig. It stays where it is.
     { id: "red-thread", transform: THREAD, sprite: { src: "sprites/red-thread.webp", layer: "prop", sizeVh: 6 },
@@ -62,14 +62,17 @@ export default defineScene({
       visible: searched("dwarf-pines") },
     // One stone lifted out of the heap and left lying beside it, with the damp print it came off.
     prop("moved-stone", MOVED_STONE, "sprites/stone-turned.webp", 5, { visible: searched("path-stones") }),
-    // The pack comes off her back the first time she kneels down, and stays on the sand.
-    prop("pack-down", PACK_DOWN, "sprites/backpack-floor.webp", 13, { visible: any(...SPOTS.map((spot) => searched(spot.id))) }),
+    /* The pack comes off her back the first time she kneels down, and stays on the sand. 14vh is the height the
+       same pack has in the other two outdoor stands (searchWall, searchPath): one bag, one size on the ground. */
+    prop("pack-down", PACK_DOWN, "sprites/backpack-floor.webp", 14, { visible: any(...SPOTS.map((spot) => searched(spot.id))) }),
     // The stone standing in the sand: nothing under it, but her hand knows it (v4 §7: 她记得抓过的那块石头).
     { id: "standing-stone", transform: STANDING_STONE, className: "search-hotspot",
       interactable: { verbs: ["inspect"], label: "沙地上立着的石头", reveal: 12, cost: { minutes: 2 }, once: true } },
-    // The wall across the valley, in the morning sun this time. Looking is a minute; it gives nothing.
+    /* The wall across the valley, in the morning sun this time. Looking is a minute; it gives nothing, and it is
+       one minute only: a second click comes back as interact:refused, the hand out and back, no second sentence. */
     { id: "sassolungo", transform: SASSOLUNGO,
-      interactable: { verbs: ["inspect"], label: "对面的锯齿石墙", reveal: 12, cost: { minutes: 1 } }, gaze: { radius: 12, dwell: 900 } },
+      interactable: { verbs: ["inspect"], label: "对面的锯齿石墙", reveal: 12, cost: { minutes: 1 }, once: true },
+      gaze: { radius: 12, dwell: 900 } },
     // The other two footholds inside the circle, and the way home. All three from the first minute.
     goArrow("go-wall", WALL_FOOT, { to: "searchWall", minutes: 12, label: "墙脚下的灌木带", kind: "walk" }),
     goArrow("go-path", UPPER_PATH, { to: "searchPath", minutes: 10, label: "小路上段", kind: "walk" }),
@@ -79,8 +82,13 @@ export default defineScene({
     // What the second day leaves behind: the circle read, this stand turned over, and one red thread of her own.
     w.setFlag("search.findmy", true);
     w.setFlag("search.spots", SPOTS.map((spot) => spot.id).join(","));
+    // Consumed by hotel.scene.ts (the jacket over the chairback knows where the thread came off).
     w.setFlag("search.thread", true);
-    w.patch("journal", { entries: Array.from(new Set([...w.state.journal.entries, "E-findmy"])) });
+    // The first day's objective was answered by the road that night; the map carries nothing into day two.
+    w.patch("journal", { objective: null, entries: Array.from(new Set([...w.state.journal.entries, "E-findmy"])) });
+    /* A hotel bed stands between the forest and this path: the second day is walked on legs that have slept
+       (v4 §1.3, §3.2 — day two lifts the resource pressure). Nobody upstream of here zeroes them, so this does. */
+    w.patch("body", { fatigue: 0, fear: 0, breath: "calm" });
   },
   walkthrough: [
     { type: "overlay:close" },
@@ -130,6 +138,27 @@ export default defineScene({
       if (list.includes(id)) return;
       ctx.setFlag("search.spots", [...list, id].join(","));
     };
+
+    /* A place she has already been through. The engine refuses it (once), and the refusal is answered the same way
+       an impossible reach is: the hand goes out to it and comes back, one dry knock, no text. */
+    ctx.on("interact:refused", ({ entity, reason }) => {
+      if (reason !== "gone") return;
+      const def = ctx.scene.entities.find((one) => one.id === entity);
+      if (!def?.interactable?.once) return;
+      const where = ctx.transformOf(entity);
+      ctx.hand(where, "grip");
+      ctx.kick("glance", 0.3, { yaw: 0, pitch: -4 });
+      ctx.sfx("tock", Math.max(-1, Math.min(1, where.yaw / 60)), 0.3);
+    });
+
+    /* The night in Canazei happened between `car` and this path: she slept, ate, and walked back up in the morning.
+       Nothing upstream resets the body, so the second day does it here — and searchWall / searchPath, which are
+       only reachable through this stand, inherit the rested legs (v4 §1.3 第 5 条, §3.2). */
+    ctx.onEnter(() => {
+      w.patch("body", { fatigue: 0, fear: 0, breath: "calm" });
+      // The first day's objective (656 · Plan de Roces) was answered by the road two nights ago.
+      if (w.state.journal.objective) w.patch("journal", { objective: null });
+    });
 
     // The screen she has been staring at since breakfast: a circle, not a point (v4 §8, entrance overlay).
     ctx.onEnter((from) => {

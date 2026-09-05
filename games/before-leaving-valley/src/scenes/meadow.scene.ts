@@ -4,7 +4,7 @@
    the real way is the faint track climbing the rise at the far-left end of the grass, under the wall.
    Every coordinate below was read off the 150°×84° grid of 01-meadow (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84);
    the pixel it came from (1280×720) is noted beside it. */
-import { after, all, before, entityIs, not } from "../engine/condition";
+import { after, all, before, entityIs, flag, not } from "../engine/condition";
 import type { EntityDef } from "../engine/entity";
 import { defineScene } from "../engine/scene";
 import type { EntityId, Transform } from "../engine/types";
@@ -23,17 +23,16 @@ const BELL_TOWER: Transform = { yaw: 21, pitch: -10.5 };             // the belf
 const WALL_ROUTE: Transform = { yaw: -15, pitch: 9, distance: 24 };  // the dark cleft up the wall above the scree cone's apex (512, 283)
 const SASSOLUNGO: Transform = { yaw: 48, pitch: 6, distance: 40 };   // the main tower of the jagged wall across the road (1050, 309)
 const HUT: Transform = { yaw: 46.5, pitch: -14, distance: 18 };      // the wooden house on the road (1037, 480)
-const TRACK_BEND: Transform = { yaw: 23.5, pitch: -24.7 };           // on the dirt itself, where the track swings right toward the chapel and the road (840, 572)
+const TRACK_BEND: Transform = { yaw: 24.4, pitch: -24.7 };           // on the dirt itself, where the track swings right toward the chapel and the road (848, 572; the dirt runs 832–856 on that row)
 const FAR_TRACK: Transform = { yaw: -66, pitch: -8 };                // the faint pale track up the rise at the far-left end of the grass (77, 429)
 
-/* A mark that stays on its stone after she has read it (v4 §3.5 / §3.8 memory ③): the real one keeps a very faint
-   highlight on the painting until she leaves the node, a false one goes grey and can no longer be pressed.
-   The shared factory hides the whole entity once it is read; here the entity stays and only its state changes. */
+/* A mark that stays on its stone after she has read it (v4 §3.5 / §3.8 memory ③): the paint keeps a very faint
+   highlight on the painting until she leaves the node, and can no longer be pressed.
+   The shared factory hides the whole entity once it is read; here the entity stays and only its state changes —
+   `enabled: false` is what fades it (`.hotspot.is-disabled { opacity:.35 }`), so no second picture is needed. */
 const mark = (id: EntityId, transform: Transform, real: boolean): EntityDef => blaze(id, transform, real, {
   visible: undefined,
   enabled: not(entityIs(id, "read")),
-  ...(real ? { sprite: { src: "sprites/blaze-red-white.webp", layer: "prop", sizeVh: 4,
-    swap: [{ when: entityIs(id, "read"), src: "sprites/blaze-red-white-dim.webp" }] } } as const : {}),
 });
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
@@ -63,13 +62,19 @@ export default defineScene({
     lookAt("wall", WALL_ROUTE, "石墙上的路线", 1),
     lookAt("sassolungo", SASSOLUNGO, "对面的锯齿石墙", 1),
     lookAt("hut", HUT, "公路边的木屋", 1),
-    // The cloud shadow: a sprite that exists only in its window and moves with the clock; the beat fires when the gaze rests on it.
-    // Art: sprites/cloud-shadow.webp and the class .cloud-shadow-sprite (multiply, no drop shadow) are both requested with this scene.
+    // The cloud shadow: a sprite that exists only in its window and moves with the clock; resting the gaze on it
+    // fires the beat. sprites/cloud-shadow.webp and the class .cloud-shadow-sprite (multiply, no drop shadow) are
+    // not drawn yet, so this entity is a prop with no ring and nothing to point at — and until the picture lands
+    // the beat has a second, painted way in: looking at the wall itself inside the window (see the script).
     { id: "cloud-shadow", transform: cloudAt,
       sprite: { src: "sprites/cloud-shadow.webp", layer: "back", sizeVh: 14, className: "cloud-shadow-sprite" },
       gaze: { radius: 14, dwell: 1200 }, visible: all(after(CLOUD_FROM), before(CLOUD_TO)) },
-    // The wrong track: the obvious one, bending right to the chapel and the road. Ten minutes there and back; never a dead end.
-    wrongWay("chapel-track", TRACK_BEND, "往右去教堂的土路", 10, "土路到教堂门口就没了。"),
+    // The wrong track: the obvious one, bending right to the chapel and the road. Ten minutes there and back; never
+    // a dead end. Once walked it stays on the painting and fades (`.hotspot.is-disabled`); pressing it again gets
+    // the hand back and a tock, the way v4 §3 promises for anything she will not do twice.
+    wrongWay("chapel-track", TRACK_BEND, "往右去教堂的土路", 10, "土路到教堂门口就没了。", {
+      enabled: not(flag("meadow.wrong")),
+    }),
     // The way on: the faint track at the far-left end of the grass, climbing the rise under the wall. Never locked (D6).
     goArrow("go", FAR_TRACK, { to: "approach", minutes: 20, label: "草地尽头的土路", kind: "walk" }),
   ],
@@ -81,10 +86,15 @@ export default defineScene({
     { type: "travel", entity: "go" },
   ],
   variants: {
-    // Walk the chapel track first (−10 min → 10:00: the bell strikes and the cloud shadow appears on the wall), then go on.
+    // Walk the chapel track first (−10 min → 10:00: the bell strikes and the shadow comes onto the wall), press it
+    // again to be told with a hand and a tock that she has already been down there, then look at the wall and go on.
     wrong: [
       { type: "interact", entity: "chapel-track", verb: "inspect" },
       { wait: 1600 },
+      { type: "interact", entity: "chapel-track", verb: "inspect" },
+      { wait: 400 },
+      { type: "interact", entity: "wall", verb: "inspect" },
+      { wait: 400 },
       { type: "interact", entity: "blaze-meadow", verb: "inspect" },
       { wait: 400 },
       { type: "travel", entity: "go" },
@@ -123,6 +133,7 @@ export default defineScene({
       if (verb === "photograph") return shoot(WALL_ROUTE);
       glanceAt(WALL_ROUTE, 0.7); ctx.sfx("breath", -0.2, 0.7); ctx.setFlag("meadow.wall", true);
       ctx.say("墙上有一条线。那就是路。", { tag: "meadow-wall" });
+      cloudCrosses();                                    // between ten and twelve past, the wall goes dark under her eyes
     });
     ctx.onInteract("sassolungo", (verb) => {
       if (verb === "photograph") return shoot(SASSOLUNGO);
@@ -134,13 +145,16 @@ export default defineScene({
       glanceAt(HUT, 0.5); ctx.sfx("breath", 0.6, 0.35); ctx.setFlag("meadow.hut", true);
     });
 
-    // The cloud shadow crossing the wall: only for someone still here between ten and twelve past, and only if she looks at it.
-    ctx.onGaze("cloud-shadow", () => {
-      if (ctx.flag("meadow.sawCloud", false)) return;
+    // The cloud shadow crossing the wall: only for someone still here between ten and twelve past. Two ways in —
+    // the gaze resting on the shadow itself (once its picture exists), or looking at the wall while it is on it.
+    // No line: a shadow and a gust are the world's to say, not hers (v4 §10.2.2).
+    const cloudCrosses = () => {
+      const now = ctx.minute();
+      if (now < CLOUD_FROM || now >= CLOUD_TO || ctx.flag("meadow.sawCloud", false)) return;
       ctx.setFlag("meadow.sawCloud", true);
-      ctx.kick("settle", 0.25); ctx.fx("gust", 0.3);
-      ctx.say("云影从墙上走过去。", { tag: "meadow-cloud" });
-    });
+      ctx.kick("settle", 0.25); ctx.fx("gust", 0.35); ctx.sfx("exhale", -0.2, 0.5);
+    };
+    ctx.onGaze("cloud-shadow", cloudCrosses);
 
     // The bell at ten: the clock crossing the hour while she is still on the meadow. Three strikes off to the right and
     // her head turns to them. No line: the strikes are the world telling the hour, and the hour is the sun's and the phone's to give.
@@ -168,6 +182,11 @@ export default defineScene({
       ctx.kick("step", 0.8); ctx.sfx("step", 0.4); ctx.fx("dust", 0.3);
       ctx.after(600, () => { ctx.kick("settle", 0.6); ctx.sfx("step", 0.2); });
       ctx.say("土路到教堂门口就没了。", { tag: "meadow-wrong" });
+    });
+    // Pressed a second time: she has already been down there. The hand goes out and comes back, no text (v4 §3).
+    ctx.on("interact:refused", ({ entity }) => {
+      if (entity !== "chapel-track") return;
+      ctx.hand(TRACK_BEND); ctx.kick("glance", 0.4, { yaw: 0, pitch: -3 }); ctx.sfx("tock", 0.4, 0.35);
     });
 
     // Standing still: the third breath brings a gust through the grass, once.

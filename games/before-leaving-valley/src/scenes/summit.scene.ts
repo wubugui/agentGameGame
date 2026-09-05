@@ -75,6 +75,9 @@ export default defineScene({
       sprite: { src: "sprites/helicopter.webp", layer: "figure", sizeVh: 2.6 },
       gaze: { radius: 14, dwell: 600 },
       visible: all(flag(HELI_NEAR), not(flag(HELI))) },
+    /* `heli-passing` is a CSS class the integrator still has to add (it is in the requests): a four-to-six second
+       translate across the sky and a fade. Until it lands the sprite simply sits where it entered — no rule of that
+       name exists in any stylesheet today, and an unknown class does nothing. */
     { id: "heli-over", transform: HELI_OVER,
       sprite: { src: "sprites/helicopter-passing.webp", layer: "figure", sizeVh: 8, className: "heli-passing" },
       gaze: { radius: 14, dwell: 900 },
@@ -248,7 +251,7 @@ export default defineScene({
     { type: "item:use", item: "camera360" },
     { type: "pack:close" },
     { type: "hold:start", entity: "selfie" },
-    { wait: 3200 },
+    { wait: 3400 },
     { type: "hold:end" },
     { wait: 300 },
     { type: "travel", entity: "go" },
@@ -270,7 +273,7 @@ export default defineScene({
       { type: "item:use", item: "camera360" },
       { type: "pack:close" },
       { type: "hold:start", entity: "selfie" },
-      { wait: 3200 },
+      { wait: 3400 },
       { type: "hold:end" },
       { type: "wait" },
       { type: "travel", entity: "go" },

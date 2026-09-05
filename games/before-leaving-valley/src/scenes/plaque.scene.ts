@@ -3,13 +3,22 @@
    the plates to the two pegs where it goes over the edge, the gear on the gravel at her feet, the red paint on
    the pale rock below the cable, and the pass far behind her on the left.
    Coordinates read off the 150°×84° grid of 03-plaque (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84).
-   Time: nothing this scene owns is both mandatory and priced — clipping is free, everything with a price is optional.
-   The four minutes the fastest route still spends are the engine's dressing (pack open/close 0.5→1 each, helmet 1, lanyard 1),
-   which v4 §3.6 makes compulsory here and §3.1 counts as player action on top of the 10:25 baseline; the walk stays 5 分 per §3.1. */
-import { all, flag, not, worn } from "../engine/condition";
+   Time: v4 §3.1 gives this node five minutes to the next one and puts `cable` at 10:30, and those five minutes are
+   now spent where the engine actually spends them — four on the dressing it makes compulsory (pack open and close
+   round 0.5 up to 1 each, helmet 1, lanyard 1) and one on stepping off the gravel onto the wall. The fastest legal
+   line therefore leaves at 10:29 and opens `cable` at 10:30, exactly the baseline; everything else here (the four
+   plates, the marks, the anchor, the two shots, the comparison) is optional and priced on top. */
+import { all, entityIs, flag, not, worn } from "../engine/condition";
+import type { EntityDef } from "../engine/entity";
 import { defineScene } from "../engine/scene";
 import type { EntityId, Transform } from "../engine/types";
 import { blaze, goArrow, prop, readable } from "./_shared";
+
+/* A mark that stays on its stone after she has read it (v4 §3.5 / §3.8 memory ③): the paint keeps a very faint
+   highlight until she leaves the node, and can no longer be pressed. `enabled: false` is what fades it
+   (`.hotspot.is-disabled { opacity:.35 }`); the shared factory would delete it from the painting instead. */
+const mark = (id: EntityId, transform: Transform, real: boolean): EntityDef =>
+  blaze(id, transform, real, { visible: undefined, enabled: not(entityIs(id, "read")) });
 
 const BLUE = "plaque.blue", ORANGE = "plaque.orange", CLIPPED = "plaque.clipped", PULLED = "plaque.pulled";
 const ANCHOR: Transform = { yaw: 13, pitch: -14 };                // the lower ring anchor the cable starts from (752, 482)
@@ -73,13 +82,14 @@ export default defineScene({
       visible: not(dressed),
     }),
     // Two candidate marks: the red paint on the pale rock below the cable, and the crustose lichen on the slab above it.
-    blaze("blaze-plaque", { yaw: 4, pitch: -33 }, true),                             // the orange-red paint (677, 645)
-    blaze("lichen-plaque", { yaw: 5.5, pitch: 13.5 }, false),                        // the lichened patch on the slab (687, 243); sprites/blaze-false.webp is orange-grey, so her line names no colour
+    mark("blaze-plaque", { yaw: 4, pitch: -33 }, true),                              // the orange-red paint (677, 645)
+    mark("lichen-plaque", { yaw: 5.5, pitch: 13.5 }, false),                         // the lichened patch on the slab (687, 243); sprites/blaze-false.webp is orange-grey, so her line names no colour
     // Where the cable goes over the edge, and the pass behind her. Looking is free (gaze); a 360 shot costs a minute, or three from the pack.
     // (The minute of a shot is charged by `phone:shoot`; the two extra minutes for digging the camera out are charged in shoot().)
     { id: "cable-up", transform: { ...CABLE_TOP, distance: 14 }, interactable: { verbs: ["photograph"], label: "往上的钢缆", reveal: 14, cost: { minutes: 0 } }, gaze: { radius: 12, dwell: 900 } },
     { id: "pass-view", transform: PASS, interactable: { verbs: ["photograph"], label: "山口草甸", reveal: 14, cost: { minutes: 0 } }, gaze: { radius: 12, dwell: 900 } },
-    goArrow("go", CABLE_GO, { to: "cable", minutes: 5, label: "上墙", kind: "walk" }),
+    // Up onto the wall: one minute of the five §3.1 gives this leg — the other four are the dressing above it.
+    goArrow("go", CABLE_GO, { to: "cable", minutes: 1, label: "上墙", kind: "walk" }),
   ],
   seed: (w) => {
     w.patch("inventory", { worn: Array.from(new Set([...w.state.inventory.worn, "helmet", "lanyard", "gloves"])) as typeof w.state.inventory.worn });
@@ -117,7 +127,7 @@ export default defineScene({
       { type: "interact", entity: "plate-route", verb: "read" }, { type: "overlay:close" },
       { type: "interact", entity: "plate-hut", verb: "read" }, { type: "overlay:close" },
       { type: "phone:open", tab: "conversation" }, { type: "ui:action", id: "phone:tab", value: "conversation" }, { type: "phone:close" },
-      { type: "hold:start", entity: "anchor-start" }, { wait: 1200 }, { type: "hold:end" },
+      { type: "hold:start", entity: "anchor-start" }, { wait: 1600 }, { type: "hold:end" },
       { type: "interact", entity: "pass-view", verb: "photograph" },
       { type: "interact", entity: "cable-up", verb: "photograph" },
       { type: "interact", entity: "carabiner-blue", verb: "clip" },
@@ -225,7 +235,9 @@ export default defineScene({
       ctx.spend({ minutes: 1 }, "把 C/D 和备忘录并排看了一眼");         // v4 §6 prices it at 1 分（ClockSystem 会把 <0.5 直接丢掉）
       ctx.world.emit("body:rest", { seconds: 2 });
       ctx.kick("settle", 0.5); ctx.sfx("exhale", 0, 0.7);
-      ctx.say("C 到 D。教练说的是 easy。", { tag: "plaque-compare", priority: 1 });
+      // The grade is on the plate and the coach's line is in the memo; she reads neither of them out (v4 §10.2.4).
+      // All this line carries is the hesitation itself.
+      ctx.say("跟我以为的不太一样。", { tag: "plaque-compare", priority: 1 });
     };
     ctx.on("journal:entry", ({ entry }) => { if (entry === "E-grade" || entry === "E-coach") compare(); });
     ctx.onAction("phone:tab", (value) => { if (value === "conversation") compare(); });

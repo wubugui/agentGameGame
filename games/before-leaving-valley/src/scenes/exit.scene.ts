@@ -93,9 +93,11 @@ export default defineScene({
       interactable: { verbs: ["inspect"], label: "石塔右边的碎石", reveal: 18, cost: { minutes: 12, fatigue: 0.1 }, once: true } },
     // The valley floor off to the right: roads, a stream, a white roof. A minute to look; a shot from the phone.
     lookAt("valley", { yaw: 62, pitch: -8, distance: 20 }, "谷底", 1),
-    // Looking back down the cable: the box is a dot on the pale slope under it. One tick of attention, nothing said.
-    { id: "mailbox-below", transform: { yaw: 54, pitch: -28, distance: 26 },
-      sprite: { src: "sprites/mailbox-far.webp", layer: "prop", sizeVh: 1.2 },
+    /* Looking back down the cable: the box is a dot on the pale slope under it. One tick of attention, nothing said.
+       distance 16 keeps it inside PanoStage's 1:1 band (scale = max(.6, 10/d) cancels the wrapper's d/10 up to 16.7),
+       so sizeVh is the height it really draws — beyond that the 0.6 floor makes a "far" sprite come out bigger. */
+    { id: "mailbox-below", transform: { yaw: 54, pitch: -28, distance: 16 },
+      sprite: { src: "sprites/mailbox-far.webp", layer: "prop", sizeVh: 1.9 },
       gaze: { radius: 12, dwell: 900 } },
     backArrow("back", { yaw: 66, pitch: -27.3 }, "mailbox", "回头", 12),
     goArrow("go", { yaw: -17, pitch: -5.5 }, { to: "summit", minutes: 88, label: "往上", kind: "walk" }),
@@ -230,18 +232,18 @@ export default defineScene({
   },
   walkthrough: [
     { type: "interact", entity: "blaze-exit-a", verb: "inspect" }, { wait: 300 },
-    ...route("haul-cable", 1800),
+    ...route("haul-cable", 2200),
   ],
   variants: {
     // The rock beside the cable both times: eight minutes more, nothing off the hands.
-    rock: [{ type: "interact", entity: "blaze-exit-a", verb: "inspect" }, { wait: 300 }, ...route("rock-holds", 2400)],
+    rock: [{ type: "interact", entity: "blaze-exit-a", verb: "inspect" }, { wait: 300 }, ...route("rock-holds", 2900)],
     // Look up, nod, take the picture, then climb. Two minutes and a photograph that gives nothing back.
     nod: [
       { wait: 4000 },
       { type: "interact", entity: "climbers-nod", verb: "wave" }, { wait: 600 },
       { type: "interact", entity: "climbers-photo", verb: "photograph" }, { wait: 600 },
       { type: "interact", entity: "blaze-exit-a", verb: "inspect" }, { wait: 300 },
-      ...route("haul-cable", 1800),
+      ...route("haul-cable", 2200),
     ],
     // Both wrong lines, a false mark, then the right one; no mark confirmed on the way out would cost twelve more.
     wrong: [
@@ -249,10 +251,10 @@ export default defineScene({
       { type: "interact", entity: "wrong-right", verb: "inspect" }, { wait: 800 },
       { type: "interact", entity: "blaze-exit-b", verb: "inspect" }, { wait: 300 },
       { type: "interact", entity: "blaze-exit-a", verb: "inspect" }, { wait: 300 },
-      ...route("rock-holds", 2400),
+      ...route("rock-holds", 2900),
     ],
     // Straight up the cable without looking for a mark: the twelve minutes are paid at the top.
-    blind: route("haul-cable", 1800),
+    blind: route("haul-cable", 2200),
     back: [{ type: "travel", entity: "back" }],
   },
 });

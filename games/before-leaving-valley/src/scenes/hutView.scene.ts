@@ -5,11 +5,11 @@
    adds the legs up, and decides: the hut, or straight down. Nothing here is locked; only the light is spent.
    Every coordinate was read off the 150°×84° grid of 09b-hut (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84);
    the pixel it came from (1280×720) is noted beside it. */
-import { after, entityIs, flag, has, not } from "../engine/condition";
+import { after, before, entityIs, flag, has, not } from "../engine/condition";
 import type { EntityDef } from "../engine/entity";
 import { defineScene } from "../engine/scene";
 import type { EntityId, Transform } from "../engine/types";
-import { goArrow, lookAt, prop, windy, wrongWay } from "./_shared";
+import { goArrow, lookAt, offset, prop, windy, wrongWay } from "./_shared";
 
 const CHOICE = "hutView.choice";
 const SPREAD = "hutView.mapSpread";
@@ -24,8 +24,10 @@ const OBJ_TIME = "把从这里到公路的每一段时间加起来";
 const OBJ_RETREAT = "紧急下撤：找 656 · Plan de Roces · Val Lasties";
 
 // Things painted in 09b-hut, with the pixel they were read from.
-const HUT: Transform = { yaw: -34, pitch: 1.2, distance: 30 };        // on the shoulder above the far wall across the valley (350, 350)
-const FAR_WALL: Transform = { yaw: -21, pitch: -10, distance: 20 };   // the layered grey wall on the far side of the valley (460, 446)
+/* distance 16 keeps the sprite out of PanoStage's scale clamp (max(0.6, 10/d)), so sizeVh really is the height
+   on screen: 2.2 vh ≈ 16 px at 720p — a house across a whole valley, read against the wall behind it. */
+const HUT: Transform = { yaw: -34, pitch: 1.2, distance: 16 };        // on the shoulder above the far wall across the valley (350, 350)
+const FAR_WALL: Transform = { yaw: -29.7, pitch: -8.6, distance: 20 }; // the middle of the layered grey wall on the far side (387, 434)
 const MESA: Transform = { yaw: 12, pitch: 14.5, distance: 35 };       // the flat-topped range in the sun, centre skyline (742, 236)
 const CLOUDS: Transform = { yaw: 36, pitch: 33, distance: 30 };       // the cloud bank over the right-hand massif (947, 78)
 const MAP_STONE: Transform = { yaw: -20, pitch: -20.5, distance: 9 }; // the top face of the big cracked table rock (470, 531)
@@ -33,19 +35,38 @@ const CHOC_STONE: Transform = { yaw: -7, pitch: -22, distance: 9 };   // the sam
 const BLAZE_TRAIL: Transform = { yaw: 58.5, pitch: -33 };             // the red-white bar painted on the stone in the track (1139, 643)
 const WHITE_SMEAR: Transform = { yaw: 57.4, pitch: -17 };             // the pale half-gone smear further up the same track (1130, 507)
 const PAVEMENT_MARK: Transform = { yaw: 28, pitch: -18.7, distance: 12 }; // a slab of the limestone pavement, mid-field (880, 520)
-const SPUR: Transform = { yaw: -8, pitch: -10.5, distance: 14 };      // the square grass-topped block out over the drop (570, 450)
+/* The grass top of the square block, not its face: the block's upper surface runs from pitch −2.3 down to its front
+   lip at −4, and the hotspot means "walk out onto it and stand above the drop", so it sits on the lip (570, 390). */
+const SPUR: Transform = { yaw: -8, pitch: -3.5, distance: 14 };       // the square grass-topped block out over the drop (570, 390)
 const RIM: Transform = { yaw: 14, pitch: -3.3, distance: 16 };        // the grass-and-stone lip running on past the block (760, 388)
 const TRAIL: Transform = { yaw: 54, pitch: -24 };                     // the dirt track where it widens under her right hand (1101, 566)
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 /* A candidate mark. Three of them, all labelled the same, indistinguishable until she is close (v4 §3.5).
-   Two are painted into 09b-hut and carry no sprite of their own; the third is a lichened stone on the pavement. */
+   Two are painted into 09b-hut and carry no sprite of their own; the third is a lichened stone on the pavement.
+   A painted one can simply stop being a hotspot once she has settled it. The one that owns a stone must not:
+   §3.5 asks for the point to go grey and stop answering, not for the stone to disappear while she is looking at it. */
+/* The house on the far rim, in two states. It is NOT one entity with a sprite swap: hut-far.webp and
+   hut-far-lit.webp are two different paintings of two different houses (676×419 with the walls filling 45% of the
+   frame, against 756×655 with the walls filling 54%), and a swap entry cannot carry its own sizeVh — so the one
+   frame where the window comes on would also change the size of the building. Measured off the alpha profile of
+   both files: at 2.2 vh the dark house is 0.99 vh tall and 1.60 vh wide; 1.9 vh puts the lit house at 1.02 × 1.61.
+   The walls match; the frames do not, and the walls are what the player sees across a valley. The 0.2° of pitch
+   is the same correction: the lit house sits lower inside its own frame. (The re-export is an ART request.) */
+const house = (id: EntityId, transform: Transform, src: string, sizeVh: number, when: EntityDef["visible"]): EntityDef => ({
+  id, transform, visible: when,
+  sprite: { src, layer: "prop", sizeVh },
+  interactable: { verbs: ["inspect", "photograph"], label: "对面岩壁上的房子", reveal: 12, cost: { minutes: 1 } },
+  gaze: { radius: 12, dwell: 900 },
+});
+
 const mark = (id: EntityId, transform: Transform, real: boolean, sprite?: string): EntityDef => ({
   id, transform, blaze: { real }, className: "blaze-hotspot",
   interactable: { verbs: ["inspect"], label: "石头上的记号", reveal: 12, cost: { minutes: 0 } },
-  visible: not(entityIs(id, "read")),
-  ...(sprite ? { sprite: { src: sprite, layer: "prop" as const, sizeVh: 3.5 } } : {}),
+  ...(sprite
+    ? { sprite: { src: sprite, layer: "prop" as const, sizeVh: 3.5 }, enabled: not(entityIs(id, "read")) }
+    : { visible: not(entityIs(id, "read")) }),
 });
 
 export default defineScene({
@@ -60,11 +81,10 @@ export default defineScene({
   fallback: "高原到这里就断了。",
   exitWhen: flag(CHOICE, { eq: "retreat" }),
   entities: [
-    // The one dark thing on the far rim. Its window comes on at 17:00 — the sprite swaps itself, nobody announces it.
-    { id: "hut", transform: HUT,
-      sprite: { src: "sprites/hut-far.webp", layer: "prop", sizeVh: 2, swap: [{ when: after(HUT_LIT), src: "sprites/hut-far-lit.webp" }] },
-      interactable: { verbs: ["inspect", "photograph"], label: "对面岩壁上的房子", reveal: 12, cost: { minutes: 1 } },
-      gaze: { radius: 12, dwell: 900 } },
+    // The one dark thing on the far rim. At 17:00 the dark one stops being drawn and the lit one starts: the house
+    // does not move and does not change size, one window simply comes on. Nobody announces it.
+    house("hut", HUT, "sprites/hut-far.webp", 2.2, before(HUT_LIT)),
+    house("hut-lit", offset(HUT, 0, -0.2), "sprites/hut-far-lit.webp", 1.9, after(HUT_LIT)),
     // Things to look at across the gap. None of them tells her anything she could not see.
     lookAt("far-wall", FAR_WALL, "对面的岩壁", 1),
     lookAt("mesa", MESA, "对面的台状山", 1),
@@ -86,7 +106,10 @@ export default defineScene({
     wrongWay("spur", SPUR, "崖边那块方岩", 6, "岩顶到头了。下面是山谷。"),
     // Two ways out, and only the map decides which one is open (v4 §7). The hut way is a dead end that costs light.
     goArrow("go-hut", RIM, { to: "hutTurn", kind: "detour", label: "沿崖边往山屋", minutes: TO_HUTTURN, condition: flag(CHOICE, { eq: "hut" }) }),
-    goArrow("go", TRAIL, { to: "signpost", kind: "run", label: "顺土路下撤", minutes: TO_SIGNPOST }),
+    // The track is painted into the bottom right corner of 09b-hut and the arrow stays on it; a wider reveal is
+    // what makes it surface early while she is still turning her head that way (the fallback line does the rest).
+    { ...goArrow("go", TRAIL, { to: "signpost", kind: "run", label: "顺土路下撤", minutes: TO_SIGNPOST }),
+      interactable: { verbs: ["inspect"], label: "顺土路下撤", reveal: 28 } },
   ],
   seed: (w) => {
     w.setFlag(CHOICE, "retreat");
@@ -119,19 +142,21 @@ export default defineScene({
 
     // --- The house on the far rim. Her eyes rest on it and the pencil goes to the margin of the map: the one
     //     objective in the whole game she writes for herself (v4 §5.2 obj-time). No line comes with it. ---
-    ctx.onGaze("hut", () => {
-      if (ctx.flag(WROTE, false)) return;
-      ctx.setFlag(WROTE, true);
-      write(OBJ_TIME);                                   // JournalSystem answers with the pencil
-      glanceAt(HUT, 0.4);
-      ctx.flash("地图边上多了一行铅笔字");
-    });
-    ctx.onInteract("hut", (verb) => {
-      if (verb === "photograph") return shoot(HUT);
-      glanceAt(HUT, 0.6); ctx.sfx("breath", -0.4, 0.5);
-      ctx.setFlag("hutView.looked", true);
-      ctx.say(ctx.minute() >= HUT_LIT ? "窗亮了。还是隔着一整个山谷。" : "对面。隔着一整个山谷。", { tag: "hut-look" });
-    });
+    for (const id of ["hut", "hut-lit"]) {
+      ctx.onGaze(id, () => {
+        if (ctx.flag(WROTE, false)) return;
+        ctx.setFlag(WROTE, true);
+        write(OBJ_TIME);                                 // JournalSystem answers with the pencil
+        glanceAt(HUT, 0.4);
+        ctx.flash("地图边上多了一行铅笔字");
+      });
+      ctx.onInteract(id, (verb) => {
+        if (verb === "photograph") return shoot(HUT);
+        glanceAt(HUT, 0.6); ctx.sfx("breath", -0.4, 0.5);
+        ctx.setFlag("hutView.looked", true);
+        ctx.say(ctx.minute() >= HUT_LIT ? "窗亮了。还是隔着一整个山谷。" : "对面。隔着一整个山谷。", { tag: "hut-look" });
+      });
+    }
     // 17:00. The window comes on across the valley: the sprite swaps, her head turns, one line, one entry.
     ctx.onMark("hut-window-lit", () => {
       if (w.state.sceneId !== "hutView" || w.state.ui.travel) return;   // only for someone still standing on the lip

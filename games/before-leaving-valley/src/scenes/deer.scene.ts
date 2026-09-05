@@ -6,11 +6,11 @@
    Every coordinate was read off the 150°×84° grid of 12-deer (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84);
    the pixel it came from (1280×720) is noted beside it. */
 import type { Condition } from "../engine/condition";
-import { all, any, flag, not } from "../engine/condition";
+import { all, any, entityIs, flag, not } from "../engine/condition";
 import type { EntityDef } from "../engine/entity";
 import { defineScene } from "../engine/scene";
 import type { Transform } from "../engine/types";
-import { blaze, goArrow, lookAt } from "./_shared";
+import { blaze, goArrow, lookAt, prop } from "./_shared";
 
 const SEEN = "deer.seen";        // the invariant every later scene leans on (contract §6)
 const HOW = "deer.how";          // "still" | "skirt" | "through"
@@ -28,12 +28,17 @@ const TO_FOREST_EDGE = 55;       // v4 §3.1: deer 19:20 → forestEdge 20:15
 const LOST_MINUTES = 12;         // no confirmed mark: v4 §3.5 charges 12 for this terrain band (scree uses 12 too)
 
 // Things painted in 12-deer, with the pixel they were read from.
-const HERD: Transform = { yaw: 14, pitch: -25, distance: 14 };        // the open grass under the rise, left of the big boulder (760, 574)
-const FAWN_AT: Transform = { yaw: 17, pitch: -29.5, distance: 11 };   // the grass two steps nearer, in front of the herd (785, 613)
-const PRESS: Transform = { yaw: 18, pitch: -28.5, distance: 10 };     // the grass they were standing in (794, 604)
-const HOOF: Transform = { yaw: 26, pitch: -32, distance: 9 };         // the wide sandy path in front of her feet (862, 634)
+/* The herd sprite is 1032x549 with a band of spruce across its top 45%, so its anchor is set from the picture it
+   has to sit in, not from the middle of the grass: at 25 vh (15 deg, 129 px of the 1280x720 grid) its painted tree
+   bases land on the painted tree bases at y 595 and its deer stand on the grass between y 600 and y 646, each
+   animal about 5.8 vh - a 1.4 m deer at twenty metres. */
+const HERD: Transform = { yaw: 9.5, pitch: -27, distance: 14 };       // the herd standing at the wood edge above the open grass (721, 591)
+const HERD_RUN: Transform = { yaw: 15, pitch: -28, distance: 12 };    // where they go up, half a step nearer the trees (768, 600)
+const FAWN_AT: Transform = { yaw: 11, pitch: -33.5, distance: 11 };   // the open grass two steps nearer, in front of the herd (734, 647)
+const PRESS: Transform = { yaw: 12.3, pitch: -30.1, distance: 10 };   // the grass they were standing in, left of the sand (745, 618)
+const HOOF: Transform = { yaw: 23.5, pitch: -32, distance: 9 };       // the wide sandy path in front of her feet; the sand runs 804-875 here (841, 634)
 const TREELINE: Transform = { yaw: 12, pitch: -15.5 };                // the tall dark spruce where the scree runs into the wood (745, 493)
-const BOULDER: Transform = { yaw: 27, pitch: -25 };                   // the big white boulder standing beside the path (870, 574)
+const BOULDER: Transform = { yaw: 26.7, pitch: -24.7 };               // the big white boulder standing beside the path, painted (855-885, 558-585)
 const RUST_ROCK: Transform = { yaw: -14.5, pitch: -19.3 };            // the rust-orange block in the boulder field at the scree foot (516, 526)
 const SCREE_BACK: Transform = { yaw: -36, pitch: -2, distance: 16 };  // the pale cone of the scree she has just come down (333, 377)
 const SUNSET: Transform = { yaw: 32, pitch: 26, distance: 16 };       // the orange cloud band over the right-hand sky (912, 137)
@@ -71,28 +76,27 @@ export default defineScene({
   // No gate: leaving is itself one of the three ways past them (v4 §7), and it is what sets deer.seen.
   exitWhen: undefined,
   entities: [
-    /* The herd. Nothing but deer and the grass they stand in — the checked-in deer-herd.webp has a band of spruce
-       painted into its top half, which at this pitch would put toy conifers in the middle of the meadow, so the
-       whole family is re-cut (deer-herd-grass and its states, see the sprites output). Six faces: running,
-       eyeshine, shapes with heads up, shapes, turned and tracking her, heads up. */
+    /* The herd, standing at the wood edge in the grass: the whole subject of the node, and it has to be on the
+       screen. deer-herd.webp (fourteen animals with their own band of spruce behind them) is what exists, so it is
+       what is used, placed and scaled so its trees sit on the painted tree line and its deer on the painted grass.
+       Running is a separate entity, not a swap, because deer-fleeing.webp is six animals filling its frame and a
+       swap entry cannot carry its own sizeVh — at the herd's 25 vh those six would be four metres tall.
+       The two dusk faces stay pointed at art that does not exist yet: with no lit herd to show after 19:48 there is
+       nothing up there to see, which is what the picture should say. The re-cut family is an ART request. */
     { id: "herd", transform: HERD,
-      sprite: { src: "sprites/deer-herd-grass.webp", layer: "figure", sizeVh: 6, swap: [
-        { when: flag(FLEEING), src: "sprites/deer-fleeing.webp" },
+      sprite: { src: "sprites/deer-herd.webp", layer: "figure", sizeVh: 25, swap: [
         { when: DARK, src: "sprites/deer-eyeshine.webp" },
         { when: all(DIM, HEADS_UP), src: "sprites/deer-shadows-alert.webp" },
         { when: DIM, src: "sprites/deer-shadows.webp" },
-        { when: flag(WATCH), src: "sprites/deer-herd-watching.webp" },
-        { when: flag(ALERT), src: "sprites/deer-herd-alert.webp" },
       ] },
       interactable: { verbs: ["inspect"], label: "草坡上的鹿群", reveal: 16, cost: { minutes: 3 }, once: true },
       gaze: { radius: 16, dwell: 700 },
-      visible: HERE },
-    // The smallest one, once she has stood still long enough for it to risk two steps. It dims with the rest.
+      visible: all(HERE, not(flag(FLEEING))) },
+    // The eight hundred milliseconds of them actually going. Nothing to click: it is over before a hand could move.
+    prop("herd-running", HERD_RUN, "sprites/deer-fleeing.webp", 6.5, { visible: flag(FLEEING) }),
+    // The smallest one, once she has stood still long enough for it to risk two steps.
     { id: "fawn", transform: FAWN_AT,
-      sprite: { src: "sprites/deer-fawn.webp", layer: "figure", sizeVh: 5.5, swap: [
-        { when: DARK, src: "sprites/deer-fawn-eyeshine.webp" },
-        { when: DIM, src: "sprites/deer-fawn-shadow.webp" },
-      ] },
+      sprite: { src: "sprites/deer-fawn.webp", layer: "figure", sizeVh: 5.5 },
       gaze: { radius: 12, dwell: 600 },
       visible: all(flag(FAWN), not(flag(BOLTED))) },
     // Keeping to the trees instead of crossing the open grass: six minutes, and she gets to watch them longer.
@@ -100,21 +104,26 @@ export default defineScene({
       interactable: { verbs: ["step"], label: "林线下的那排云杉", reveal: 14, cost: { minutes: 6 } },
       visible: HERE },
     // What is left afterwards, and all there ever is if she made a noise coming down.
+    // The prints are the one deer thing that is actually drawn, and she reads them after dark: no night swap, or
+    // the only trace in the picture would delete itself at exactly the hour she goes looking for it.
     { id: "hoofprints", transform: HOOF,
-      sprite: { src: "sprites/hoofprints.webp", layer: "prop", sizeVh: 8, swap: [
-        { when: DARK, src: "sprites/hoofprints-dark.webp" },
-      ] },
+      sprite: { src: "sprites/hoofprints.webp", layer: "prop", sizeVh: 8 },
       interactable: { verbs: ["inspect"], label: "小路上的蹄印", reveal: 13, cost: { minutes: 1 }, once: true },
       visible: AFTERWARDS },
+    // The label is the painted grass, not the press: until grass-pressed.webp exists there is nothing else drawn
+    // there, and the label has to name what the picture holds (red line 5).
     { id: "grass-pressed", transform: PRESS,
-      sprite: { src: "sprites/grass-pressed.webp", layer: "prop", sizeVh: 4.5, swap: [
-        { when: DARK, src: "sprites/grass-pressed-dark.webp" },
-      ] },
-      interactable: { verbs: ["inspect"], label: "草上的压痕", reveal: 13, cost: { minutes: 1 }, once: true },
+      sprite: { src: "sprites/grass-pressed.webp", layer: "prop", sizeVh: 4.5 },
+      interactable: { verbs: ["inspect"], label: "它们站过的那片草", reveal: 13, cost: { minutes: 1 }, once: true },
       visible: AFTERWARDS },
     // Two candidate marks: the red-white bar on the boulder beside the path, and a rust stain on the red block.
-    blaze("blaze-deer", BOULDER, true),
-    blaze("rust-deer", RUST_ROCK, false),
+    // Both keep their stone after she settles them and go grey instead of vanishing (v4 §3.5). The bar is 3 vh so
+    // it sits inside the painted boulder rather than standing a second stone on top of it.
+    blaze("blaze-deer", BOULDER, true, {
+      sprite: { src: "sprites/blaze-red-white.webp", layer: "prop", sizeVh: 3 },
+      visible: undefined, enabled: not(entityIs("blaze-deer", "read")),
+    }),
+    blaze("rust-deer", RUST_ROCK, false, { visible: undefined, enabled: not(entityIs("rust-deer", "read")) }),
     // Looking. The scree behind her, the last of the sun, the wall across the valley. A minute each, once each.
     look1("scree-back", SCREE_BACK, "刚下来的碎石坡"),
     look1("sunset-clouds", SUNSET, "天上最后一道橙色", { visible: { kind: "light", gte: 0.001 } }),

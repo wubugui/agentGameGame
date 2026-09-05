@@ -11,6 +11,7 @@
 
    Every coordinate is read off the 150°×84° grid of 19-hotel (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84,
    W×H = 1280×720); the pixel each one came from is noted beside it. */
+import { ENTRIES } from "../data/entries";
 import { all, flag, not } from "../engine/condition";
 import { defineScene } from "../engine/scene";
 import type { Transform } from "../engine/types";
@@ -25,7 +26,7 @@ const LAMP: Transform = { yaw: -33, pitch: 5, distance: 8 };            // the l
 const JACKET: Transform = { yaw: -25, pitch: -18, distance: 7 };        // the back of the chair (427, 514)
 const WALL_PICTURE: Transform = { yaw: -43, pitch: 19, distance: 12 };  // the framed alpine meadow on the panelling (270, 200)
 const PACK: Transform = { yaw: -10, pitch: -35.5, distance: 7 };        // the boards between desk and radiator (555, 664)
-const RADIATOR: Transform = { yaw: 5, pitch: -20, distance: 8 };        // the white radiator under the window (683, 531)
+const RADIATOR: Transform = { yaw: -2, pitch: -20.5, distance: 8 };     // the bare white fins left of the towel (623, 536)
 const VILLAGE: Transform = { yaw: 26.5, pitch: 3, distance: 40 };       // the church tower and the village lights (866, 334)
 const OPEN_WINDOW: Transform = { yaw: 52, pitch: 6, distance: 9 };      // the casement standing open on the right (1084, 309)
 const BED: Transform = { yaw: 65, pitch: -22, distance: 8 };            // the striped blanket, turned down (1195, 549)
@@ -36,6 +37,10 @@ const EVENING = 20 * 60 + 15;
 const CALLS_BEFORE_DONE = 8;
 /** view/overlays/HotelCalls.tsx keeps the book: twenty-two places she could think of to ring. */
 const CALLS_IN_BOOK = 22;
+/** What the account actually says she rang: 二十多家附近酒店和游客中心 — the first twenty lines of the book.
+ *  The last two (the police switchboard, the mountain-rescue room) stay for the player to choose or not;
+ *  the seed does not assert she rang them. */
+const CALLS_SEEDED = 20;
 
 const listOf = (value: string) => value.split(",").filter(Boolean);
 
@@ -53,23 +58,29 @@ export default defineScene({
   exitWhen: flag("hotel.hungUp"),
   entities: [
     /* The laptop she left open this morning. The circle on it is the same circle, and it has not moved.
-       Closing it is free, reversible by nothing, and worth nothing at all (v4 §7). */
+       Closing it is free, reversible by nothing, and worth nothing at all (v4 §7).
+       Two states, two entities, because the label has to be the name of the thing that is on the desk: while the
+       lid is up it is 开着的电脑 and it opens the screen; once it is shut it is 合上的电脑 and it answers a hand
+       on it with the sound of a closed lid. Neither one is ever a disabled node. */
     {
       id: "laptop", transform: LAPTOP,
-      sprite: {
-        src: "sprites/laptop-open.webp", layer: "prop", sizeVh: 10,
-        swap: [{ when: flag("hotel.findmyOff"), src: "sprites/laptop-closed.webp" }],
-      },
+      sprite: { src: "sprites/laptop-open.webp", layer: "prop", sizeVh: 10 },
       interactable: { verbs: ["use"], label: "开着的电脑", reveal: 12, cost: { minutes: 0 } },
-      enabled: not(flag("hotel.findmyOff")),
+      visible: not(flag("hotel.findmyOff")),
       gaze: { radius: 12, dwell: 900 },
+    },
+    {
+      id: "laptop-shut", transform: LAPTOP,
+      sprite: { src: "sprites/laptop-closed.webp", layer: "prop", sizeVh: 10 },
+      interactable: { verbs: ["inspect"], label: "合上的电脑", reveal: 12, cost: { minutes: 0 } },
+      visible: flag("hotel.findmyOff"),
     },
     /* Her own page out of the notebook, twenty-two numbers copied off the local directory. It never opens:
        it only fills up with crossed-off lines while she works down it. */
     {
       id: "notepad", transform: NOTEPAD,
       sprite: {
-        src: "sprites/notepad-list.webp", layer: "prop", sizeVh: 3,
+        src: "sprites/notepad-list.webp", layer: "prop", sizeVh: 5,
         swap: [{ when: flag("hotel.calls", { gte: CALLS_BEFORE_DONE }), src: "sprites/notepad-crossed.webp" }],
       },
     },
@@ -119,15 +130,21 @@ export default defineScene({
   ],
   seed: (w) => {
     // What the evening leaves behind: the whole book rung through, the receiver down, Find My off, mom's joke heard.
-    w.setFlag("hotel.called", Array.from({ length: CALLS_IN_BOOK }, (_, index) => String(index)).join(","));
-    w.setFlag("hotel.calls", CALLS_IN_BOOK);
+    w.setFlag("hotel.called", Array.from({ length: CALLS_SEEDED }, (_, index) => String(index)).join(","));
+    w.setFlag("hotel.calls", CALLS_SEEDED);
     w.setFlag("hotel.hungUp", true);
     w.setFlag("hotel.findmyOff", true);
     w.setFlag("hotel.momPing", true);
     w.setFlag("hotel.momHeard", true);
-    w.patch("journal", { entries: Array.from(new Set([...w.state.journal.entries, "E-hotels", "E-mama"])) });
+    w.patch("journal", {
+      objective: null,
+      entries: Array.from(new Set([
+        ...w.state.journal.entries, "E-hotels",
+        ...(ENTRIES["E-mama"] ? ["E-mama"] : []),
+      ])),
+    });
     // Two days on her feet end here; the third day starts rested and warm.
-    w.patch("body", { fatigue: 0, fear: 0 });
+    w.patch("body", { fatigue: 0, fear: 0, breath: "calm" });
   },
   walkthrough: [
     { type: "interact", entity: "room-phone", verb: "use" },
@@ -205,6 +222,11 @@ export default defineScene({
     /* She walked down off the path in the morning and rang from here until it was dark. The clock catches up on
        the way in; no mark fires on day two, so nothing else moves. */
     ctx.onEnter(() => {
+      // The first day's objective (656 · Plan de Roces) was answered by the road two nights ago.
+      if (w.state.journal.objective) w.patch("journal", { objective: null });
+      // A bed and a breakfast stand between the forest and this room, the same body `search` starts the day on:
+      // warping straight in here has to arrive on the same legs a played morning does (matches this scene's seed).
+      w.patch("body", { fatigue: 0, fear: 0, breath: "calm" });
       if (w.state.clock.minuteOfDay >= EVENING) return;
       w.patch("clock", { minuteOfDay: EVENING });
       w.set("phone", { ...w.state.phone, minuteOfDay: EVENING });
@@ -267,10 +289,17 @@ export default defineScene({
       ctx.open("findmy", { closing: true });
     });
     ctx.onGaze("laptop", () => {
+      if (ctx.flag("hotel.findmyOff", false)) return;      // it is shut: there is no screen to catch her face
       if (ctx.flag("hotel.screen", false)) return;
       ctx.setFlag("hotel.screen", true);
       ctx.sfx("tick", -0.5, 0.3);
       ctx.kick("settle", 0.2);
+    });
+    /* A hand on the shut lid. Nothing opens; the aluminium knocks once and her hand comes back off it. */
+    ctx.onInteract("laptop-shut", () => {
+      ctx.hand(LAPTOP, "grip");
+      ctx.kick("glance", 0.25, { yaw: -3, pitch: -3 });
+      ctx.sfx("tock", -0.5, 0.35);
     });
     ctx.onAction("findmy:off", () => {
       if (ctx.flag("hotel.findmyOff", false)) return;
@@ -296,7 +325,7 @@ export default defineScene({
     ctx.onInteract("wall-picture", () => {
       ctx.kick("glance", 0.4, { yaw: -2, pitch: 3 });
       ctx.sfx("breath", -0.4, 0.4);
-      ctx.say("两天前我在里面。", { tag: "hotel-picture" });
+      ctx.say("昨天早上我在里面。", { tag: "hotel-picture" });
     });
 
     /* The pack: the empty slot is in there, and she is not going to be told about it. */
@@ -377,6 +406,8 @@ export default defineScene({
       ctx.after(420, () => ctx.sfx("cloth", 0, 0.3));
       w.patch("clock", { minuteOfDay: 9 * 60 + 10 });
       w.set("phone", { ...w.state.phone, minuteOfDay: 9 * 60 + 10, date: { year: 2025, month: 8, day: 1 } });
+      // A bed, a night, and a morning: the third day starts on legs that have slept (matches this scene's seed).
+      w.patch("body", { fatigue: 0, fear: 0, breath: "calm" });
     });
   },
 });

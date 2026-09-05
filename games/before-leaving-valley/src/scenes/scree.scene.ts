@@ -5,7 +5,7 @@
    game where one picture holds the sun, the wall and how much slope is left: she has to choose to look up for it.
    Every coordinate was read off the 150°×84° grid of 11-scree (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84);
    the pixel it came from (1280×720) is noted beside it. */
-import { after, before, flag } from "../engine/condition";
+import { after, before, entityIs, flag, not } from "../engine/condition";
 import { defineScene, type WalkStep } from "../engine/scene";
 import type { Transform } from "../engine/types";
 import type { World } from "../engine/world";
@@ -18,15 +18,20 @@ const STAR_MINUTE = 20 * 60 + 30;     // v4 §8: the first star, after half past
 const HALFWAY = 3;                    // v4 §8: the look back at the whole wall comes at half way
 const TO_DEER = 80;                   // v4 §3.1: the hundred minutes of this node minus the six steps themselves
 const LOST_MINUTES = 12;              // v4 §3.5: no confirmed mark on scree costs twelve
-const GULLY_MINUTES = 14;             // the sand runnel straight down the fall line (v4 §9: screeGully, folded into the node)
+const GULLY_MINUTES = 14;             // straight down the fall line on loose sand (v4 §9: screeGully, folded into the node)
 
-/* The six wide flat shelves of the painted stone band, far end first, and the single flat stone lying at her feet. */
+/* The flat footings, in the order she takes them. The painted stone band runs down-slope to the LEFT, so the first
+   four steps traverse it (each one lower on the picture than the last, which is what going down a slope sideways
+   looks like), and then the shelf band ends: the last two cut back across the top of the rubble heap to the single
+   flat stone lying on the sand at her feet, which is where the trail out is. Every step is nearer and lower than the
+   one before it — pitch -2.1, -6.5, -9.6, -12.4, -28.0, -35.2 — and the two that swing right are her rejoining the
+   line, not a jump. All six were re-read at 2.4-3.6x on 11-scree. */
 const FLAT: Transform[] = [
   { yaw: 2.9, pitch: -2.1, distance: 13 },    // the farthest shelf of the band (665, 378)
-  { yaw: -1.2, pitch: -4.2, distance: 12 },   // the next shelf down-left (630, 396)
-  { yaw: -11.1, pitch: -6.5, distance: 12 },  // (545, 416)
-  { yaw: -24, pitch: -9.6, distance: 11 },    // (435, 442)
-  { yaw: -39.8, pitch: -12.4, distance: 10 }, // (300, 466)
+  { yaw: -11.1, pitch: -6.5, distance: 12 },  // the next shelf down-left (545, 416)
+  { yaw: -24, pitch: -9.6, distance: 12 },    // (435, 442)
+  { yaw: -39.8, pitch: -12.4, distance: 11 }, // the near left-hand shelf, where the band runs out (300, 466)
+  { yaw: -14.1, pitch: -28, distance: 9 },    // a flat-topped stone on the near side of the rubble heap (520, 600)
   { yaw: -0.3, pitch: -35.2, distance: 8 },   // the single flat stone lying on the sand at her feet (638, 662)
 ];
 /* The thin trail worn into the fine sand, from where it appears out of the slope down to where it leaves the picture. */
@@ -44,8 +49,8 @@ const BLOCK: Transform[] = [
   { yaw: 20.8, pitch: -21.9, distance: 12 },  // (818, 548)
   { yaw: 29.9, pitch: -23.1, distance: 11 },  // (895, 558)
   { yaw: 37.3, pitch: -27.5, distance: 11 },  // (958, 596)
-  { yaw: 31, pitch: -31.5, distance: 10 },    // (905, 630)
-  { yaw: 40.4, pitch: -33.3, distance: 10 },  // (985, 645)
+  { yaw: 32.8, pitch: -30.8, distance: 10 },  // the top of the low block at the foot of the heap (920, 624)
+  { yaw: 40.8, pitch: -32.2, distance: 10 },  // the last block, where the heap runs back out into sand (988, 636)
 ];
 
 const TRAIL_OUT: Transform = { yaw: 24, pitch: -38.7, distance: 9 };     // where the trail leaves the bottom of the picture (845, 692)
@@ -57,7 +62,9 @@ const SUN: Transform = { yaw: 50, pitch: 16, distance: 16 };             // the 
 const WALL_BACK: Transform = { yaw: -55.1, pitch: 25.1, distance: 16 };  // the grey towers filling the left edge, above and behind her (170, 145)
 const STAR: Transform = { yaw: -29.3, pitch: 36.2, distance: 16 };       // the blue gap of sky between the towers and the massif (390, 50)
 const GREEN: Transform = { yaw: 35.2, pitch: -4.7, distance: 16 };       // the layered rock terraces across the gully, grass on their tops (940, 400)
-const GULLY: Transform = { yaw: -36.3, pitch: -30.1, distance: 10 };     // the sand runnel between the shelves and the rubble (330, 618)
+/* Nothing is painted here but sand: the loose panel of it immediately left of the rubble heap, which looks from
+   above like the straight way down and is not one. The label names the sand, because the sand is what is drawn. */
+const LOOSE_SAND: Transform = { yaw: -31.6, pitch: -31.5, distance: 10 }; // the open sand just left of the rubble heap (370, 630)
 
 const stepOf = (w: World) => Math.min(w.flag<number>(STEP, 0), TOTAL - 1);
 const pan = (t: Transform) => Math.max(-1, Math.min(1, t.yaw / 45));
@@ -84,12 +91,18 @@ export default defineScene({
       interactable: { verbs: ["step"], label: "细沙", reveal: 14, cost: { fatigue: 0.02 } },
       visible: flag(STEP, { lt: TOTAL }) },
     { id: "block-detour", transform: (w) => BLOCK[stepOf(w)], className: "foot-hotspot",
-      interactable: { verbs: ["step"], label: "大石块", reveal: 14, cost: { minutes: 3, fatigue: 0.03 } },
+      interactable: { verbs: ["step"], label: "大石块", reveal: 14, cost: { minutes: 3, fatigue: 0.02 } },
       visible: flag(STEP, { lt: TOTAL }) },
-    // Three candidate marks (v4 §3.5): paint on the middle boulder, lichen on the near shelf, an old bar on the far terrace.
-    blaze("blaze-scree", BOULDER_MARK, true),
-    blaze("lichen-scree", SLAB_MARK, false),
-    blaze("rust-scree", FAR_ROCK_MARK, false, { sprite: { src: "sprites/blaze-false.webp", layer: "prop", sizeVh: 2.5 } }),
+    // Three candidate marks (v4 §3.5): paint on the middle boulder, lichen on the near shelf, an old bar on the far
+    // terrace. All three keep their stone on the slope after she has settled them and go grey instead of vanishing:
+    // §3.5 asks a confirmed real mark for a faint highlight until she leaves the node and a false one for a dead
+    // point, not for the stone to evaporate off the slope in front of her.
+    blaze("blaze-scree", BOULDER_MARK, true, { visible: undefined, enabled: not(entityIs("blaze-scree", "read")) }),
+    blaze("lichen-scree", SLAB_MARK, false, { visible: undefined, enabled: not(entityIs("lichen-scree", "read")) }),
+    blaze("rust-scree", FAR_ROCK_MARK, false, {
+      sprite: { src: "sprites/blaze-false.webp", layer: "prop", sizeVh: 2.5 },
+      visible: undefined, enabled: not(entityIs("rust-scree", "read")),
+    }),
     // Looking up: the one picture in the game with the sun, the wall and how much slope is left in it (v4 §6).
     lookAt("sunset-clouds", CLOUDS, "夕阳的云", 2, { interactable: { verbs: ["inspect", "photograph"], label: "夕阳的云", reveal: 16, cost: { minutes: 2 } } }),
     // Half way down, the whole wall is behind and above her.
@@ -97,11 +110,12 @@ export default defineScene({
     // How much is left: the layered terraces across the gully, stepping down into the valley.
     lookAt("green-terraces", GREEN, "对面的岩台", 1),
     // The low sun burns out of the sky at 20:15; after half past eight one star stands in the gap over the massif.
-    prop("sun-low", SUN, "sprites/sun-low.webp", 9, { visible: before(SUNSET) }),
+    // 4 vh: the disc itself is a tenth of that, which is about the half degree the sun really is (contract §2).
+    prop("sun-low", SUN, "sprites/sun-low.webp", 4, { visible: before(SUNSET) }),
     { id: "first-star", transform: STAR, sprite: { src: "sprites/first-star.webp", layer: "back", sizeVh: 2.5 },
       gaze: { radius: 12, dwell: 900 }, visible: after(STAR_MINUTE) },
-    // Straight down the fall line: the sand runnel between the shelves and the rubble. It cliffs out; she comes back.
-    wrongWay("scree-gully", GULLY, "石头中间那条沙沟", GULLY_MINUTES, "下面接不上。"),
+    // Straight down the fall line, on the loose sand beside the rubble. It cliffs out; she climbs back up.
+    wrongWay("scree-gully", LOOSE_SAND, "石头左边那片松沙", GULLY_MINUTES, "下面接不上。"),
     goArrow("go", TRAIL_OUT, { to: "deer", minutes: TO_DEER, label: "往下的小径", kind: "run" }),
   ],
   seed: (w) => {
@@ -237,6 +251,14 @@ export default defineScene({
     ctx.onMark("sunset", () => {
       w.emit("ambience", { overrides: { birds: 0, wind: 0.6 } });
       ctx.sfx("exhale", 0, 0.6); ctx.kick("settle", 0.5); ctx.setFlag("scree.sunsetHere", true);
+    });
+
+    /* Leaving. The blocks are the safe way and the one that is off the line (v4 §7): every second step taken on
+       them is a minute of walking back to the trail at the bottom, and nothing on screen ever said so. */
+    ctx.on("travel:begin", ({ from, to }) => {
+      if (from !== "scree" || to !== "deer") return;
+      const blocks = ctx.flag<number>("scree.blocks", 0);
+      if (blocks >= 2) { ctx.spend({ minutes: Math.floor(blocks / 2) }, "从石块堆绕回小径"); ctx.kick("step", 0.4); }
     });
 
     /* Leaving without having settled a mark: twelve minutes of finding the line again (v4 §3.5). Never a lock. */

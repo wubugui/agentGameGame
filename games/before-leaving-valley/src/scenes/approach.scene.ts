@@ -1,19 +1,31 @@
 /* The gravel road under the Sella wall, 10:10. The road climbs the middle of the picture to a dark hollow at the
    foot of the wall; a big rounded bulge of the wall stands right of the road, a pale outcrop left of it. The grassy
-   scree slope rises to the left, the big bushes and the pass meadow fall away to the right, and the hut by the road
-   is already a dot at the far right edge. Coordinates read off the 150°×84° grid of 02-approach. */
-import { flag, not } from "../engine/condition";
+   scree slope rises to the left, and the big bushes and the pass meadow fall away to the right, with the hut on it
+   at the far right edge (1182–1238 × 610–647: roof, gable and window, not a dot).
+   Coordinates read off the 150°×84° grid of 02-approach.
+   Art still to land: sprites/blaze-arrow-old.webp, old-cable.webp and carving-1912.webp. All three anchors are on
+   painted grey limestone, so no ring strays off the picture, but until the pictures exist the old cable and the
+   1912 letters are three rings on bare rock — see `sprites` in this scene's output for the specs. */
+import { entityIs, flag, not } from "../engine/condition";
+import type { EntityDef } from "../engine/entity";
 import { defineScene } from "../engine/scene";
-import type { Transform } from "../engine/types";
+import type { EntityId, Transform } from "../engine/types";
 import { blaze, goArrow, prop, readable } from "./_shared";
+
+/* A mark that stays on its stone after she has read it (v4 §3.5 / §3.8 memory ③): the paint keeps a very faint
+   highlight on the painting until she leaves the node, and can no longer be pressed. The shared factory hides the
+   whole entity once it is read; here it stays and only its state changes — `enabled: false` is what fades it
+   (`.hotspot.is-disabled { opacity:.35 }`), so no second picture is needed. Same three lines as meadow. */
+const mark = (id: EntityId, transform: Transform, real: boolean, extra: Partial<EntityDef> = {}): EntityDef =>
+  blaze(id, transform, real, { visible: undefined, enabled: not(entityIs(id, "read")), ...extra });
 
 const CUT = "approach.cut";
 const BOULDER: Transform = { yaw: 14, pitch: -12 };                   // the rounded bulge of the wall right of the road
-const OUTCROP: Transform = { yaw: -19, pitch: -10.5 };                 // the pale block left of the road at the wall's foot
+const OUTCROP: Transform = { yaw: -19, pitch: -12 };                   // the lit face of the pale block at the wall's foot (478, 463); its top edge and the shadow behind it are at y 450
 const OLD_CABLE: Transform = { yaw: 24, pitch: -6, distance: 12 };     // the grey face just right of the bulge
 const HOLLOW: Transform = { yaw: -7, pitch: -12 };                     // the dark recess where the road ends
 const WALL_TOP: Transform = { yaw: 0, pitch: 22, distance: 20 };       // the crest of the wall, straight overhead
-const HUT: Transform = { yaw: 67, pitch: -31.5, distance: 30 };        // the hut on the pass meadow, far right
+const HUT: Transform = { yaw: 65, pitch: -31.5, distance: 30 };        // the hut on the pass meadow, far right (it spans yaw 64–70; this end of it stays inside the reachable gaze)
 const FINE_GRAVEL: Transform = { yaw: -32, pitch: -8 };                // the smooth sand between the stones, straight up the slope
 const ROAD_TOP: Transform = { yaw: -2, pitch: -21 };                   // where the road narrows into the wall's foot
 
@@ -36,14 +48,14 @@ export default defineScene({
   entities: [
     // Three candidate marks (v4 §3.5): the bulge right of the road carries the paint; a stone on the slope carries
     // lichen; the wall's right face carries an old arrow from another route. Indistinguishable until she is close.
-    blaze("blaze-boulder", BOULDER, true),
-    blaze("lichen-stone", { yaw: -36, pitch: -22 }, false),
-    blaze("arrow-old", { yaw: 40, pitch: -4 }, false, { sprite: { src: "sprites/blaze-arrow-old.webp", layer: "prop", sizeVh: 4 } }),
+    mark("blaze-boulder", BOULDER, true),
+    mark("lichen-stone", { yaw: -36, pitch: -22 }, false),
+    mark("arrow-old", { yaw: 40, pitch: -4 }, false, { sprite: { src: "sprites/blaze-arrow-old.webp", layer: "prop", sizeVh: 4 } }),
     // What the wall keeps from 1912 (v4 §6/§8): a rusted length of cable on the face, and letters chiselled into the pale block.
     prop("old-cable", OLD_CABLE, "sprites/old-cable.webp", 9, {
       interactable: { verbs: ["inspect"], label: "旧钢缆", reveal: 12, cost: { minutes: 1 } },
     }),
-    readable("carving-1912", OUTCROP, "凿在岩壁上的字", {
+    readable("carving-1912", OUTCROP, "石头上凿的字", {
       kind: "carving", title: "PÖSSNECKER 1912",
       lines: ["PÖSSNECKER", "1912", "凿进石灰岩的字，边缘已经被风磨圆了。"],
       entry: "E-possnecker", minutes: 1,
@@ -51,10 +63,13 @@ export default defineScene({
     // The hollow at the foot of the wall, and the crest straight overhead: looking is free and gets a breath, not a word.
     { id: "wall-foot", transform: HOLLOW, gaze: { radius: 12, dwell: 900 } },
     { id: "wall-up", transform: WALL_TOP, gaze: { radius: 14, dwell: 1000 } },
-    // Looking back at the pass: the hut is already a dot. A minute to look, another for the photo; then no more turning round.
+    // Looking back at the pass (v4 §6: 一分钟 + 那张回望的照片). One verb, because src/view/Hotspot.tsx only ever
+    // dispatches verbs[0] — turning round and raising the phone is one movement anyway: a minute for the turn,
+    // and the phone charges its own minute and its 1% for the shutter.
     { id: "pass-view", transform: HUT,
-      interactable: { verbs: ["inspect", "photograph"], label: "山口的木屋", reveal: 14, cost: { minutes: 1 } } },
-    // The fine gravel straight up the slope looks shorter than the road. Every step slides back (v4 §8: −9 min, fatigue +0.08).
+      interactable: { verbs: ["photograph"], label: "山口的木屋", reveal: 14, cost: { minutes: 1 } } },
+    // The fine gravel straight up the slope looks shorter than the road. Every step slides back (v4 §8: −9 min, fatigue +0.08:
+    // 0.05 here, and the 0.03 that BodySystem adds for the body:slip of severity 0.6 the hold emits — do not move the total into one place).
     { id: "gravel-cut", transform: FINE_GRAVEL, className: "foot-hotspot",
       interactable: { verbs: ["hold"], label: "细砾坡", reveal: 16, cost: { minutes: 9, fatigue: 0.05 } },
       hold: { ms: 900, scaleWith: ["fatigue"] }, visible: not(flag(CUT)) },
@@ -70,7 +85,7 @@ export default defineScene({
   variants: {
     // Cut straight up the fine gravel first: nine minutes and the slope gives them all back. Then the mark, then the road.
     cut: [
-      { type: "hold:start", entity: "gravel-cut" }, { wait: 2400 }, { type: "hold:end" },
+      { type: "hold:start", entity: "gravel-cut" }, { wait: 2600 }, { type: "hold:end" },
       { wait: 400 },
       { type: "interact", entity: "blaze-boulder", verb: "inspect" },
       { type: "travel", entity: "go" },
@@ -80,7 +95,6 @@ export default defineScene({
       { type: "interact", entity: "blaze-boulder", verb: "inspect" },
       { type: "interact", entity: "old-cable", verb: "inspect" },
       { type: "interact", entity: "carving-1912", verb: "read" }, { type: "overlay:close" },
-      { type: "interact", entity: "pass-view", verb: "inspect" },
       { type: "interact", entity: "pass-view", verb: "photograph" },
       { wait: 400 },
       { type: "travel", entity: "go" },
@@ -115,12 +129,13 @@ export default defineScene({
       ctx.hand(OUTCROP); glance({ yaw: 0, pitch: -2 }, 0.3); ctx.sfx("cloth", -0.2, 0.4);
     });
 
-    // Looking back. Turning round is a minute; the photo is the phone's business, the scene only remembers she took it.
-    ctx.onInteract("pass-view", (verb) => {
-      if (verb === "photograph") { shoot(); ctx.setFlag("approach.photoBack", true); glance({ yaw: 2, pitch: -2 }, 0.35); return; }
+    // Looking back: she turns round, breathes, and takes it. No line — the hut is painted large enough to see for
+    // yourself (it is 56 px of the picture, roof, gable and window), so there is nothing here for her to announce.
+    ctx.onInteract("pass-view", () => {
       ctx.setFlag("approach.lookedBack", true);
       ctx.kick("turn", 0.5, { yaw: 1, pitch: 0 }); ctx.sfx("breath", 0.6, 0.5);
-      ctx.say("木屋已经是一个点了。", { tag: "approach-back" });
+      shoot(); ctx.setFlag("approach.photoBack", true);
+      glance({ yaw: 2, pitch: -2 }, 0.35);
     });
     ctx.on("phone:photo", ({ scene }) => {
       if (scene !== "approach") return;
@@ -146,10 +161,12 @@ export default defineScene({
       ctx.sfx("slide", -0.5, 1); ctx.kick("slip", 1.1, { yaw: -2, pitch: -5 }); ctx.fx("dust", 0.9);
       ctx.say("细砾一直在往下走。", { tag: "approach-cut", priority: 1 });
     });
+    // A hand laid on it for a moment answers with grit and dust and costs nothing; only a real try, given up, slides her back a minute.
     ctx.onRelease("gravel-cut", (progress) => {
       if (progress <= 0.05) return;
-      ctx.spend({ minutes: 1, fatigue: 0.01 }, "在细砾上滑了一下");
       ctx.sfx("slide", -0.5, 0.4); ctx.kick("slip", 0.4, { yaw: -1, pitch: -2 }); ctx.fx("dust", 0.5);
+      if (progress <= 0.2) return;
+      ctx.spend({ minutes: 1, fatigue: 0.01 }, "在细砾上滑了一下");
     });
 
     // Standing still under the wall. The first breath brings a gust down off it; the third, grit settling somewhere on the slope.

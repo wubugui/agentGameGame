@@ -68,6 +68,10 @@ const holdEntity = (h: Hold): EntityDef => ({
   visible: liveAt(h),
 });
 
+/* 回放用的按住。到这一场的时候 fatigue/fear 已经接近 1，按住时长要乘 (1 + fear·0.9 + fatigue·0.6) = 2.5，
+   所以下面每个 wait 都不小于 hold.ms × 2.5 + 300：
+   log 720/800/880/960 → 2100/2300/2500/2700；root 900/1000/1100/1200 → 3150/3400；rock 1170/1300/1430/1560 → 3550/3875/4200。
+   多等是免费的：按住到时会自己完成，之后的 hold:end 是空操作。 */
 const grab = (entity: string, wait: number): WalkStep[] => [{ type: "hold:start", entity }, { wait }, { type: "hold:end" }, { wait: 200 }];
 
 export default defineScene({
@@ -253,18 +257,22 @@ export default defineScene({
       ctx.say("走错了一小段。", { tag: "f2-lost", priority: 1 });
     });
   },
+  /* 最快的合法路线。倒木是这一场最便宜的抓手（5 分），但十小时之后它会自己动一下——除非先花一分钟用手压过它
+     （advance 里的 TESTED 分支）。1+5+5+6+6 = 23 分，比全走树根的 24 分快，也不再靠运气。 */
   walkthrough: [
+    { type: "interact", entity: "log-test", verb: "inspect" }, { wait: 400 },
     { type: "interact", entity: "blaze-f2", verb: "inspect" }, { wait: 400 },
     ...grab("f2-log", 2400),
     ...grab("f2-stump", 2600),
-    ...grab("f2-root-c", 2800),
-    ...grab("f2-root-d", 3200),
+    ...grab("f2-root-c", 3300),
+    ...grab("f2-root-d", 3500),
     { type: "travel", entity: "go" },
   ],
   variants: {
     // 一处记号都不认：出林子的时候多二十分钟。
     blind: [
-      ...grab("f2-log", 2400), ...grab("f2-stump", 2600), ...grab("f2-root-c", 2800), ...grab("f2-root-d", 3200),
+      { type: "interact", entity: "log-test", verb: "inspect" }, { wait: 400 },
+      ...grab("f2-log", 2400), ...grab("f2-stump", 2600), ...grab("f2-root-c", 3300), ...grab("f2-root-d", 3500),
       { type: "travel", entity: "go" },
     ],
     // 朝灯的方向下了一段，认错了一处旧疤，然后老老实实走石头。
@@ -272,7 +280,7 @@ export default defineScene({
       { type: "interact", entity: "wrong-slope", verb: "inspect" }, { wait: 900 },
       { type: "interact", entity: "moss-f2", verb: "inspect" }, { wait: 400 },
       { type: "interact", entity: "blaze-f2", verb: "inspect" }, { wait: 400 },
-      ...grab("f2-root-a", 3200), ...grab("f2-bank", 3400), ...grab("f2-rock-c", 3600), ...grab("f2-rock-d", 4000),
+      ...grab("f2-root-a", 3200), ...grab("f2-bank", 3700), ...grab("f2-rock-c", 4000), ...grab("f2-rock-d", 4400),
       { type: "travel", entity: "go" },
     ],
     // 这片林子给的全部：压一压木头、看一眼下面的灯、拍一张、记号、慢的那条线。
@@ -283,7 +291,7 @@ export default defineScene({
       { type: "interact", entity: "blaze-f2", verb: "inspect" }, { wait: 400 },
       ...grab("f2-root-a", 3000),
       { type: "wait" }, { wait: 600 },
-      ...grab("f2-bank", 3400), ...grab("f2-rock-c", 3600), ...grab("f2-root-d", 3200),
+      ...grab("f2-bank", 3700), ...grab("f2-rock-c", 4000), ...grab("f2-root-d", 3500),
       { type: "travel", entity: "go" },
     ],
   },

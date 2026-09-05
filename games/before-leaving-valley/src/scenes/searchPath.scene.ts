@@ -8,7 +8,7 @@
    are on the painting from the first minute and nothing has to be done to earn them.
    Every coordinate was read off the 150°×84° grid of 18c-searchpath (yaw = (x/W − .5)·150,
    pitch = (.5 − y/H)·84); the pixel it came from (1280×720) is noted beside it. */
-import { entityIs, flag, not } from "../engine/condition";
+import { flag, not } from "../engine/condition";
 import type { EntityDef } from "../engine/entity";
 import { defineScene } from "../engine/scene";
 import type { EntityId, SfxName, Transform } from "../engine/types";
@@ -33,62 +33,68 @@ const SPOTS: Spot[] = [
   // The mossy bank of roots and stones on the left, where the green runs down to the bare dirt (529, 467).
   { id: "moss-bank", label: "路边的苔藓", sfx: "cloth", pan: -0.3, fx: "gust", transform: { yaw: -13, pitch: -12.5 }, find: "moss" },
   // The creeping pine spread over the slope on the right, its near lobe over the path edge (964, 514).
-  { id: "pine-bush", label: "矮松丛", sfx: "cloth", pan: 0.5, fx: "gust", transform: { yaw: 38, pitch: -18 }, find: "branch" },
+  { id: "pine-bush", label: "路右边那丛矮松", sfx: "cloth", pan: 0.5, fx: "gust", transform: { yaw: 38, pitch: -18 }, find: "branch" },
   // The long pale stone lying at the left edge of the sand, a streak of moss along its back (580, 576).
   { id: "flat-stone", label: "路边那块长石头", sfx: "thud", pan: -0.15, fx: "dust", transform: { yaw: -7, pitch: -25 } },
   // The heap of rounded boulders down the slope on the left, in their own shadow (375, 634).
-  { id: "boulders", label: "坡下的几块巨石", sfx: "thud", pan: -0.55, fx: "dust", transform: { yaw: -31, pitch: -32, distance: 9 } },
+  { id: "boulders", label: "坡下那堆圆石", sfx: "thud", pan: -0.55, fx: "dust", transform: { yaw: -31, pitch: -32, distance: 9 } },
 ];
 
 const MOSS_SCUFF: Transform = { yaw: -16, pitch: -14 };        // the green of the bank itself, just above the bare dirt (503, 480)
 const KNEE_PRINT: Transform = { yaw: 17, pitch: -21 };         // the damp brown dirt along the right edge of the sand (785, 540)
 const BROKEN_BRANCH: Transform = { yaw: 34, pitch: -22 };      // the bare ground at the foot of the creeping pine (930, 549)
-const PACK_DOWN: Transform = { yaw: -13, pitch: -33 };         // the pine needles left of the sand, at her feet (529, 643)
+const PACK_DOWN: Transform = { yaw: -16, pitch: -33 };         // the pine needles left of the sand, clear of the long stone (493, 643)
 const BIG_ROOT: Transform = { yaw: -35, pitch: -17 };          // the roots of the big pine coming out of the bank (345, 510)
 const SPIRES: Transform = { yaw: 0, pitch: 22, distance: 30 }; // the rock towers standing over the canopy (640, 161)
 const UP_PATH: Transform = { yaw: 5, pitch: -10 };             // the sand going on up over the rise (683, 446)
-const DOWN_PATH: Transform = { yaw: 2, pitch: -31 };           // the sand going out of the picture at her feet (657, 626)
-const HOME_PATH: Transform = { yaw: 18, pitch: -34 };          // the same sand, lower and further right, leaving the frame (794, 651)
+/* The two ways out are measured in the running 1280×720 view, not on the plate: the perspective camera puts
+   (yaw, pitch) on screen row 360·(1 − tan(pitch)/(cos(yaw)·tan 30°)), so −29° at these yaws left half the label
+   under the bottom edge. They are also pulled apart — one down the middle of the sand, one out over the needles
+   on the right — so the two arrows are not the same patch of ground with two different words on it. */
+const DOWN_PATH: Transform = { yaw: 0.5, pitch: -24.5 };       // the middle of the sand, going down out of the frame (644, 570)
+const HOME_PATH: Transform = { yaw: 24.5, pitch: -22.8 };      // where the sand's right edge runs into the pine needles (849, 555)
 
 const TO_SEARCH = 10;    // the ten minutes search charges to walk up here, paid again going back
 const TO_HOTEL = 35;     // those ten plus the twenty-five from the stand below down to the village
 
 export default defineScene({
   id: "searchPath",
-  day: 2, place: "昨晚的小路 · 第二天", elevation: "1,800 m",
+  day: 2, place: "昨晚的小路 · 第二天", elevation: "1,880 m",
   painting: "pano/18c-searchpath.webp",
   body: "stand", material: "soft",
   ambience: { wind: 0.3, windTone: 850, birds: 0.65, crickets: 0, stream: 0, engine: 0, heater: 0 },
   weather: { motes: "pollen" },
   arriveAt: 10 * 60,
   idleLook: true,
-  fallback: "昨晚我从这儿爬下去的。",
+  fallback: "松针上还是湿的。",
   // Day two has no completion threshold (v4 §8): nothing gates either way out.
   exitWhen: undefined,
   entities: [
-    // The five places. Turned over once, then grey: the picture keeps the record of what she has already done.
+    /* The five places. Once each: a second click still reaches the engine (no `enabled` guard, so the hotspot is
+       never a dead button) and comes back as interact:refused — her hand goes out to it and comes back. */
     ...SPOTS.map((spot): EntityDef => ({
       id: spot.id, transform: spot.transform, className: "search-hotspot",
       interactable: { verbs: ["inspect"], label: spot.label, reveal: 13, cost: { minutes: 12 }, once: true },
-      enabled: not(entityIs(spot.id, "used")),
       ...(spot.id === "pine-bush" ? { gaze: { radius: 13, dwell: 1000 } } : {}),
     })),
-    // What the bank gives up: a hand's width of moss rubbed off it. Hers, and it stays where it is.
+    /* What the bank gives up: a hand's width of moss rubbed off it, the wet brown dirt showing through. Hers,
+       and it stays where it is. The art is still to be drawn (`moss-torn`); until it exists the view hides it and
+       the beat still lands, because what announces it is the head turning and one tick, not a picture. */
     { id: "moss-scuff", transform: MOSS_SCUFF,
-      sprite: { src: "sprites/moss-scuff.webp", layer: "prop", sizeVh: 8 },
+      sprite: { src: "sprites/moss-torn.webp", layer: "prop", sizeVh: 4 },
       interactable: { verbs: ["inspect"], label: "蹭掉的苔藓", reveal: 12, cost: { minutes: 1 }, once: true },
-      visible: flag(FOUND_MOSS), enabled: not(entityIs("moss-scuff", "used")) },
+      visible: flag(FOUND_MOSS) },
     // What the sand gives up: one very shallow knee print in the mud along its edge.
     { id: "knee-print", transform: KNEE_PRINT,
       sprite: { src: "sprites/knee-print.webp", layer: "prop", sizeVh: 7 },
       interactable: { verbs: ["inspect"], label: "泥地上很浅的印", reveal: 12, cost: { minutes: 1 }, once: true },
       gaze: { radius: 12, dwell: 900 },
-      visible: flag(FOUND_KNEE), enabled: not(entityIs("knee-print", "used")) },
+      visible: flag(FOUND_KNEE) },
     // What the creeping pine gives up: one branch snapped off at the root of it, the break still pale.
     { id: "broken-branch", transform: BROKEN_BRANCH,
       sprite: { src: "sprites/broken-branch.webp", layer: "prop", sizeVh: 7 },
       interactable: { verbs: ["inspect"], label: "断掉的树枝", reveal: 12, cost: { minutes: 1 }, once: true },
-      visible: flag(FOUND_BRANCH), enabled: not(entityIs("broken-branch", "used")) },
+      visible: flag(FOUND_BRANCH) },
     // The pack comes off her back the first time she kneels down, and stays on the needles.
     prop("pack-down", PACK_DOWN, "sprites/backpack-floor.webp", 14, { visible: flag(TURNED, { gte: 1 }) }),
     // The roots of the big pine, out of the bank at hand height. Last night she came down past them holding on.
@@ -156,6 +162,15 @@ export default defineScene({
   },
   script: (ctx) => {
     const w = ctx.world;
+
+    /* The second day is walked on legs that slept and with nothing written on the map: `search` does both when
+       she comes back up the path, and this stand only hangs off that one — but ?node=searchPath skips `search`'s
+       seed (engine/dev.ts SIDE_PARENT), so a warped save has to arrive the same way a played one does. */
+    ctx.onEnter(() => {
+      if (w.state.journal.objective) w.patch("journal", { objective: null });
+      if (w.state.body.fatigue > 0 || w.state.body.fear > 0) w.patch("body", { fatigue: 0, fear: 0, breath: "calm" });
+    });
+
     const glanceAt = (target: Transform, strength = 0.5) => {
       const here = w.rt.gaze;
       ctx.kick("glance", strength, {
@@ -169,6 +184,18 @@ export default defineScene({
       ctx.setFlag("search.spots", [...list, id].join(","));
     };
     const traces = () => [FOUND_MOSS, FOUND_KNEE, FOUND_BRANCH].filter((key) => ctx.flag(key, false)).length;
+
+    /* A place she has already been through. The engine refuses it (once), and the refusal is answered the way an
+       impossible reach is: her hand goes out to it and comes back, one dry knock, no text. */
+    ctx.on("interact:refused", ({ entity, reason }) => {
+      if (reason !== "gone") return;
+      const def = ctx.scene.entities.find((one) => one.id === entity);
+      if (!def?.interactable?.once) return;
+      const where = ctx.transformOf(entity);
+      ctx.hand(where, "grip");
+      ctx.kick("glance", 0.3, { yaw: 0, pitch: -4 });
+      ctx.sfx("tock", Math.max(-1, Math.min(1, where.yaw / 60)), 0.3);
+    });
 
     /* Turning a place over: the pack goes down, she kneels, the ground answers, and either something of hers is
        lying under it or nothing is. Twelve minutes either way; the two empty ones stay empty for good. */
@@ -215,7 +242,7 @@ export default defineScene({
       ctx.kick("pull", 0.45);
       ctx.sfx("thud", 0.45, 0.5);
       ctx.after(500, () => ctx.sfx("cloth", 0.45, 0.35));
-      ctx.say("树枝是新断的。", { tag: "path-branch" });
+      ctx.say("树枝是新断的。", { tag: "path-branch", priority: 1 });
     });
 
     /* The roots of the big pine: she takes hold of them the way she took hold of them in the dark, and lets go.
@@ -225,7 +252,7 @@ export default defineScene({
       ctx.kick("pull", 0.6);
       ctx.sfx("grip", -0.4, 0.7);
       ctx.after(600, () => { ctx.kick("settle", 0.4); ctx.sfx("cloth", -0.4, 0.4); });
-      ctx.say("这根树根，我昨晚抓过。", { tag: "path-root" });
+      ctx.say("昨晚这根是湿的。", { tag: "path-root" });
     });
     ctx.onRelease("big-root", () => {
       ctx.kick("settle", 0.3);
@@ -270,7 +297,7 @@ export default defineScene({
       ctx.sfx("step", 0.15, 0.6);
       ctx.fx("dust", 0.3);
       ctx.after(620, () => { ctx.kick("turn", 0.6); ctx.sfx("step", 0.1, 0.4); });
-      ctx.say("再往上，就在圈外了。", { tag: "path-above" });
+      ctx.say("再往上，就在圈外了。", { tag: "path-above", priority: 1 });
     });
 
     /* Standing still on it. A drop off a branch on the right, then a bird further off, and then the thing the

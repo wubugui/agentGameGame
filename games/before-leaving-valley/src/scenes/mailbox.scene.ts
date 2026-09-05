@@ -5,9 +5,9 @@
    Coordinates read off the 150°×84° grid of 06-mailbox (yaw = (x/1280 − 0.5)·150, pitch = (0.5 − y/720)·84):
    the cable enters bottom left over the forest at (666, 637), climbs right across the pale wall — (1000, 499),
    (1152, 474), (1180, 470) — and reaches the bolted hanger plate at (1200..1250, 390..530) before leaving the frame
-   at (1280, 445). Everything on the box itself is placed against the rendered mailbox sprite, not guessed: the box
-   sprite measures 164 × 173 px on screen, and the pad drawn inside it occupies fractions x 0.31..0.70, y 0.35..0.56
-   of that rectangle. The pass lies 180 m below to the left. */
+   at (1280, 445). Everything on the box itself is placed against the rendered mailbox sprite, not guessed: at 18 vh
+   the box sprite measures about 123 × 130 px on screen, and the pad drawn inside it occupies fractions x 0.31..0.70,
+   y 0.35..0.56 of that rectangle. The pass lies 180 m below to the left. */
 import { LETTER_LINES_IT } from "../data/letter";
 import { all, entityIs, flag, not, worn } from "../engine/condition";
 import { defineScene, type WalkStep } from "../engine/scene";
@@ -21,16 +21,25 @@ const FLIPS = "mailbox.flips", VALLEY_SHOT = "mailbox.photoValley";
 const LEAVES = 4;               // the pad: three rain-soaked leaves and the one that matters
 const LETTER_LEAF = 2;          // the third leaf is the 28/07 page
 
-/* Painted things. The hanger where the cable is bolted to the rock, top right; the box on the wall just under the
-   cable beside it; the cable's lower run at her feet, bottom left. */
+/* Painted things. The hanger where the cable is bolted to the rock, top right; the box low on the wall under it; the
+   cable's lower run at her feet, bottom left.
+   The box sprite carries a stone plinth baked into it (a green box bolted onto a boulder, painted three-quarters from
+   above, in a bluer stone than this wall). It is 18 vh rather than 24, so the borrowed stone covers a third less of the
+   pale face, and it sits lower and further right than it did, against the blockier rock instead of out on the smooth
+   panel. It cannot go lower than this: measured live, past about pitch -30 the sprite runs off the bottom of the
+   viewport and the pad hotspots stop being reachable. The real fix is a recut without the plinth (it is in the art
+   request); nothing here points at art that does not exist, because the box must never stop being drawn. */
 const ANCHOR: Transform = { yaw: 65, pitch: -12 };                    // the cable at the foot of the hanger plate (1195, 463)
 const LANYARD_ON_ANCHOR: Transform = { yaw: 64.5, pitch: -15.5, distance: 9 };   // the carabiner hanging from it
-const BOX: Transform = { yaw: 52, pitch: -23.5, distance: 9 };        // the box, on the wall under the cable (1084, 561)
-const LID: Transform = { yaw: 52.7, pitch: -20.1 };                   // its lid: fraction (0.55, 0.24) of the closed sprite
-const PAD: Transform = { yaw: 51.6, pitch: -22.6, distance: 9 };      // the leaf standing up in the open box (0.47, 0.42)
-const PAD_EDGE: Transform = { yaw: 50.6, pitch: -23.9 };              // the pad's near left corner (0.385, 0.51)
-const PAGE_AT: Transform = { yaw: 52.4, pitch: -22.2 };               // the writing on that leaf (0.53, 0.40)
-const PAGE_CORNER: Transform = { yaw: 53.2, pitch: -24.2 };           // its loose bottom right corner (0.60, 0.575)
+const BOX: Transform = { yaw: 54, pitch: -25.5, distance: 9 };       // the box, on the blockier rock under the cable (1101, 579)
+/* Everything on the box is an offset from BOX, kept in the proportions that were verified against the rendered sprite
+   and rescaled with it (24 vh -> 18 vh, so each offset x 0.75), then re-measured live with getBoundingClientRect
+   against the pad the open sprite actually paints (fractions x 0.31..0.70, y 0.35..0.56 of its rectangle). */
+const LID: Transform = { yaw: 54.53, pitch: -22.95 };                 // its lid: fraction (0.55, 0.24) of the closed sprite
+const PAD: Transform = { yaw: 53.7, pitch: -24.83, distance: 9 };     // the leaf standing up in the open box (0.47, 0.42)
+const PAD_EDGE: Transform = { yaw: 52.95, pitch: -25.8 };             // the pad's near left corner (0.385, 0.51)
+const PAGE_AT: Transform = { yaw: 54.3, pitch: -24.53 };              // the writing on that leaf (0.53, 0.40)
+const PAGE_CORNER: Transform = { yaw: 54.9, pitch: -26.03 };          // its loose bottom right corner (0.60, 0.575)
 const CABLE_UP: Transform = { yaw: 60, pitch: -13.4 };                // the cable itself, rising past the box (1152, 474)
 const CABLE_FOOT: Transform = { yaw: 3, pitch: -32.3 };               // the cable's lower run, dropping away left (666, 637)
 
@@ -76,13 +85,13 @@ export default defineScene({
       visible: not(flag(CLIPPED)) },
     { id: "anchor-lanyard", transform: LANYARD_ON_ANCHOR, sprite: { src: "sprites/carabiner-blue.webp", layer: "hand", sizeVh: 7 }, visible: flag(CLIPPED) },
     // The box on the wall under the cable: closed until she has both hands; the lid is the thing she opens.
-    { id: "mailbox", transform: BOX, sprite: { src: "sprites/mailbox-closed.webp", layer: "prop", sizeVh: 24, swap: [{ when: flag(OPENED), src: "sprites/mailbox-open.webp" }] } },
+    { id: "mailbox", transform: BOX, sprite: { src: "sprites/mailbox-closed.webp", layer: "prop", sizeVh: 18, swap: [{ when: flag(OPENED), src: "sprites/mailbox-open.webp" }] } },
     { id: "mailbox-lid", transform: LID,
       interactable: { verbs: ["use"], label: "金属盒", reveal: 13, cost: { minutes: 1 }, requires: handsFree },
       visible: not(flag(OPENED)) },
     // The Memo pad inside is painted into the open box: three rain-soaked leaves. Landing on the fourth turns one leaf
     // up against the lid — the only leaf with writing on it, and the only one this sprite ever shows.
-    { id: "memo-pad", transform: PAD, sprite: { src: "sprites/memo-page.webp", layer: "prop", sizeVh: 8 }, visible: onLetterLeaf },
+    { id: "memo-pad", transform: PAD, sprite: { src: "sprites/memo-page.webp", layer: "prop", sizeVh: 6 }, visible: onLetterLeaf },
     { id: "memo-flip", transform: PAD_EDGE,
       interactable: { verbs: ["use"], label: "便签本", reveal: 12, cost: { minutes: 0.5 }, requires: handsFree },
       visible: flag(OPENED) },

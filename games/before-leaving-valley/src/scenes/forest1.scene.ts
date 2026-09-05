@@ -58,6 +58,9 @@ const COST: Record<"root" | "rock" | "log", Cost> = {
 };
 const FALSE_LINES: Record<string, string> = { "moss-mark": "地衣。不是漆。", "old-arrow": "旧箭头。别的路线。" };
 
+/* Walkthrough holds. `wait` has to cover the worst case the replay can arrive in — fear 1, fatigue 1 multiply the
+   hold by 2.5 — so every number below is at least `hold.ms × 2.5 + 300` (root 850 → 2425, rock 1150 → 3175,
+   deadfall 700 → 2050). Waiting longer than that is free: the hold completes on its own and hold:end is a no-op. */
 const pull = (entity: string, wait: number): WalkStep[] => [{ type: "hold:start", entity }, { wait }, { type: "hold:end" }, { wait: 260 }];
 
 export default defineScene({
@@ -104,7 +107,8 @@ export default defineScene({
       interactable: { verbs: ["inspect"], label: "树干上的记号", reveal: 12, cost: { minutes: 1 } },
     }),
     // The gap between the two trunks on the left. Twenty-five minutes in and back out; in there the road is gone.
-    wrongWay("tree-gap", TREE_GAP, "左边两棵树之间的缝", 25, "那里听不见公路。"),
+    // It leaves the painting once she has been in there: `once` alone would leave a hotspot that refuses silently.
+    wrongWay("tree-gap", TREE_GAP, "左边两棵树之间的缝", 25, "那里听不见公路。", { visible: not(flag(GAP)) }),
     // The last blue between the crowns. Nothing to click: she looks up, and for a moment the wood has a top.
     { id: "canopy", transform: CANOPY_SKY, gaze: { radius: 13, dwell: 1000 } },
     // Wide (everything, dimly) or narrow (one thing, and nothing else). It costs the hands a beat, and half a
@@ -260,11 +264,16 @@ export default defineScene({
       ctx.say("走错了一小段。", { tag: "forest1-lost", priority: 1 });
     });
   },
+  /* The log is the fastest hold here and the only one that can answer back: above fatigue 0.55 it rolls one time in
+     three, and that costs four minutes instead of a step. The replay arrives with the hands gone, so every route that
+     touches the deadfall carries one spare pull; if the log held, that pull finds `onTrail` false and is refused
+     without starting anything (a tock, no hand, no clock). */
   walkthrough: [
     { type: "interact", entity: "blaze-656", verb: "inspect" }, { wait: 320 },
     ...pull("hold-root", 2600),
     ...pull("deadfall", 2600),
     ...pull("hold-root", 3000),
+    ...pull("hold-root", 3200),
     ...pull("hold-root", 3200),
     { type: "travel", entity: "go" },
   ],
@@ -274,11 +283,12 @@ export default defineScene({
       { type: "interact", entity: "tree-gap", verb: "inspect" }, { wait: 1500 },
       { type: "interact", entity: "blaze-656", verb: "inspect" }, { wait: 320 },
       ...pull("hold-root", 2800), ...pull("deadfall", 2800), ...pull("hold-root", 3200), ...pull("hold-root", 3400),
+      ...pull("hold-root", 3400),
       { type: "travel", entity: "go" },
     ],
     // Every stone, no mark: eight minutes a pull and twenty more on the way out, with the hands almost intact.
     blind: [
-      ...pull("hold-rock", 3000), ...pull("hold-rock", 3200), ...pull("hold-rock", 3400), ...pull("hold-rock", 3600),
+      ...pull("hold-rock", 3300), ...pull("hold-rock", 3400), ...pull("hold-rock", 3500), ...pull("hold-rock", 3600),
       { type: "travel", entity: "go" },
     ],
     // Everything the dark offers: both false marks, the real one, a shout, the narrow bite, mixed holds.
@@ -287,11 +297,12 @@ export default defineScene({
       { type: "interact", entity: "old-arrow", verb: "inspect" }, { wait: 320 },
       { type: "interact", entity: "blaze-656", verb: "inspect" }, { wait: 320 },
       { type: "shout" }, { wait: 600 },
-      ...pull("hold-rock", 3000),
-      { type: "interact", entity: "lamp-bite", verb: "use" }, { wait: 400 },
+      ...pull("hold-rock", 3300),
+      { type: "interact", entity: "lamp-bite", verb: "use" }, { wait: 1200 },
       ...pull("deadfall", 2800),
       { type: "shout" }, { wait: 600 },
       ...pull("hold-root", 3000), ...pull("hold-rock", 3400),
+      ...pull("hold-root", 3400),
       { type: "travel", entity: "go" },
     ],
   },

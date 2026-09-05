@@ -6,7 +6,7 @@
    Every coordinate was read off the 150°×84° grid of 13-forest-edge (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84);
    the pixel it came from (2048×1152) is noted beside it. */
 import type { Condition } from "../engine/condition";
-import { all, before, flag, has, not } from "../engine/condition";
+import { all, before, entityIs, flag, has, not } from "../engine/condition";
 import { defineScene } from "../engine/scene";
 import type { Transform } from "../engine/types";
 import { blaze, goArrow, lookAt, prop, wrongWay } from "./_shared";
@@ -27,7 +27,11 @@ const CRICKETS_HUSH = 20 * 60 + 40;
 const LAMP_LINE = "特别特别幸运，我带了一盏拍视频用的补光灯。";
 
 // Things painted in 13-forest-edge, with the pixel they were read from.
-const TRUNK: Transform = { yaw: 27, pitch: -22 };                       // the straight spruce trunk right of the clearing (1396, 878)
+/* 13-forest-edge has no bare trunk anywhere in it — brightened 2-3x and read at 4-6x, the wood is drawn as a wall
+   of boughs from the canopy down to the grass — so the mark cannot be put on a painted trunk. It is put where a
+   trunk would stand instead: a 10 vh sprite whose foot rests on the forest floor at y 604, just above the grass
+   line. The sprite has to carry its own bark (it is specced that way in the ART request). */
+const TRUNK: Transform = { yaw: 27, pitch: -25.5 };                     // the wood edge right of the clearing, sprite foot on the forest floor (870, 579)
 const LEFT_BOULDER: Transform = { yaw: -23, pitch: -24 };               // the white boulder left of the trail (706, 905)
 const LOW_ROCK: Transform = { yaw: 11, pitch: -30 };                    // the small grey rock under the dwarf pine's roots (1180, 993)
 const RIGHT_BOULDER: Transform = { yaw: -1.5, pitch: -21.5 };          // the middle of that boulder's sloping top, so the map lies on stone (1003, 871)
@@ -57,18 +61,23 @@ export default defineScene({
   entities: [
     // Three candidate marks: the 656 on the spruce trunk, lichen on the near boulder, another route's old paint on the low rock.
     // The label is the name of the thing in the painting: this one is on a trunk, the other two are on stone.
+    // All three stay where they are once she has settled them and go grey (v4 §3.5) — in the dark, a mark she has
+    // read is the one thing she can still steer by, and deleting it off the trunk is the opposite of that.
     blaze("blaze-656", TRUNK, true, {
-      sprite: { src: "sprites/blaze-656.webp", layer: "prop", sizeVh: 5 },
+      sprite: { src: "sprites/blaze-656.webp", layer: "prop", sizeVh: 10 },
       interactable: { verbs: ["inspect"], label: "树干上的记号", reveal: 12, cost: { minutes: 1 } },
+      visible: undefined, enabled: not(entityIs("blaze-656", "read")),
     }),
-    blaze("lichen-edge", LEFT_BOULDER, false),
-    blaze("oldpaint-edge", LOW_ROCK, false),
+    // The two that are not paint are pale stone: they only exist for her once there is a lamp on them. Before that
+    // this frame has no light source in it, and nothing in it should be lit.
+    blaze("lichen-edge", LEFT_BOULDER, false, { visible: HOLDING_LAMP, enabled: not(entityIs("lichen-edge", "read")) }),
+    blaze("oldpaint-edge", LOW_ROCK, false, { visible: HOLDING_LAMP, enabled: not(entityIs("oldpaint-edge", "read")) }),
     // The dark the trail runs into. Nothing to click: she just looks at it.
     { id: "forest-dark", transform: FOREST_DARK, gaze: { radius: 14, dwell: 900 } },
     // 20:40, still standing here: the crickets stop. A trigger, not a timeout — the clock did it.
     { id: "crickets-hush", transform: FOREST_DARK, trigger: { source: { on: "minute", at: CRICKETS_HUSH }, once: true, tag: "crickets-hush" } },
     // The map on the boulder top: the 656 line goes straight into the green (v4 §5.2 obj-forest). One minute, and the dark under it.
-    prop("paper-map", RIGHT_BOULDER, "sprites/map-folded.webp", 9, {
+    prop("paper-map", RIGHT_BOULDER, "sprites/map-folded.webp", 6.5, {
       interactable: { verbs: ["use"], label: "摊开地图", reveal: 12, cost: { minutes: 0.7, fear: 0.05 }, requires: has("paperMap") },
     }),
     // The last direct light of the day, on the wall over the treeline. A minute, or 1% of what is left of the phone.
@@ -140,8 +149,6 @@ export default defineScene({
     // standing still until the cold comes, the zip and the narrow bite. (No chocolate: on the main line it is
     // already gone by the time she gets here — hutView eats it — so `item:use chocolate` would do nothing.)
     thorough: [
-      { type: "interact", entity: "lichen-edge", verb: "inspect" }, { wait: 300 },
-      { type: "interact", entity: "oldpaint-edge", verb: "inspect" }, { wait: 300 },
       { type: "interact", entity: "blaze-656", verb: "inspect" }, { wait: 300 },
       { type: "interact", entity: "paper-map", verb: "use" }, { wait: 600 }, { type: "overlay:close" }, { wait: 300 },
       { type: "interact", entity: "sasso-wall", verb: "inspect" }, { wait: 300 },
@@ -153,6 +160,9 @@ export default defineScene({
       { type: "ui:action", id: "call:try", value: "phone" }, { wait: 300 },
       { type: "ui:action", id: "call:hangup" }, { wait: 500 },
       { type: "interact", entity: "lamp-out", verb: "use" }, { wait: 500 },
+      // The two stones that are not paint are only there once the lamp is on them.
+      { type: "interact", entity: "lichen-edge", verb: "inspect" }, { wait: 300 },
+      { type: "interact", entity: "oldpaint-edge", verb: "inspect" }, { wait: 300 },
       { type: "interact", entity: "zip-jacket", verb: "use" }, { wait: 300 },
       { type: "lamp:mode", mode: "narrow" }, { wait: 400 },
       { type: "travel", entity: "go" },

@@ -4,35 +4,43 @@
    Coordinates read off the 150°×84° grid of 16-hairpin (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84, W×H = 1280×720). */
 import { all, any, flag, has, not } from "../engine/condition";
 import { defineScene } from "../engine/scene";
+import { prop } from "./_shared";
 import type { Transform } from "../engine/types";
-import type { World } from "../engine/world";
 
 const STANCE = "hairpin.stance";        // "center" | "rail" | "shadow"
-const SIGNAL = "hairpin.signal";        // "wave" | "shout" | "lamp"
+const SIGNAL = "hairpin.signal";        // "wave" | "shout" | "lamp" — the last thing she did with her body
+const NEXT = "hairpin.nextSignal";      // which of the three the single E-key action will do next
 const CARS = "hairpin.cars";            // 0, 1, 2 — never three (policy invariant)
 const WAVED = "hairpin.waved";
 const LEFT = "hairpin.leftBehind";
 const PHASE = "hairpin.phase";          // "arrive" | "one" | "gap" | "two" | "stopped"
 const STOP = "hairpin.stopAt";          // "front" | "near" | "far"
 
-/* Painted places. */
+/* Painted places. Read off the grid: x = yaw·8.5333 + 640, y = 360 − pitch·8.5714. */
 const BEND: Transform = { yaw: 2, pitch: -24 };                    // asphalt inside the crook, under the yellow line (657, 566)
-const RAIL: Transform = { yaw: 40, pitch: -18 };                   // the guardrail and its red reflectors (981, 514)
+const RAIL: Transform = { yaw: 38, pitch: -24 };                   // the asphalt at the foot of the guardrail posts (964, 566)
 const SHADOW: Transform = { yaw: -52, pitch: -13 };                // the mossy verge in the trees' shadow, road edge (196, 471)
 const BRANCH: Transform = { yaw: -40, pitch: -10 };                // the dead branches lying on the gravel apron (300, 447)
-const SIGN: Transform = { yaw: -12.5, pitch: -6.4 };               // the wooden chevron board (533, 415)
-const PLATE: Transform = { yaw: -11.7, pitch: -14.2 };             // the small blue plate under it (540, 482)
+const PLATE: Transform = { yaw: -11.7, pitch: -14.2 };             // the small blue plate under the chevron board (540, 482)
 const VILLAGE: Transform = { yaw: 37, pitch: -8.4, distance: 40 }; // the lit church and the houses on the valley floor (958, 432)
 const SKY: Transform = { yaw: 10, pitch: 29, distance: 60 };       // the milky way over the pass (730, 110)
 const FAR_ROAD: Transform = { yaw: 7, pitch: -10.5, distance: 16 };// where the road comes round the far bend (700, 450)
 const STOPPED: Transform = { yaw: 12, pitch: -18, distance: 9 };   // a car halted on the crook, wheels on (742, 581)
 const DOOR: Transform = { yaw: 10, pitch: -15, distance: 9 };      // its near window, once it is standing there
-const TAIL_NEAR: Transform = { yaw: 43, pitch: -24, distance: 14 };  // asphalt inside the guardrail, a dozen paces on (1007, 566)
-const TAIL_FAR: Transform = { yaw: 29, pitch: -20.5, distance: 22 }; // where the road narrows past the reflectors (887, 536)
+/* The two places it can be standing when she is left behind. Both distances stay under 16.7, where PanoStage's
+   `Math.max(0.6, 10/distance)` clamp is still inactive and the sprite's on-screen height is exactly its sizeVh —
+   past that the clamp stops the shrinking and the far pair renders bigger than the near one. */
+const TAIL_NEAR: Transform = { yaw: 22, pitch: -26, distance: 12 };  // the bend's asphalt, a dozen paces on (828, 583)
+const TAIL_FAR: Transform = { yaw: 30, pitch: -22.7, distance: 16 }; // the road at the far side of the curve (896, 555)
 const OFFSCREEN: Transform = { yaw: 0, pitch: -88 };               // story actions: E-key prompts, never drawn on the painting
 
 const carComing = any(flag(PHASE, { eq: "one" }), flag(PHASE, { eq: "two" }));
-const tailAt = (w: World): Transform => (w.flag<string>(STOP, "far") === "near" ? TAIL_NEAR : TAIL_FAR);
+const beforeSecondStop = not(flag(CARS, { gte: 2 }));
+const leftAt = (where: string) => all(flag(LEFT), flag(STOP, { eq: where }));
+/* "wave" is also what an unset flag means, so a fresh arrival always has exactly one button on screen. */
+const nextIs = (kind: "wave" | "shout" | "lamp") =>
+  kind === "wave" ? not(any(flag(NEXT, { eq: "shout" }), flag(NEXT, { eq: "lamp" }))) : flag(NEXT, { eq: kind });
+const SIGNAL_ORDER: Record<string, "wave" | "shout" | "lamp"> = { wave: "shout", shout: "lamp", lamp: "wave" };
 
 export default defineScene({
   id: "hairpin",
@@ -49,8 +57,10 @@ export default defineScene({
     { id: "stance-center", transform: BEND, className: "foot-hotspot",
       interactable: { verbs: ["step"], label: "弯心的柏油", reveal: 16, cost: { minutes: 1 } },
       visible: not(flag(STANCE, { eq: "center" })) },
+    // Not "outside the rail" — beyond it the painting shows only the drop into the valley. This is the strip of
+    // asphalt hard against the posts, which is what the plate actually paints there.
     { id: "stance-rail", transform: RAIL, className: "foot-hotspot",
-      interactable: { verbs: ["step"], label: "护栏外侧", reveal: 14, cost: { minutes: 1 } },
+      interactable: { verbs: ["step"], label: "护栏边的柏油", reveal: 14, cost: { minutes: 1 } },
       visible: not(flag(STANCE, { eq: "rail" })) },
     { id: "stance-shadow", transform: SHADOW, className: "foot-hotspot",
       interactable: { verbs: ["step"], label: "树影里", reveal: 14, cost: { minutes: 1 } },
@@ -60,27 +70,36 @@ export default defineScene({
     { id: "bus-plate", transform: PLATE, className: "counter-hotspot",
       interactable: { verbs: ["read"], label: "蓝色小牌", reveal: 12, cost: { minutes: 0 } },
       readable: { kind: "timetable", title: "站牌", lines: ["472", "Passo Sella — Canazei"], entry: "E-472", minutes: 1 } },
-    { id: "bend-sign", transform: SIGN,
-      interactable: { verbs: ["inspect"], label: "弯道指示牌", reveal: 13, cost: { minutes: 1 } } },
     { id: "village-lights", transform: VILLAGE,
       interactable: { verbs: ["inspect"], label: "谷底的灯", reveal: 13, cost: { minutes: 1 } } },
     { id: "milky-way", transform: SKY,
       interactable: { verbs: ["inspect"], label: "天上那条带子", reveal: 13, cost: { minutes: 1 } } },
     { id: "branches", transform: BRANCH,
       interactable: { verbs: ["inspect"], label: "路上的断枝", reveal: 12, cost: { minutes: 1 } } },
-    /* The cars. Sprites are drawn on the painting whatever she is looking at; the things she can do about them
-       are separate hotspots, so a car braking in front of her never fades out because her eyes went elsewhere. */
+    /* The cars. Headlights come round the far bend and then sit there: the beat is hers to take, by resting her eyes
+       on them (v4 §10.3 — 第一辆车 is a gaze trigger, never a timer) or by reaching for them.
+       The light itself is a prop of its own, because a `sprite` inside a `Hotspot` inherits that button's reveal
+       opacity (GazeSystem writes the live radius onto the node, floored at 11°, so even `reveal: 0` fades) — and a
+       car coming up the valley at her is not something to be found by sweeping the beam. The hotspot on the same
+       point stays reveal-gated: to take the beat she has to turn and look at it. */
+    prop("headlight-beam", FAR_ROAD, "sprites/car-passing.webp", 5, { visible: carComing }),
     { id: "headlights", transform: FAR_ROAD,
-      sprite: { src: "sprites/car-passing.webp", layer: "prop", sizeVh: 5 },
+      interactable: { verbs: ["inspect"], label: "上来的车灯", reveal: 22 },
       gaze: { radius: 14, dwell: 600 },
       visible: carComing },
-    { id: "taillights", transform: tailAt,
-      sprite: { src: "sprites/taillights-far.webp", layer: "prop", sizeVh: 4 },
-      visible: flag(LEFT) },
-    { id: "run-after", transform: tailAt, className: "hold-hotspot",
-      interactable: { verbs: ["hold"], label: "那两点红色", reveal: 20 },
+    /* Left behind: two red points on the road and thirty seconds of running. Two states, because the on-screen
+       height is the sizeVh and nothing else — 十几步外 has to be the bigger of the two. A wide reveal (18° of live
+       radius on ten-hour legs) so the red carries from where the braking turned her head, not only from on top of it. */
+    { id: "tail-near", transform: TAIL_NEAR, className: "hold-hotspot",
+      sprite: { src: "sprites/taillights-far.webp", layer: "prop", sizeVh: 9 },
+      interactable: { verbs: ["hold"], label: "那两点红色", reveal: 45 },
       hold: { ms: 2600, scaleWith: ["fatigue"] },
-      visible: flag(LEFT) },
+      visible: leftAt("near") },
+    { id: "tail-far", transform: TAIL_FAR, className: "hold-hotspot",
+      sprite: { src: "sprites/taillights-far.webp", layer: "prop", sizeVh: 3 },
+      interactable: { verbs: ["hold"], label: "那两点红色", reveal: 45 },
+      hold: { ms: 2600, scaleWith: ["fatigue"] },
+      visible: leftAt("far") },
     { id: "stopped-car", transform: STOPPED,
       sprite: { src: "sprites/car-stopped.webp", layer: "figure", sizeVh: 26 },
       visible: flag(STOP, { eq: "front" }) },
@@ -88,20 +107,27 @@ export default defineScene({
       interactable: { verbs: ["inspect"], label: "上车", reveal: 24 },
       exit: { to: "car", kind: "walk", label: "上车", minutes: 25 } },
 
-    /* How to signal. Three things a person does on a dark road; all three are hers to pick, in any order, any number of times. */
+    /* How to signal. Three things a person does on a dark road, and she does one of them at a time: pressing E does
+       the one on the button and moves the button on to the next, 挥手 → 喊 help → 把补光灯举起来 → 挥手. Whatever she
+       did last is what the second car answers, so all three are hers to land on and none of them is a menu.
+       Signalling costs no clock: what brings the next pair of lights up the valley is a minute spent on something
+       real — moving her feet, reading the plate — or standing still (`onWait`), never the signal itself.
+       They are one button because `.story-action` is pinned to a single slot at the bottom of the screen (pano.css
+       :127, `left:50% !important`): two visible at once and they stack pixel-on-pixel, and E only ever reaches the
+       first. See requests.css — with three separate slots this can go back to three buttons. */
     { id: "signal-wave", transform: OFFSCREEN, tags: ["action"],
       interactable: { verbs: ["wave"], label: "挥手", reveal: 0, cost: { minutes: 0 } },
-      visible: not(flag(CARS, { gte: 2 })) },
+      visible: all(beforeSecondStop, any(nextIs("wave"), all(nextIs("lamp"), not(has("fillLight"))))) },
     { id: "signal-shout", transform: OFFSCREEN, tags: ["action"],
       interactable: { verbs: ["talk"], label: "喊 help", reveal: 0, cost: { minutes: 0, fatigue: 0.02 } },
-      visible: not(flag(CARS, { gte: 2 })) },
+      visible: all(beforeSecondStop, nextIs("shout")) },
     { id: "signal-lamp", transform: OFFSCREEN, tags: ["action"],
       interactable: { verbs: ["use"], label: "把补光灯举起来", reveal: 0, cost: { minutes: 0, lamp: 0.02 }, requires: has("fillLight") },
-      visible: not(flag(CARS, { gte: 2 })) },
+      visible: all(beforeSecondStop, nextIs("lamp"), has("fillLight")) },
   ],
 
   seed: (w) => {
-    w.setFlag(STANCE, "center"); w.setFlag(SIGNAL, "lamp");
+    w.setFlag(STANCE, "center"); w.setFlag(SIGNAL, "lamp"); w.setFlag(NEXT, "wave");
     w.setFlag(WAVED, true); w.setFlag(CARS, 2);
     w.setFlag(LEFT, false); w.setFlag(STOP, "front"); w.setFlag(PHASE, "stopped");
   },
@@ -109,6 +135,8 @@ export default defineScene({
   script: (ctx) => {
     const w = ctx.world;
     const phase = () => ctx.flag<string>(PHASE, "arrive");
+    // The ladder starts on the bare hand; the entity conditions treat "unset" as 挥手 too, this only makes it explicit.
+    ctx.onEnter(() => { if (!ctx.flag<string>(NEXT, "")) ctx.setFlag(NEXT, "wave"); });
 
     /* Headlights come up the valley whenever a minute goes by on this road: standing still counts, so does anything
        she does. Never a timer — every minute here was spent by the player. The lights then sit there and wait. */
@@ -135,7 +163,7 @@ export default defineScene({
         ctx.kick("glance", 0.45, { yaw: 32, pitch: -8 });
         w.emit("ambience", { overrides: {} });
       });
-      ctx.spend({ minutes: 1 }, "第一辆车过去了");
+      ctx.spend({ minutes: 1 }, "第一辆车过去了");   // still phase "one" while this drains, so it cannot summon the second
       ctx.setFlag(PHASE, "gap");
       ctx.say("它没有停。", { tag: "hairpin-first" });
     };
@@ -160,20 +188,25 @@ export default defineScene({
         ctx.say("车窗降下来了。", { tag: "hairpin-stop" });
       } else {
         ctx.setFlag(LEFT, true);
+        const tail = where === "near" ? TAIL_NEAR : TAIL_FAR;
         w.emit("ambience", { overrides: { engine: 0.1 } });
-        ctx.after(600, () => { ctx.sfx("slide", 0.7, 0.5); ctx.kick("glance", 0.5, { yaw: 30, pitch: -8 }); });
+        // The red is out at the edge of what she can see: the sound and the head turn are what take her eyes there.
+        ctx.after(600, () => { ctx.sfx("slide", 0.7, 0.5); ctx.kick("glance", 0.8, { yaw: tail.yaw * 0.4, pitch: -8 }); });
         ctx.spend({ minutes: 1 }, "它从身边过去了");
         ctx.say("它在前面停下了。", { tag: "hairpin-past" });
       }
     };
 
-    /* Both beats belong to the car, and the car answers two things: her eyes on it, or her hand in the air. */
+    /* Both beats belong to the car, and the car answers her eyes — v4 §10.3: the headlights come round the bend and
+       then wait there; nothing on a timer picks them up. Signalling never resolves them, so she is free to change
+       her mind about what she is doing with her body for as long as the lights are still coming. */
     const resolve = () => {
       const here = phase();
       if (here === "one") pass();
       else if (here === "two") halt();
     };
     ctx.onGaze("headlights", () => resolve());
+    ctx.onInteract("headlights", () => resolve());
 
     /* Standing somewhere. Feet on asphalt, on gravel, on grass — three different sounds, three different distances. */
     const stand = (id: string, value: string, pan: number, strength: number) => ctx.onInteract(id, () => {
@@ -186,14 +219,13 @@ export default defineScene({
     stand("stance-rail", "rail", 0.6, 0.7);
     stand("stance-shadow", "shadow", -0.7, 0.55);
 
-    /* Signalling. The most primitive way there is. */
+    /* Signalling. No line goes with it: a hand, a voice and a lamp on an empty road say it themselves.
+       Each one also hands the button on to the next, so the road always offers her exactly one thing to try. */
     const signal = (kind: "wave" | "shout" | "lamp", body: () => void) => ctx.onInteract(`signal-${kind}`, () => {
-      const first = !ctx.flag(WAVED, false);
       ctx.setFlag(SIGNAL, kind);
       ctx.setFlag(WAVED, true);
+      ctx.setFlag(NEXT, SIGNAL_ORDER[kind]);
       body();
-      if (first) ctx.say("所以我采用了最原始的方式。", { tag: "hairpin-primitive" });
-      resolve();
     });
     signal("wave", () => {
       ctx.hand({ yaw: 4, pitch: -4 }, "grip");
@@ -213,7 +245,7 @@ export default defineScene({
     });
 
     /* Left behind: ten hours in, thirty seconds of running after two red points. It is never a failure, only a price. */
-    ctx.onHold("run-after", () => {
+    const runAfter = () => {
       const far = ctx.flag<string>(STOP, "far") === "far";
       ctx.setFlag(LEFT, false);
       ctx.setFlag(STOP, "front");
@@ -223,23 +255,20 @@ export default defineScene({
       ctx.sfx("exhale", 0, 0.95);
       ctx.kick("land", 1.0);
       ctx.say("追上了。", { tag: "hairpin-caught" });
-    });
-    ctx.onRelease("run-after", (progress) => {
+    };
+    const caughtBreath = (progress: number) => {
       if (progress < 0.15) return;
       ctx.kick("settle", 0.6);
       ctx.sfx("breath", 0, 0.85);
-    });
+    };
+    for (const id of ["tail-near", "tail-far"]) { ctx.onHold(id, runAfter); ctx.onRelease(id, caughtBreath); }
 
     /* Everything else on this bend is optional and silent. */
     ctx.onInteract("bus-plate", () => {
       ctx.hand(PLATE, "grip");
       ctx.kick("glance", 0.45, { yaw: -2, pitch: -4 });
-      ctx.say("公交早没了。手机也掉了。", { tag: "hairpin-bus" });
-    });
-    ctx.onInteract("bend-sign", () => {
-      ctx.kick("glance", 0.5, { yaw: -4, pitch: 3 });
-      ctx.sfx("tock", -0.3, 0.5);
-      ctx.entity("bend-sign").set("lit", true);
+      // §6 sanctions this half only. The empty phone slot is hers to find in the pack (§3.6), not to be told about.
+      ctx.say("公交早没了。", { tag: "hairpin-bus" });
     });
     ctx.onInteract("village-lights", () => {
       ctx.kick("glance", 0.6, { yaw: 8, pitch: -3 });
@@ -267,40 +296,48 @@ export default defineScene({
     });
   },
 
-  /* Fastest legal way through: stand in the crook, raise the lamp at the first car, stand a moment, raise it again. */
+  /* Fastest legal way through: step into the crook, go up the ladder to the lamp while the first pair of lights is
+     still coming, look at it so it goes by, stand a moment for the second, and look at that one too.
+     Each signal spends the minute that brings the next car up the valley; the eyes do the rest. */
   walkthrough: [
     { type: "interact", entity: "stance-center", verb: "step" }, { wait: 400 },
-    { type: "interact", entity: "signal-lamp", verb: "use" }, { wait: 500 },
-    { type: "wait" }, { wait: 400 },
-    { type: "interact", entity: "signal-lamp", verb: "use" }, { wait: 500 },
+    { type: "interact", entity: "signal-wave", verb: "wave" }, { wait: 400 },
+    { type: "interact", entity: "signal-shout", verb: "talk" }, { wait: 400 },
+    { type: "interact", entity: "signal-lamp", verb: "use" }, { wait: 400 },
+    { type: "interact", entity: "headlights", verb: "inspect" }, { wait: 900 },
+    { type: "wait" }, { wait: 500 },
+    { type: "interact", entity: "headlights", verb: "inspect" }, { wait: 900 },
     { type: "travel", entity: "go" },
   ],
   variants: {
-    /* The shadow and a bare hand: it goes past her and stops forty metres down, and she runs after it. */
+    /* The shadow and a bare hand: it goes past her and stops forty metres down, and she runs after it.
+       The hold is scaled by fatigue only (2600 ms × up to 1.6), so 7 s covers the worst arrival. */
     left: [
       { type: "interact", entity: "stance-shadow", verb: "step" }, { wait: 400 },
-      { type: "interact", entity: "signal-wave", verb: "wave" }, { wait: 500 },
-      { type: "wait" }, { wait: 400 },
-      { type: "interact", entity: "signal-wave", verb: "wave" }, { wait: 500 },
-      { type: "hold:start", entity: "run-after" }, { wait: 7000 }, { type: "hold:end" }, { wait: 500 },
+      { type: "interact", entity: "signal-wave", verb: "wave" }, { wait: 400 },
+      { type: "interact", entity: "headlights", verb: "inspect" }, { wait: 900 },
+      { type: "wait" }, { wait: 500 },
+      { type: "interact", entity: "headlights", verb: "inspect" }, { wait: 900 },
+      { type: "hold:start", entity: "tail-far" }, { wait: 7000 }, { type: "hold:end" }, { wait: 500 },
       { type: "travel", entity: "go" },
     ],
-    /* Everything the bend has: the branches, the plate, the chevron, the valley, the sky,
-       both other places to stand, and all three ways of signalling before the second pair of lights comes up. */
+    /* Everything the bend has: the branches, the plate, the valley, the sky, both other places to stand, and all
+       three ways of signalling — the ladder goes round twice, so the second car answers the lamp. */
     thorough: [
       { type: "interact", entity: "branches", verb: "inspect" }, { wait: 1200 },
       { type: "interact", entity: "bus-plate", verb: "read" }, { wait: 400 },
       { type: "overlay:close" }, { wait: 300 },
-      { type: "interact", entity: "bend-sign", verb: "inspect" }, { wait: 300 },
       { type: "interact", entity: "village-lights", verb: "inspect" }, { wait: 400 },
       { type: "interact", entity: "milky-way", verb: "inspect" }, { wait: 400 },
       { type: "interact", entity: "stance-rail", verb: "step" }, { wait: 300 },
-      { type: "interact", entity: "stance-center", verb: "step" }, { wait: 300 },
+      { type: "interact", entity: "stance-shadow", verb: "step" }, { wait: 300 },
       { type: "interact", entity: "signal-wave", verb: "wave" }, { wait: 300 },
       { type: "interact", entity: "signal-shout", verb: "talk" }, { wait: 300 },
+      { type: "interact", entity: "headlights", verb: "inspect" }, { wait: 900 },
+      { type: "interact", entity: "stance-center", verb: "step" }, { wait: 300 },
       { type: "interact", entity: "signal-lamp", verb: "use" }, { wait: 300 },
-      { type: "wait" }, { wait: 1200 },
-      { type: "interact", entity: "signal-lamp", verb: "use" }, { wait: 500 },
+      { type: "wait" }, { wait: 900 },
+      { type: "interact", entity: "headlights", verb: "inspect" }, { wait: 900 },
       { type: "travel", entity: "go" },
     ],
   },

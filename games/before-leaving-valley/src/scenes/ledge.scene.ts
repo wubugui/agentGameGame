@@ -29,9 +29,13 @@ const PATH: Transform = { yaw: 5.9, pitch: -2.3, distance: 26 };      // the hai
 const TREELINE: Transform = { yaw: 14, pitch: -17.5, distance: 20 };  // dark spruce at the foot of the fan (760, 510)
 const ROAD: Transform = { yaw: 25.5, pitch: -21.7, distance: 18 };    // the guardrail showing between the trunks (858, 546)
 const VILLAGE: Transform = { yaw: 25, pitch: 2.2, distance: 40 };     // the roofs far down the valley (855, 341)
-const HUT: Transform = { yaw: 33.5, pitch: 11.5, distance: 40 };      // the crest of the far shoulder across the valley (926, 259)
+/* The skyline of the far shoulder across the valley: the sky/ridge edge sits on row 240 at x 926 (sampled on the plain
+   plate), so the house stands on that crest. distance 16 keeps it inside PanoStage's 1:1 band (scale = max(.6, 10/d)
+   cancels the wrapper's d/10 exactly at d ≤ 16.7), which makes sizeVh the literal height on screen: 0.9 vh ≈ 6 px on a
+   720-high viewport — smaller than the 8–14 px roofs of the village painted much nearer, as a whole valley away should be. */
+const HUT: Transform = { yaw: 33.5, pitch: 13.8, distance: 16 };      // on the crest of the far shoulder (926, 242)
 const CLOUD_SHADOW: Transform = { yaw: -26, pitch: 0, distance: 30 }; // the dark bands walking down the left slope (420, 360)
-const LIP: Transform = { yaw: 2, pitch: -25.5, distance: 7 };         // where the middle rib stops and it is air (657, 578)
+const LIP: Transform = { yaw: 2, pitch: -28.5, distance: 7 };         // the nose of the middle rib, where the rock stops (657, 604)
 const FLAT: Transform = { yaw: -20, pitch: -28, distance: 8 };        // the broad pale top of the left rib (469, 600)
 const BLOCKS: Transform = { yaw: -57, pitch: -14, distance: 14 };     // the boulder field on the left shoulder (154, 480)
 const TURF: Transform = { yaw: -51.5, pitch: -30, distance: 8 };      // the grass-and-mud channel between the ribs (201, 620)
@@ -58,11 +62,11 @@ export default defineScene({
     stretch("hair-path", PATH, "碎石上的一条细线", 2, 12),
     stretch("tree-line", TREELINE, "碎石扇脚下的林线", 1),
     stretch("guardrail", ROAD, "林子里露出来的护栏", 1, 12),
-    // Further out, and nothing to do with the way down: the roofs, and the one dark house on the far rim.
+    // Further out, and nothing to do with the way down: the roofs, and the one dark house on the far skyline.
     stretch("village", VILLAGE, "谷底的几点屋顶", 1),
     { id: "hut", transform: HUT,
-      sprite: { src: "sprites/hut-far.webp", layer: "prop", sizeVh: 1.6, swap: [{ when: after(HUT_LIT), src: "sprites/hut-far-lit.webp" }] },
-      interactable: { verbs: ["inspect", "photograph"], label: "对面崖边的小房子", reveal: 12, cost: { minutes: 1 } },
+      sprite: { src: "sprites/hut-far.webp", layer: "prop", sizeVh: 0.9, swap: [{ when: after(HUT_LIT), src: "sprites/hut-far-lit.webp" }] },
+      interactable: { verbs: ["inspect", "photograph"], label: "对面的小房子", reveal: 12, cost: { minutes: 1 } },
       gaze: { radius: 12, dwell: 900 } },
     // The cloud shadows crossing the slope: no hotspot, no label, only somewhere for her eyes to rest.
     { id: "cloud-shadow", transform: CLOUD_SHADOW, gaze: { radius: 14, dwell: 1200 } },
@@ -80,11 +84,14 @@ export default defineScene({
     backArrow("back", TURF, "plateau", "回头", BACK_MINUTES),
   ],
   exitWhen: undefined,
+  /* ledge is a side scene: engine/dev.ts's warpTo walks MAIN_ORDER only, so this seed is never run by ?node=.
+     Nothing downstream reads ledge.* today; it is kept complete against a future wiring, not relied on. */
   seed: (w) => {
     w.setFlag(LOOKS, 4);
     w.setFlag(SEEN, true);
     w.setFlag(TRACED, true);
     w.setFlag(SKETCHED, true);
+    w.setFlag(LEANED, true);
     w.setFlag(HUT_SEEN, true);
     w.emit("journal:entry", { entry: "E-descent", source: null });
   },
@@ -102,14 +109,18 @@ export default defineScene({
     const roadIn = () => { roadOn = true; ctx.setFlag(ROAD_HEARD, true); w.emit("ambience", { overrides: { engine: 0.12 } }); };
     const roadOut = () => { if (!roadOn) return; roadOn = false; w.emit("ambience", { overrides: {} }); };
 
-    /* --- The four stretches. Each is a look and a minute; the fourth one joins them up. --- */
+    /* --- The four stretches. Each is a look and a minute; the fourth one joins them up. Framing one in the phone is
+           also having followed it: the minute is charged either way, so it has to count either way. --- */
     const follow = (id: string, target: Transform, pan: number) => {
       ctx.onInteract(id, (verb) => {
         roadOut();
-        if (verb === "photograph") return shoot(target);
-        glanceAt(target, 0.55);
-        ctx.sfx("breath", pan, 0.5);
-        w.emit("body:rest", { seconds: 2 });
+        if (verb === "photograph") {
+          shoot(target);
+        } else {
+          glanceAt(target, 0.55);
+          ctx.sfx("breath", pan, 0.5);
+          w.emit("body:rest", { seconds: 2 });
+        }
         const already = ctx.flag(`ledge.followed.${id}`, false);
         if (already) return;
         ctx.setFlag(`ledge.followed.${id}`, true);
@@ -138,6 +149,7 @@ export default defineScene({
     const findHut = () => {
       if (ctx.flag(HUT_SEEN, false)) return;
       ctx.setFlag(HUT_SEEN, true);
+      ctx.setFlag(SEEN, true);
       glanceAt(HUT, 0.5); ctx.sfx("tick", 0.4, 0.45);
       ctx.say("那栋房子。隔着一整个山谷。", { tag: "ledge-hut" });
     };
@@ -185,12 +197,14 @@ export default defineScene({
            Nothing gets drawn that she has not followed with her eyes first (v4 §6: 世界里读到的，她不复述). --- */
     ctx.onInteract("flat-rock", () => {
       roadOut();
-      if (windy(w)) ctx.spend({ minutes: 0.5 }, "用石头压住本子");
+      if (windy(w)) ctx.spend({ minutes: 1 }, "用石头压住本子");   // ClockSystem rounds each spend: a whole minute or none
       ctx.hand(FLAT); glanceAt(FLAT, 0.4);
       w.dispatch({ type: "item:use", item: "notebook" });
       if (!ctx.flag(TRACED, false) || ctx.flag(SKETCHED, false)) return;
       ctx.setFlag(SKETCHED, true);
       ctx.spend({ minutes: 2 }, "在本子上把这条线画下来");
+      // The pencil is the scene's own: E-descent is not in data/entries.ts yet, and the journal is silent about ids it does not know.
+      ctx.sfx("pencil", 0, 0.6);
       ctx.learn("E-descent");
       ctx.flash("本子上多了一条线");
     });
@@ -219,6 +233,8 @@ export default defineScene({
     ctx.on("interact:attempt", roadOut);
     ctx.on("gaze:enter", roadOut);
     ctx.on("phone:open", roadOut);
+    /* ledge.seen is the contract's name for "she stood here and looked at least once" — any of it counts, not only the four stretches. */
+    ctx.on("interact:done", () => ctx.setFlag(SEEN, true));
 
     /* --- Arriving off the plateau, and going back onto it. --- */
     ctx.onEnter(() => { ctx.kick("step", 0.6, { yaw: 0, pitch: -3 }); ctx.sfx("step", -0.2, 0.6); ctx.fx("dust", 0.2); });
@@ -239,7 +255,7 @@ export default defineScene({
       { type: "interact", entity: "guardrail", verb: "inspect" }, { wait: 400 },
       { type: "interact", entity: "hut", verb: "inspect" }, { wait: 300 },
       { type: "interact", entity: "village", verb: "photograph" }, { wait: 300 },
-      { type: "hold:start", entity: "lip" }, { wait: 2200 }, { type: "hold:end" }, { wait: 600 },
+      { type: "hold:start", entity: "lip" }, { wait: 2700 }, { type: "hold:end" }, { wait: 600 },
       { type: "interact", entity: "flat-rock", verb: "use" }, { wait: 500 },
       { type: "overlay:close" }, { wait: 200 },
       { type: "travel", entity: "back" },

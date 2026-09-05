@@ -3,7 +3,10 @@
    one limb moves at a time, each hold only after the one below. Look before you grab (0.8 s on the thin flake
    shows the hairline, on the seam shows the sheen). The last hold: step on it honestly, or stretch past it to the
    lip of the crack. Deep in the dark there is a shelf — the only place on the whole wall to sit down.
-   Coordinates read off the 150°×84° grid of 05-crack (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84). */
+   Coordinates read off the 150°×84° grid of 05-crack (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84).
+   Entity budget: 15 of the 16 the contract allows. `wipe` is a story action but the view still projects it (it is
+   parked below the painting, where PanoStage drops it) — the engine request to keep `tags:["action"]` out of
+   buildViews is in this scene's output, and until it lands the one free slot is the margin. */
 import { all, entityIs, flag, not } from "../engine/condition";
 import type { Condition } from "../engine/condition";
 import { defineScene, type WalkStep } from "../engine/scene";
@@ -11,10 +14,17 @@ import { CRACK_HOLDS } from "../data/ferrata";
 import type { EntityDef } from "../engine/entity";
 import type { Transform } from "../engine/types";
 import type { World } from "../engine/world";
-import { blaze, goArrow, lookAt } from "./_shared";
+import { blaze, goArrow } from "./_shared";
+import type { EntityId } from "../engine/types";
 
 const STEP = "crack.step", WET = "crack.wet", SAT = "crack.sat";
-const LEDGE = "crack.ledgeSeen", LUNGED = "crack.lunged", MISSED = "crack.lungeMissed", PRICKED = "crack.pricked", SKY = "crack.sky", PHOTO = "crack.photoDown";
+const LEDGE = "crack.ledgeSeen", LUNGED = "crack.lunged", MISSED = "crack.lungeMissed", PRICKED = "crack.pricked", PHOTO = "crack.photoDown";
+
+/* A mark that stays on its rock after she has read it (v4 §3.5 / §3.8 memory ③): the paint keeps a very faint
+   highlight until she leaves the node, and can no longer be pressed. `enabled: false` is what fades it
+   (`.hotspot.is-disabled { opacity:.35 }`); the shared factory would delete it from the painting instead. */
+const mark = (id: EntityId, transform: Transform, real: boolean): EntityDef =>
+  blaze(id, transform, real, { visible: undefined, enabled: not(entityIs(id, "read")) });
 
 /* The four true holds in order, then the two that only look like holds. Positions re-read from the grid of 05-crack:
    the painting is bare limestone, so every hold is a sprite laid on the thing it stands on. */
@@ -52,11 +62,13 @@ const realHold = (h: typeof REAL[number]): EntityDef => ({
   visible: atStep(h.order),
 });
 
-/* A false hold: a thin flake whose own sprite carries the hairline, a shallow seam that seeps. Look at it 0.8 s
-   and her hand will not go there. Both sit within reach of the climbing line, so refusing them is a real choice. */
-const falseHold = (h: typeof FALSE[number], seen: string, sizeVh: number): EntityDef => ({
+/* A false hold: a thin flake with a hairline in it, a shallow seam that seeps. Look at it 0.8 s and her hand will
+   not go there. Both sit within reach of the climbing line, so refusing them is a real choice.
+   No sprite swap on the look: sprites/hold-flake-cracked.webp and hold-groove-wet.webp are not drawn yet, and a
+   picture that fails to load is hidden by the view — the hold would disappear instead of showing what is wrong with it. */
+const falseHold = (h: typeof FALSE[number], sizeVh: number): EntityDef => ({
   id: h.id, transform: PLACE[h.id] ?? h, className: "hold-hotspot",
-  sprite: { src: h.sprite, layer: "prop", sizeVh, swap: [{ when: entityIs(h.id, "read"), src: seen }] },
+  sprite: { src: h.sprite, layer: "prop", sizeVh },
   interactable: { verbs: ["hold"], label: h.label, reveal: 13, cost: { minutes: 2 }, requires: not(entityIs(h.id, "read")) },
   hold: { ms: 500, scaleWith: ["fatigue"] },
   gaze: { radius: 13, dwell: 800 },
@@ -64,7 +76,8 @@ const falseHold = (h: typeof FALSE[number], seen: string, sizeVh: number): Entit
 });
 
 const grab = (entity: string, wait: number): WalkStep[] => [{ type: "hold:start", entity }, { wait }, { type: "hold:end" }];
-const TO_THE_KNOB: WalkStep[] = [...grab("hold-step", 1600), ...grab("hold-edge", 2000), ...grab("hold-knob", 2000)];
+/* Hold waits are ms × 2.5 + 300 throughout: holdMs is ms × (1 + fatigue·0.6), so the route still runs at fatigue 1. */
+const TO_THE_KNOB: WalkStep[] = [...grab("hold-step", 2100), ...grab("hold-edge", 2600), ...grab("hold-knob", 2600)];
 
 export default defineScene({
   id: "crack",
@@ -78,30 +91,35 @@ export default defineScene({
   exitWhen: flag(STEP, { gte: TOTAL }),
   entities: [
     ...REAL.map(realHold),
-    falseHold(FALSE[0], "sprites/hold-flake-cracked.webp", 6),
-    falseHold(FALSE[1], "sprites/hold-groove-wet.webp", 6),
+    falseHold(FALSE[0], 6),
+    falseHold(FALSE[1], 6),
     // The last move: past the slot straight to the lip of the crack — one move fewer, a tenth of her hands, one in four does not reach.
     { id: "crack-lip", transform: LIP, className: "hold-hotspot",
       interactable: { verbs: ["hold"], label: "裂缝顶端", reveal: 14, cost: { minutes: 2, fatigue: 0.1 }, requires: all(lastStep, not(flag(MISSED))) },
       hold: { ms: 1500, scaleWith: ["fatigue"] }, visible: all(lastStep, not(flag(MISSED))) },
     // Deep inside the chimney: only a gaze that goes into the dark finds the shelf.
     { id: "crack-deep", transform: DEEP, gaze: { radius: 14, dwell: 900 }, visible: all(onWall, not(flag(LEDGE))) },
+    // sprites/crack-ledge.webp is still to be drawn (a pale shelf wedged across the dark chimney, one edge catching
+    // the light from the notch above); until it exists the shelf is the ring and its label, and nothing is hidden.
     { id: "ledge", transform: SHELF, sprite: { src: "sprites/crack-ledge.webp", layer: "prop", sizeVh: 12 },
       interactable: { verbs: ["use"], label: "岩台", reveal: 13, cost: { minutes: 1 } }, visible: all(onWall, flag(LEDGE), not(flag(SAT))) },
     // Wet hands: a free wipe on the trousers (an E-key action; the transform sits below the painting so it never projects).
     { id: "wipe", transform: { yaw: 0, pitch: -88 }, tags: ["action"], interactable: { verbs: ["use"], label: "在裤子上蹭一下", reveal: 0, cost: { minutes: 0 } }, visible: flag(WET) },
-    // The chimney below her, once she is up in it: a look, or the one photograph of the day taken straight down.
-    lookAt("view-down", { yaw: 22, pitch: -36, distance: 12 }, "裂缝下方", 1, { visible: flag(STEP, { gte: 1 }) }),
-    // The clouds over the lip of the crack: rest the eyes there and the wind comes down the chimney.
-    { id: "sky", transform: { yaw: 20, pitch: 36, distance: 40 }, gaze: { radius: 14, dwell: 1200 } },
+    // The chimney below her, once she is up in it: the one photograph of the day taken straight down (v4 §8).
+    // One verb, because view/Hotspot.tsx only ever dispatches verbs[0]; the free look is the gaze on the same point.
+    { id: "view-down", transform: { yaw: 22, pitch: -36, distance: 12 },
+      interactable: { verbs: ["photograph"], label: "裂缝下方", reveal: 12, cost: { minutes: 0 } },
+      gaze: { radius: 12, dwell: 900 }, visible: flag(STEP, { gte: 1 }) },
     // Two candidate marks: red paint on the middle block beside the chimney; a rust streak under the seam on the right.
-    blaze("blaze-crack", { yaw: 14, pitch: -12 }, true),
-    blaze("rust-crack", { yaw: 42, pitch: -21 }, false),
+    mark("blaze-crack", { yaw: 14, pitch: -12 }, true),
+    mark("rust-crack", { yaw: 42, pitch: -21 }, false),
     // Mid-way, the smooth terrace to the right looks far easier. It is not the route; slab's back arrow carries the twenty minutes.
     { id: "slab-way", transform: { yaw: 46, pitch: 3 }, className: "go-hotspot", tags: ["exit"],
       exit: { to: "slab", kind: "detour", label: "右边平滑的大石板", minutes: 0, condition: all(mid, not({ kind: "visited", scene: "slab" })) },
       interactable: { verbs: ["inspect"], label: "右边平滑的大石板", reveal: 20 } },
-    goArrow("go", { yaw: 23, pitch: 28 }, { to: "mailbox", minutes: 38, label: "往上", kind: "walk" }),
+    // The way on, in the notch itself: at yaw 23 the painted rock inside the notch starts at y ≈ 160 (above that is
+    // sky), so pitch 22 puts the arrow at (836, 171) — on the rock she pulls over, not in the air above it.
+    goArrow("go", { yaw: 23, pitch: 22 }, { to: "mailbox", minutes: 38, label: "往上", kind: "walk" }),
   ],
   seed: (w) => {
     w.setFlag(STEP, TOTAL); w.setFlag(WET, false); w.setFlag(SAT, false); w.setFlag(LEDGE, false);
@@ -154,14 +172,18 @@ export default defineScene({
       ctx.say(id === "hold-flake" ? "石片碎了。" : "手滑出来了。", { tag: "crack-fumble", priority: 1 });
     };
     for (const h of FALSE) ctx.onHold(h.id, () => fumble(h.id, PLACE[h.id] ?? h));
-    // Looking first: 0.8 s on the flake shows the hairline; on the seam, the sheen. After that her hand will not go there.
+    // Looking first: 0.8 s on the flake shows the hairline; on the seam, the sheen. After that her hand will not go
+    // there — so each of them has to say, in half a line and one sound, what it is she has just seen. Without that
+    // the seam was a hold that silently stopped working (sprites/hold-groove-wet.webp is still to be drawn).
     for (const h of FALSE) ctx.onGaze(h.id, () => {
       const state = ctx.entity(h.id).state;
       if (state.read || state.hidden) return;
       ctx.entity(h.id).patch({ read: true });
       const at = PLACE[h.id] ?? h;
-      ctx.sfx("tick", at.yaw / 60, 0.6); ctx.kick("glance", 0.4, { yaw: at.yaw * 0.05, pitch: at.pitch * 0.05 });
-      if (h.id === "hold-flake") ctx.say("有一道发丝裂纹。", { tag: "crack-hairline" });
+      const flake = h.id === "hold-flake";
+      ctx.kick("glance", 0.4, { yaw: at.yaw * 0.05, pitch: at.pitch * 0.05 });
+      ctx.sfx(flake ? "tick" : "slide", at.yaw / 60, flake ? 0.6 : 0.35);
+      ctx.say(flake ? "有一道发丝裂纹。" : "这道缝在渗水。", { tag: `crack-${h.id}` });
     });
 
     // The stretch past the last hold: a quarter of the time the fingers do not make it, and she does not try it twice.
@@ -204,17 +226,12 @@ export default defineScene({
       if (waits % 3 === 0) { ctx.fx("gust", 0.35); ctx.kick("settle", 0.3); }
     });
 
-    // Looking down the chimney: a glance and a breath, and no words for the thing she is already looking at;
-    // the photograph is the phone's shutter laid on top of the minute.
-    ctx.onInteract("view-down", (verb) => {
-      if (verb === "photograph") { w.dispatch({ type: "phone:shoot" }); ctx.setFlag(PHOTO, true); ctx.kick("glance", 0.3, { yaw: 0, pitch: -4 }); return; }
-      ctx.kick("glance", 0.6, { yaw: 0, pitch: -8 }); ctx.sfx("breath", 0.4, 0.6);
-    });
-    // The clouds over the lip: once, the wind comes down the chimney.
-    ctx.onGaze("sky", () => {
-      if (ctx.flag(SKY, false)) return;
-      ctx.setFlag(SKY, true);
-      ctx.fx("gust", 0.6); ctx.kick("turn", 0.4, { yaw: 1, pitch: 0 }); ctx.sfx("breath", 0.3, 0.4);
+    // Down the chimney: resting her eyes there is a glance and a breath and costs nothing; pressing it is the one
+    // photograph taken straight down, and the phone charges its own minute and its 1% for it. No words either way —
+    // she is looking at it.
+    ctx.onGaze("view-down", () => { ctx.kick("glance", 0.6, { yaw: 0, pitch: -8 }); ctx.sfx("breath", 0.4, 0.6); });
+    ctx.onInteract("view-down", () => {
+      w.dispatch({ type: "phone:shoot" }); ctx.setFlag(PHOTO, true); ctx.kick("glance", 0.3, { yaw: 0, pitch: -4 });
     });
 
     // The marks: the paint settles the segment (hand and cloth from the journal); the rust costs its minute, no words.
@@ -238,30 +255,30 @@ export default defineScene({
   // Fastest legal line: the paint costs 0 minutes and saves the 8 that travel:begin charges for leaving unsure.
   walkthrough: [
     { type: "interact", entity: "blaze-crack", verb: "inspect" }, { wait: 300 },
-    ...TO_THE_KNOB, ...grab("hold-slot", 2400), { type: "travel", entity: "go" },
+    ...TO_THE_KNOB, ...grab("hold-slot", 3100), { type: "travel", entity: "go" },
   ],
   variants: {
     // Two holds up, then the terrace that looks easier: leaves for `slab` (whose back arrow returns here with the twenty minutes).
-    detour: [...grab("hold-step", 1600), ...grab("hold-edge", 2000), { type: "travel", entity: "slab-way" }],
+    detour: [...grab("hold-step", 2100), ...grab("hold-edge", 2600), { type: "travel", entity: "slab-way" }],
     // The stretch: if it misses, the honest last hold follows; if it lands, that hold is simply refused.
-    lunge: [...TO_THE_KNOB, ...grab("crack-lip", 3400), ...grab("hold-slot", 2400), { type: "travel", entity: "go" }],
+    lunge: [...TO_THE_KNOB, ...grab("crack-lip", 4100), ...grab("hold-slot", 3100), { type: "travel", entity: "go" }],
     // The seam grabbed without looking: wet hands, the wipe, then the honest way up.
     // Replay this one WITHOUT ?reveal=1 (`crack&nosave=1`): reveal pins GazeSystem's radius at 999, so both false
     // holds are already "read" on the first frame and the grab is refused in silence. Unflagged it costs 2 minutes
     // and 0.04 fatigue, and crack.wet is back to false after the wipe (measured: reaches mailbox at minute 790,
     // i.e. 2 for the seep plus the 8 this variant pays for never confirming the mark).
     fumble: [
-      ...grab("hold-step", 1600), ...grab("hold-edge", 2000),
-      ...grab("hold-groove", 1200), { wait: 400 },
+      ...grab("hold-step", 2100), ...grab("hold-edge", 2600),
+      ...grab("hold-groove", 1600), { wait: 400 },
       { type: "interact", entity: "wipe", verb: "use" }, { wait: 300 },
-      ...grab("hold-knob", 2000), ...grab("hold-slot", 2400), { type: "travel", entity: "go" },
+      ...grab("hold-knob", 2600), ...grab("hold-slot", 3100), { type: "travel", entity: "go" },
     ],
     // Everything the crack offers that a script can reach: the mark, the shelf's minute, the photograph straight down.
     thorough: [
       { type: "interact", entity: "blaze-crack", verb: "inspect" }, { wait: 300 },
-      ...grab("hold-step", 1600),
+      ...grab("hold-step", 2100),
       { type: "interact", entity: "view-down", verb: "photograph" }, { wait: 300 },
-      ...grab("hold-edge", 2000), ...grab("hold-knob", 2000), ...grab("hold-slot", 2400),
+      ...grab("hold-edge", 2600), ...grab("hold-knob", 2600), ...grab("hold-slot", 3100),
       { type: "travel", entity: "go" },
     ],
   },

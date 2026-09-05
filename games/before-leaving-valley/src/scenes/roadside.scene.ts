@@ -1,9 +1,16 @@
 /* Passo Sella, the road, 09:40. The first stand of the day and the spot she will stand on again three days later
    (20-bus-stop is the same painting; the clock alone makes it morning). Sassolungo fills the middle; the white
-   house with its wooden gable and the playground on the left; the wooden chalets and the road on the right, a car
-   pulled half onto the grass verge in front of the chalets with two people beside it on the grass, backs to her,
-   looking at the mountain; the blank wooden signpost at the far right with the trail board pinned to its upper arm.
-   The grass rises on the left: that is the way.
+   house with its wooden gable, the benches in front of it and the playground on the left; the wooden chalets and
+   the road on the right; the big wooden signpost at the far right, its arm still blank. The grass rises on the
+   left: that is the way.
+   WHAT IS AND IS NOT PAINTED (v4 §12 P1 says so in as many words): the two Chinese hikers, their car, the carving
+   in the shop window and the blue 472 sign are NOT in 20-bus-stop; they were always meant to be sprites, and the
+   sprites are not drawn yet. So nothing in this file puts a ring or a label on a patch of empty grass:
+   `car-parked` and `hikers` are pure props that stay invisible until their pictures land, the hello is the E-key
+   story action the engine keeps for things done to people, and the car leaving is a sound off to the right —
+   two doors and tyres on gravel — with no dust and no head turned toward a blank piece of verge. The 472 sign is
+   not here at all (E-472 is on the timetable at `hairpin` on the second day); it comes back with its picture.
+   The trail board is the exception: the wooden signpost IS painted, so the board pinned to its arm keeps its ring.
    Every coordinate was read off the 150°x84.375° grid of 20-bus-stop (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84);
    the pixel it came from (1280x720) is noted beside it. Sprite heights come from one scale law for this painting:
    the three painted road lines (left edge / centre dashes / right edge) meet at a vanishing point at y ≈ 486, so the
@@ -22,10 +29,10 @@ import { phoneDispatch } from "../systems/UISystem";
 import { goArrow, lookAt, readable } from "./_shared";
 
 const SEEN = "roadside.seen", GREETED = "roadside.greeted", CAR_GONE = "roadside.carGone", PHOTO = "roadside.photo";
-/** They are leaving anyway: three minutes after she gets here the car pulls out (v4 §7: "40 秒后车开走"). */
+/** They are leaving anyway: three minutes after she gets here the car pulls out (v4 §7: "40 秒后车开走").
+    One mechanism only — the clock. Standing still is a minute each (BodySystem), reading is two, the hello is
+    three, so every way of spending this morning arrives at 09:43 on its own; nothing here runs on a timer. */
 const CAR_LEAVES_AT = 9 * 60 + 43;
-/** Looking costs no minutes, so standing and watching is the other way they go: five settled breaths ≈ 36 s. */
-const STILLS_UNTIL_CAR_LEAVES = 5;
 /** The one photograph of this morning that is not hers. Its own title, so the police gallery can tell it apart. */
 const THEIR_PHOTO = "Passo Sella · 出发前";
 
@@ -35,11 +42,12 @@ const ROAD: Transform = { yaw: 30, pitch: -28, distance: 12 };            // the
 const PLAYGROUND: Transform = { yaw: -36, pitch: -16, distance: 16 };     // the wooden tower, the slide and the swings (333, 497)
 const HILLS: Transform = { yaw: -39.8, pitch: 3.5, distance: 30 };        // the green slope rising on the left (300, 330)
 const SHOP_WINDOW: Transform = { yaw: 27.2, pitch: -13.2, distance: 14 }; // the near chalet's one dark ground-floor window (872, 473)
-const BOARD: Transform = { yaw: 62, pitch: 0 };                            // the upper arm of the blank wooden signpost (1169, 360)
-const BUS_SIGN: Transform = { yaw: 44.5, pitch: -15.6 };                   // standing on the verge where the tarmac begins (1020, 494; foot 512)
-const BENCH: Transform = { yaw: -5, pitch: -16, distance: 14 };           // the bench outside the white house (597, 497)
-const CAR: Transform = { yaw: 38.1, pitch: -17 };                          // half on the verge, half on the tarmac's edge (965, 506; wheels 530)
-const HIKERS: Transform = { yaw: 31.1, pitch: -17.3 };                     // on the grass verge, off the tarmac, left of the car (905, 508; feet 536)
+const BOARD: Transform = { yaw: 57, pitch: 0 };                            // the painted signpost's arm, on its pointed half (1126, 360; the plank runs 1093–1248 × 333–413)
+const BENCH: Transform = { yaw: -5, pitch: -16, distance: 14 };           // the benches and tables outside the white house (597, 497; the row runs 566–696 × 494–514)
+const CAR: Transform = { yaw: 38.1, pitch: -17 };                          // where the car will stand once it is drawn: half on the verge, half on the tarmac's edge (965, 506; wheels 530)
+const HIKERS: Transform = { yaw: 31.1, pitch: -17.3 };                     // where the two will stand once they are drawn: on the grass, left of the car (905, 508; feet 536)
+/** The hello is done to people, not to a place: an E-key action (v4 §3 story actions). Below the painting so it never projects. */
+const OFFSCREEN: Transform = { yaw: 0, pitch: -88 };
 const GRASS_WAY: Transform = { yaw: -47.3, pitch: -13.1 };                 // the open grass just left of the play tower, where the slope starts up (236, 472)
 
 const carHere = all(not(flag(CAR_GONE)), not(flag(GREETED)));
@@ -83,8 +91,10 @@ export default defineScene({
     lookAt("road", ROAD, "山口公路", 1),
     lookAt("playground", PLAYGROUND, "儿童游乐架", 1),
     lookAt("hills", HILLS, "左边的草坡", 1),
-    // The trail board pinned to the blank signpost's upper arm: route numbers, the legs and their times (v4 §6: 2 min → the map's hours).
-    readable("trail-board", BOARD, "木牌上的步道展示牌", {
+    // The painted wooden signpost at the right, with the trail board on its arm: route numbers, the legs and their
+    // times (v4 §6: 2 min → the map's hours). The only thing in this scene that writes MAP_LEGS, so it sits on the
+    // pointed half of the plank rather than its middle — yaw 57 is well inside the 68.9° the gaze actually reaches.
+    readable("trail-board", BOARD, "木头路牌", {
       kind: "board", title: "PASSO SELLA · SENTIERI 649 / 656", lines: BOARD_LINES, entry: "E-route", minutes: 2,
     }, { sprite: { src: "sprites/trail-board.webp", layer: "prop", sizeVh: 7 } }),
     // The chalet's shop window: a carved deer with a bear, a wolf and a boar behind it (v4 §6: 1 min → E-forest).
@@ -92,30 +102,27 @@ export default defineScene({
     readable("shop-window", SHOP_WINDOW, "木屋的橱窗", {
       kind: "carving", title: "橱窗里的木雕", lines: ["一架木雕。", "鹿站在最前面。", "后面是熊、狼、野猪。"], entry: "E-forest", minutes: 1,
     }, { sprite: { src: "sprites/woodcarving.webp", layer: "prop", sizeVh: 1.2 } }),
-    // The blue 472 sign standing where the tarmac begins. No timetable: the account never gives one (v4 §12 B9).
-    readable("bus-sign", BUS_SIGN, "蓝色站牌", {
-      kind: "sign", title: "472", lines: ["472", "Passo Sella ↔ Canazei", "Fermata"], entry: "E-472", minutes: 1,
-    }, { sprite: { src: "sprites/busstop-sign.webp", layer: "prop", sizeVh: 7 } }),
-    // The bench outside the white house. Empty today; that is the whole of it.
+    // The benches and tables outside the white house. Empty today; that is the whole of it.
     { id: "bench", transform: BENCH, interactable: { verbs: ["inspect"], label: "长椅", reveal: 12, cost: { minutes: 0 } }, gaze: { radius: 12, dwell: 900 } },
     // A car pulled off onto the verge and two people beside it on the grass, backs to her, looking at the mountain.
+    // Props only: no ring, no label, nothing to point at until the two pictures exist (see the header).
     { id: "car-parked", transform: CAR, sprite: { src: "sprites/car-parked.webp", layer: "prop", sizeVh: 9.5 }, visible: not(flag(CAR_GONE)) },
-    { id: "hikers", transform: HIKERS, sprite: { src: "sprites/hikers-cn.webp", layer: "figure", sizeVh: 11 },
-      gaze: { radius: 12, dwell: 700 }, visible: not(flag(CAR_GONE)) },
+    { id: "hikers", transform: HIKERS, sprite: { src: "sprites/hikers-cn.webp", layer: "figure", sizeVh: 11 }, visible: not(flag(CAR_GONE)) },
     // A hello, for as long as the car is there. Three minutes, and they take one with her phone (v4 §7).
-    // Nothing gates it but the car being there: looking at them first only adds the line about the language.
-    { id: "hikers-greet", transform: HIKERS, interactable: { verbs: ["talk"], label: "两个中国面孔", reveal: 14, cost: { minutes: 0 }, once: true },
+    { id: "hikers-greet", transform: OFFSCREEN, tags: ["action"],
+      interactable: { verbs: ["talk"], label: "跟路边那两位打个招呼", reveal: 0, cost: { minutes: 0 }, once: true },
       visible: carHere },
-    // The clock takes them away if she has not gone over by 09:43. Not a timer: minutes she spent.
-    { id: "car-leaves", transform: CAR, trigger: { source: { on: "minute", at: CAR_LEAVES_AT }, once: true, tag: "car-leaves" }, visible: carHere },
+    // The clock takes them away at 09:43, whatever she did with the three minutes before it — including saying hello.
+    { id: "car-leaves", transform: CAR, trigger: { source: { on: "minute", at: CAR_LEAVES_AT }, once: true, tag: "car-leaves" }, visible: not(flag(CAR_GONE)) },
     // The way on: up the grass on the left, toward the wall behind her. Never locked.
     goArrow("go", GRASS_WAY, { to: "meadow", minutes: 10, label: "往草甸走", kind: "walk" }),
   ],
   seed: (w) => {
     w.setFlag(SEEN, true); w.setFlag(GREETED, true); w.setFlag(PHOTO, true); w.setFlag(CAR_GONE, true);
-    // What the roadside gives downstream: the legs' hours for the map on the plateau edge, the carving for the forest, the bus for the third day.
+    // What the roadside gives downstream: the legs' hours for the map on the plateau edge, and the carving for the forest.
+    // (E-472 is not seeded here any more: with no picture there is no sign to read, and the timetable at `hairpin` carries it.)
     w.patch("journal", {
-      entries: Array.from(new Set([...w.state.journal.entries, "E-route", "E-forest", "E-472"])),
+      entries: Array.from(new Set([...w.state.journal.entries, "E-route", "E-forest"])),
       mapLegs: { ...w.state.journal.mapLegs, ...(ENTRIES["E-route"].mapLegs ?? {}) },
     });
     seedPhoto(w);
@@ -128,13 +135,12 @@ export default defineScene({
       { type: "interact", entity: "hikers-greet", verb: "talk" }, { wait: 1200 },
       { type: "travel", entity: "go" },
     ],
-    // Everything the roadside offers: the hello, the board, the carving, the sign, a shot of the wall, gloves and camera on, the memo.
+    // Everything the roadside offers: the hello, the board, the carving, a shot of the wall, gloves and camera on, the memo.
     thorough: [
       { wait: 600 },
       { type: "interact", entity: "hikers-greet", verb: "talk" }, { wait: 1200 },
       { type: "interact", entity: "trail-board", verb: "read" }, { type: "overlay:close" },
       { type: "interact", entity: "shop-window", verb: "read" }, { type: "overlay:close" },
-      { type: "interact", entity: "bus-sign", verb: "read" }, { type: "overlay:close" },
       { type: "interact", entity: "sassolungo", verb: "photograph" },
       { type: "interact", entity: "bench", verb: "inspect" },
       { type: "pack:open" }, { type: "pack:equip", item: "gloves" }, { type: "pack:equip", item: "camera360" }, { type: "pack:close" },
@@ -148,9 +154,9 @@ export default defineScene({
       { type: "interact", entity: "hikers-greet", verb: "talk" }, { wait: 400 },
       { type: "travel", entity: "go" },
     ],
-    // Stand there and watch them instead: five settled breaths and the car pulls out on its own.
+    // Stand there and watch them instead: three settled breaths is three minutes, and at 09:43 the car pulls out.
     watch: [
-      { type: "wait" }, { type: "wait" }, { type: "wait" }, { type: "wait" }, { type: "wait" }, { wait: 1200 },
+      { type: "wait" }, { type: "wait" }, { type: "wait" }, { wait: 1200 },
       { type: "travel", entity: "go" },
     ],
   },
@@ -186,7 +192,6 @@ export default defineScene({
     // Reading. Her hand goes to the thing, the camera dips; the board, the carving and the sign say everything themselves.
     ctx.onInteract("trail-board", (verb) => { if (verb !== "read") return; ctx.hand(BOARD); glanceAt(BOARD, 0.35); });
     ctx.onInteract("shop-window", (verb) => { if (verb !== "read") return; ctx.hand(SHOP_WINDOW); glanceAt(SHOP_WINDOW, 0.35); ctx.sfx("tock", 0.3, 0.3); });
-    ctx.onInteract("bus-sign", (verb) => { if (verb !== "read") return; ctx.hand(BUS_SIGN); glanceAt(BUS_SIGN, 0.35); });
 
     // The bench: she looks, it is empty, a breath. Nothing to say about it today.
     ctx.onGaze("bench", () => {
@@ -196,19 +201,16 @@ export default defineScene({
     });
     ctx.onInteract("bench", () => { glanceAt(BENCH, 0.4); ctx.fx("gust", 0.25); ctx.setFlag("roadside.sawBench", true); });
 
-    // The two by the car. Looking at them long enough is how she hears what they are speaking.
-    ctx.onGaze("hikers", () => {
-      if (ctx.flag(SEEN, false) || ctx.flag(CAR_GONE, false)) return;
-      ctx.setFlag(SEEN, true);
-      ctx.sfx("cloth", 0.5, 0.4); glanceAt(HIKERS, 0.4);
-      ctx.say("他们在说中文。", { tag: "roadside-cn" });
-    });
-    // The car pulls out: a door, then dust off the road and her eyes following it. No words for a car.
+    // The car pulls out: two doors and tyres coming off the gravel, all of it off to her right. No dust, no head
+    // turned toward a piece of verge with nothing painted on it, and no words for a car (the second and third
+    // sounds are the same event still finishing — well under the second §0.2 allows).
     const carLeaves = () => {
       if (ctx.flag(CAR_GONE, false)) return;
       ctx.setFlag(CAR_GONE, true);
+      if (w.state.ui.travel) return;                                // the ten minutes of walking cross 09:43 too; she is not there to hear it
       ctx.sfx("door", 0.6, 0.7);
-      ctx.after(650, () => { ctx.fx("dust", 0.35); ctx.kick("glance", 0.3, { yaw: 2, pitch: 0 }); });
+      ctx.after(480, () => ctx.sfx("door", 0.64, 0.5));
+      ctx.after(900, () => ctx.sfx("slide", 0.7, 0.35));
     };
     ctx.onGaze("car-leaves", carLeaves);
     // Her phone in their hands and one shutter. Its own title: this is the one she did not take.
@@ -217,18 +219,16 @@ export default defineScene({
       ctx.setFlag(PHOTO, true);
       seedPhoto(w);
       ctx.sfx("shutter", 0.4, 0.9);
-      ctx.spend({ minutes: 1, battery: 1 }, "他们替她拍的一张");
-      ctx.after(900, carLeaves);                                    // they hand it back, then the doors; not the same instant
     };
-    // Hello. Two minutes of talking, then the photograph; the car goes on that photograph.
+    // Hello. The whole encounter is three minutes (v4 §6) and it ends with the shutter, so the clock — never a
+    // timer — is what shuts the doors: 09:40 + 3 is 09:43, and the minute trigger above fires on the same spend.
     ctx.onInteract("hikers-greet", () => {
       if (ctx.flag(GREETED, false) || ctx.flag(CAR_GONE, false)) return;
-      ctx.setFlag(GREETED, true);
-      ctx.spend({ minutes: 2 }, "跟路边的两位打招呼");
+      ctx.setFlag(GREETED, true); ctx.setFlag(SEEN, true);
       ctx.kick("glance", 0.7, { yaw: 3, pitch: -2 }); ctx.sfx("breath", 0.5, 0.6);
-      ctx.hand(HIKERS, "grip");
       ctx.say("是看我视频的观众。", { tag: "roadside-greet", priority: 1 });
       theirPhoto();
+      ctx.spend({ minutes: 3, battery: 1 }, "跟路边的两位打招呼，他们替她拍了一张");
     });
     ctx.on("phone:photo", ({ scene }) => { if (scene === "roadside") ctx.bump("roadside.photos", 1); });
 
@@ -243,15 +243,13 @@ export default defineScene({
       ctx.bump("roadside.mapSpread", 1); ctx.kick("glance", 0.3, { yaw: 0, pitch: -3 });
     });
 
-    // Standing still: the first breath brings a gust across the grass; the third, the swing's chain again, off to the
-    // left; by the fifth she has stood there long enough that they are getting back into the car. Looking costs no
-    // minutes, so without this the clock alone would keep them parked there for ever.
+    // Standing still: the first breath brings a gust across the grass; the third, the swing's chain again, off to
+    // the left — and that third breath is also 09:43, so the car goes on the clock, not on this counter.
     let stills = 0;
     ctx.onWait(() => {
       stills += 1;
       if (stills === 1) { ctx.fx("gust", 0.35); ctx.kick("settle", 0.2); }
       if (stills === 3) ctx.sfx("clink", -0.6, 0.2);
-      if (stills >= STILLS_UNTIL_CAR_LEAVES) carLeaves();
     });
   },
 });

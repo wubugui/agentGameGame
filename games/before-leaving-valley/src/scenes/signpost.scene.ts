@@ -1,8 +1,8 @@
 /* The fork at 2,455 m, 17:00. A wooden post with four arms on the gravel saddle: the grey limestone wall and the last
    direct sun on it away to the left, a pale track climbing the green shoulder behind it (that is 649, and it goes up),
-   the white scree slope falling away on the left, and on the right the stone tongue that drops into Val Lasties.
-   A little cairn beside the post with a red-white-red stripe on its top stone, two things on the stones that are not
-   paint, and a flat rock to spread the map on.
+   and on the right the stone tongue that drops into Val Lasties.
+   A little cairn beside the post with a red-white-red stripe on its top stone, something on the blocks away to the
+   left that is not paint, and a flat rock to spread the map on.
    Nobody says which arm is hers: the four boards read alike unless she already knows what 656 means.
    Every coordinate below was read off the 150°×84° grid of 10-signpost (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84);
    the pixel it came from (1280×720) is noted beside it. */
@@ -10,7 +10,7 @@ import { after, before, entityIs, has, not } from "../engine/condition";
 import { defineScene } from "../engine/scene";
 import type { Transform } from "../engine/types";
 import type { World } from "../engine/world";
-import { blaze, goArrow, prop, readable } from "./_shared";
+import { blaze, goArrow, offset, prop, readable } from "./_shared";
 
 const CHOSEN = "signpost.chosen";
 const CERTAIN = "signpost.certain";
@@ -18,40 +18,44 @@ const WRONG = "signpost.wrong";
 const ARMS_READ = "signpost.armsRead";
 const LOST_MINUTES = 12;                    // v4 §3.5: leaving a gravel/upper node without a confirmed mark
 const WRONG_649 = 60;                       // v4 §7: the wrong arm costs an hour and puts her back at the same fork
-const WRONG_LEFT = 25;                      // the white slope on the left ends in a broken step
 /* v4 §6: "那道光（20:15 之后就没有了）". The band slides up the wall as the valley fills with shadow and is gone at sunset. */
 const LIGHT_FROM = 17 * 60, LIGHT_TO = 20 * 60 + 15;
 
-/* The four arms, top to bottom. Centres and sizes were measured off the painting: the warm-pixel profile of
-   10-signpost puts the painted boards at (656–843, 298–344) / (634–805, 346–392) / (610–848, 394–450) /
-   (612–845, 450–506), and each sprite below is scaled to cover the board painted under it edge to edge, so the
-   red arrow tip baked into the picture never shows past the sprite. (The painted arms come out of the picture
-   altogether under GDD §11 P0; see requests.) */
-/* The anchors below are pulled ~0.9° lower than the painted board's own centre on purpose: a Hotspot lays its
-   image, the ring and the <em> label out in one grid column, so the image renders 9–10 px ABOVE the anchor
-   (measured in the running engine: box centre 310 / image centre 300 for the top board). These four numbers are
-   the anchor that puts the *image* on the board. Props (the cairn, the light band) have no such offset. */
-const ARM_SCHIAVANEIS: Transform = { yaw: 13.3, pitch: 3.7 };    // top board, painted (656–843, 298–344)
-const ARM_SELVA: Transform = { yaw: 9.6, pitch: -1.9 };          // second board, painted (634–805, 346–392)
-const ARM_BOE: Transform = { yaw: 11.1, pitch: -8.1 };           // third board, painted (610–848, 394–450)
-const ARM_LASTIES: Transform = { yaw: 11, pitch: -14.7 };        // bottom board, painted (612–845, 450–506)
-const POST: Transform = { yaw: 9.6, pitch: -22 };                // the post under the boards (722, 549)
+/* The four arms, top to bottom, re-measured at 4.5× off 10-signpost: the painted boards sit at
+   (657–848, 299–345) / (635–808, 348–392) / (612–850, 396–452) / (613–855, 452–508).
+   The board itself is a PROP and the reading is a HOTSPOT on top of it, and they have to be two entities.
+   PanoStage drives a Hotspot's opacity from how near the gaze is — `(reveal − distanceDeg) / (reveal × 0.45)`
+   with the pitch weighted 1.4× — and the four boards span 18.4° of pitch, so with the reveal of 12° that §6 asks
+   for, no gaze can ever have more than two of them up at once: the sign came apart into blank painted arms plus
+   one or two glowing lettered ones, sliding in and out as the eye travelled down the post. PropSprite writes no
+   data-reveal at all, so a prop never fades; the physical sign is on the picture the whole time she stands here,
+   and the reveal-12 hotspot is only about reading it. (E1's repaint is still an ART request — see requests.) */
+const BOARD_SCHIAVANEIS: Transform = { yaw: 13.2, pitch: 4.4 };  // top board, painted centre (752, 322)
+const BOARD_SELVA: Transform = { yaw: 9.5, pitch: -1.2 };        // second board, painted centre (721, 370)
+const BOARD_BOE: Transform = { yaw: 10.7, pitch: -7.5 };         // third board, painted centre (731, 424)
+const BOARD_LASTIES: Transform = { yaw: 11, pitch: -14 };        // bottom board, painted centre (734, 480)
+/* A Hotspot lays its ring and its <em> label out in one grid column, so the ring renders 9 px ABOVE the anchor;
+   the reading hotspots are pulled 1.05° (9 px) lower so the ring lands on the middle of the board. */
+const ARM_SCHIAVANEIS: Transform = offset(BOARD_SCHIAVANEIS, 0, -1.05);
+const ARM_SELVA: Transform = offset(BOARD_SELVA, 0, -1.05);
+const ARM_BOE: Transform = offset(BOARD_BOE, 0, -1.05);
+const ARM_LASTIES: Transform = offset(BOARD_LASTIES, 0, -1.05);
 const CAIRN: Transform = { yaw: 22.3, pitch: -30.3 };            // the pale stones piled beside the post (830, 620)
 const CAIRN_TOP: Transform = { yaw: 22.3, pitch: -29.2 };        // the top stone of that stack (830, 610; same 9 px offset)
 const BOULDERS: Transform = { yaw: -55.1, pitch: -21.6 };        // the grey-blue angular blocks on the left (170, 545)
-const GRAVEL: Transform = { yaw: -28.1, pitch: -28 };            // the pale rock band across the foreground (400, 600)
 const FLAT_ROCK: Transform = { yaw: -5.5, pitch: -30 };          // the flat pale stone left of the post (593, 617)
 const TRACK_649: Transform = { yaw: -10.9, pitch: 9.9 };         // the pale track climbing the green shoulder (547, 275)
 const PASTURE: Transform = { yaw: -25.8, pitch: 18.7, distance: 22 };  // the green slope above the track (420, 200)
-const SCREE_LEFT: Transform = { yaw: -32.4, pitch: -12.8 };      // the smooth white slope falling away left (363, 470)
 const VAL_LASTIES: Transform = { yaw: 37.5, pitch: -14 };        // the stone tongue dropping into the valley (960, 480)
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
-/* The last direct sun on the grey wall. The shadow rises out of the valley, so the band climbs the bedding to the
-   upper left and thins as it goes: (200, 265) on the wall at five o'clock, (120, 165) — the top ledge — at sunset. */
+/* The last direct sun on the bedded limestone escarpment filling the left of the picture. The shadow rises out of
+   the valley, so the band climbs the bedding to the upper left and thins as it goes. Both ends were re-read at 3.5×
+   and both are on lit rock face, not on the dark shadow band between the ledges: (190, 245) — the broad pale
+   bedding band — at five o'clock, (110, 168) — the top ledge — at sunset. */
 const lastLightAt = (w: World): Transform => {
   const t = clamp01((w.state.clock.minuteOfDay - LIGHT_FROM) / (LIGHT_TO - LIGHT_FROM));
-  return { yaw: -51.6 - t * 9.3, pitch: 11.1 + t * 11.7, distance: 14 };
+  return { yaw: -52.7 - t * 9.4, pitch: 13.4 + t * 9, distance: 14 };
 };
 
 export default defineScene({
@@ -69,40 +73,41 @@ export default defineScene({
   // Which way she took is written down on the way out.
   exitWhen: undefined,
   entities: [
-    // --- The four boards. Each one has to be read from close up (reveal 12°) and costs its minute (v4 §6). ---
+    // --- The four boards themselves: props, so the sign is one object on the picture at every gaze angle.
+    // Each sprite is scaled 8% taller than the board painted under it, which at these aspects puts it 10–19%
+    // wider as well, so no painted arrow tip shows past a sprite in any direction. ---
+    prop("board-schiavaneis", BOARD_SCHIAVANEIS, "sprites/arm-schiavaneis.webp", 9.7),
+    prop("board-selva", BOARD_SELVA, "sprites/arm-selva.webp", 9.3),
+    prop("board-boe", BOARD_BOE, "sprites/arm-boe.webp", 11.8),
+    prop("board-lasties", BOARD_LASTIES, "sprites/arm-lasties.webp", 11.8),
+    // --- Reading them. Each one has to be read from close up (reveal 12°) and costs its minute (v4 §6). ---
     readable("arm-schiavaneis", ARM_SCHIAVANEIS, "最上面的木牌", {
       kind: "sign", title: "VAL DE SCHIAVANEIS",
       lines: ["VAL DE SCHIAVANEIS", "649", "白铁皮上钉着号码"],
       minutes: 1,
-    }, { sprite: { src: "sprites/arm-schiavaneis.webp", layer: "prop", sizeVh: 9.7 } }),
+    }),
     readable("arm-selva", ARM_SELVA, "第二块木牌", {
       kind: "sign", title: "PIZ SELVA",
       lines: ["PIZ SELVA", "649", "木头晒得起了毛，字是手写的"],
       minutes: 1,
-    }, { sprite: { src: "sprites/arm-selva.webp", layer: "prop", sizeVh: 9.7 } }),
+    }),
     readable("arm-boe", ARM_BOE, "第三块木牌", {
       kind: "sign", title: "RIFUGIO BOÈ",
       lines: ["RIFUGIO BOÈ", "649"],
       minutes: 1,
-    }, { sprite: { src: "sprites/arm-boe.webp", layer: "prop", sizeVh: 11.8 } }),
+    }),
     readable("arm-lasties", ARM_LASTIES, "最下面的木牌", {
       kind: "sign", title: "PLAN DE ROCES – VAL LASTIES",
       lines: ["PLAN DE ROCES –", "VAL LASTIES 2455 m", "656"],
       entry: "E-656", minutes: 1,
-    }, { sprite: { src: "sprites/arm-lasties.webp", layer: "prop", sizeVh: 11.8 } }),
-    // The post itself: something to put a hand on while she reads. One minute, one breath back.
-    // (ClockSystem rounds cost.minutes, so half minutes do not exist; this really is one.)
-    { id: "post", transform: POST, className: "hold-hotspot",
-      interactable: { verbs: ["hold"], label: "路牌的柱子", reveal: 13, cost: { minutes: 1 } },
-      hold: { ms: 600, scaleWith: ["fatigue"] } },
-    // --- The stones. The stack beside the post carries the mark; two other things on the rock are not paint. ---
+    }),
+    // --- The stones. The stack beside the post carries the mark; the blocks on the left carry something that is not paint. ---
     // The cairn is scenery, not a hotspot: as a plain prop it is painted on the picture the whole time she stands
     // here (v4 §11 P0 asks for exactly this stack at the foot of the post), and the mark on it is the thing to press.
     prop("cairn", CAIRN, "sprites/cairn.webp", 11),
-    // The real one stays on the picture after she wipes it, greyed out: her attention, not a UI highlight (v4 §3.5).
+    // Both stay on the picture after she wipes them, greyed out: her attention, not a UI highlight (v4 §3.5).
     blaze("blaze-cairn", CAIRN_TOP, true, { visible: undefined, enabled: not(entityIs("blaze-cairn", "read")) }),
-    blaze("lichen-boulder", BOULDERS, false),
-    blaze("rust-gravel", GRAVEL, false),
+    blaze("lichen-boulder", BOULDERS, false, { visible: undefined, enabled: not(entityIs("lichen-boulder", "read")) }),
     // --- The last direct sun on the grey wall. It is a plain prop, so it is on the picture whether or not she is
     // looking at it: that is the whole point of v4 §7 — come back to this fork an hour later and the light is
     // somewhere else on the wall and a different colour. Touching it is a separate hotspot below. ---
@@ -120,16 +125,12 @@ export default defineScene({
     }),
     // Nothing to click on the pasture: the bells come from over there and she has to turn her head.
     { id: "pasture", transform: PASTURE, gaze: { radius: 14, dwell: 1000 } },
-    // --- Three ways off the saddle. They look alike; the boards are the only thing that tells them apart. ---
+    // --- Two ways off the saddle. They look alike; the boards are the only thing that tells them apart. ---
     // 649 up the green shoulder: an hour there and back, and she is standing at the same post again with the light
     // higher up the wall and redder.
     { id: "way-649", transform: TRACK_649, className: "go-hotspot", tags: ["wrongWay"],
       interactable: { verbs: ["step"], label: "绿坡上那条小路", reveal: 22, cost: { minutes: WRONG_649 }, once: true },
       enabled: not(entityIs("way-649", "used")) },
-    // The white slope on the left looks like the easy way down. It ends in a broken step.
-    { id: "way-left", transform: SCREE_LEFT, className: "go-hotspot", tags: ["wrongWay"],
-      interactable: { verbs: ["step"], label: "左边的白色碎石坡", reveal: 22, cost: { minutes: WRONG_LEFT }, once: true },
-      enabled: not(entityIs("way-left", "used")) },
     goArrow("go", VAL_LASTIES, { to: "scree", minutes: 40, label: "下去的碎石道", kind: "run" }),
   ],
   seed: (w) => {
@@ -145,16 +146,15 @@ export default defineScene({
     { type: "travel", entity: "go" },
   ],
   variants: {
-    // The hour up the green track, then the white slope, then the boards, then the mark, then down.
+    // The hour up the green track, then the boards, then the mark, then down.
     wrong: [
       { type: "interact", entity: "way-649", verb: "step" }, { wait: 1200 },
-      { type: "interact", entity: "way-left", verb: "step" }, { wait: 1200 },
       { type: "interact", entity: "arm-lasties", verb: "read" }, { type: "overlay:close" },
       { type: "interact", entity: "blaze-cairn", verb: "inspect" }, { wait: 400 },
       { type: "travel", entity: "go" },
     ],
-    // Everything the fork offers: all four boards, the map, the mark and both things that are not paint,
-    // the light on the wall, and a hand on the post.
+    // Everything the fork offers: all four boards, the map, the mark and the thing on the blocks that is not
+    // paint, and the light on the wall — looked at, and photographed.
     thorough: [
       { type: "interact", entity: "arm-schiavaneis", verb: "read" }, { type: "overlay:close" },
       { type: "interact", entity: "arm-selva", verb: "read" }, { type: "overlay:close" },
@@ -162,10 +162,9 @@ export default defineScene({
       { type: "interact", entity: "arm-lasties", verb: "read" }, { type: "overlay:close" },
       { type: "interact", entity: "paper-map", verb: "use" }, { wait: 400 }, { type: "overlay:close" },
       { type: "interact", entity: "lichen-boulder", verb: "inspect" }, { wait: 300 },
-      { type: "interact", entity: "rust-gravel", verb: "inspect" }, { wait: 300 },
       { type: "interact", entity: "blaze-cairn", verb: "inspect" }, { wait: 300 },
+      { type: "interact", entity: "last-light-look", verb: "inspect" }, { wait: 300 },
       { type: "interact", entity: "last-light-look", verb: "photograph" }, { wait: 300 },
-      { type: "hold:start", entity: "post" }, { wait: 1600 }, { type: "hold:end" },
       { type: "travel", entity: "go" },
     ],
     // Straight down without reading or confirming anything: twelve minutes of looking for the line on the way out.
@@ -193,16 +192,12 @@ export default defineScene({
       });
     }
 
-    // --- A hand on the post: a minute, one breath back. ---
-    ctx.onHold("post", () => { w.emit("body:rest", { seconds: 8 }); ctx.sfx("exhale", 0, 0.6); ctx.kick("settle", 0.4); });
-    ctx.onRelease("post", () => { ctx.sfx("cloth", 0, 0.35); });
-
     // --- The stones. The mark on the top stone of the stack is the thing worth a minute. ---
     ctx.on("blaze:confirm", ({ entity, real }) => {
       if (real) { ctx.kick("settle", 0.5); ctx.sfx("step", 0.3, 0.5); return; }
       ctx.hand(ctx.transformOf(entity));
       glance({ yaw: 0, pitch: -2 }, 0.45);
-      ctx.say(entity === "lichen-boulder" ? "地衣。不是漆。" : "铁锈。不是漆。", { tag: "sp-false" });
+      ctx.say("地衣。不是漆。", { tag: "sp-false" });
     });
 
     // --- The map on the flat stone: the paper says what it says. ---
@@ -257,8 +252,8 @@ export default defineScene({
       ctx.fx("gust", 0.6); ctx.kick("turn", 0.4);
     });
 
-    // --- The two ways that are not hers. She walks them, they run out, she is back at the same post and the band
-    // on the wall has moved. ctx.after here is only the body coming back: 0.6 s and 0.95 s (contract §0.2). ---
+    // --- The way that is not hers. She walks it, it runs out, she is back at the same post and the band on the
+    // wall has moved. ctx.after here is only the body coming back: 0.6 s and 0.95 s (contract §0.2). ---
     const wander = (id: string, pan: number, fatigue: number, line: string, tag: string) => {
       ctx.onInteract(id, () => {
         ctx.bump(WRONG, 1);
@@ -270,7 +265,6 @@ export default defineScene({
       });
     };
     wander("way-649", -0.35, 0.06, "这条一直在往上。", "sp-649");
-    wander("way-left", -0.5, 0.04, "碎石坡下面是断的。", "sp-left");
 
     // --- Leaving. Which arm she took goes down here; without a confirmed mark she loses the line for a while first. ---
     ctx.on("travel:begin", ({ from, to }) => {

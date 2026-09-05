@@ -1,11 +1,18 @@
 /* The first cable, 10:30: five anchors up a zigzag gully. At each one the two carabiners change segments one at a
    time (never both off), then she hauls the cable (fast, hard on the hands) or climbs the rock beside it (slow, free).
    Coordinates read off the 150°×84° grid of 04-cable (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84, W×H = 1280×720). */
-import { all, flag, knows, worn } from "../engine/condition";
+import { entityIs, flag, not, worn } from "../engine/condition";
+import type { EntityDef } from "../engine/entity";
 import { defineScene, type WalkStep } from "../engine/scene";
-import type { Transform } from "../engine/types";
+import type { EntityId, Transform } from "../engine/types";
 import type { World } from "../engine/world";
 import { blaze, goArrow, offset } from "./_shared";
+
+/* A mark that stays on its rock after she has read it (v4 §3.5 / §3.8 memory ③): the paint keeps a very faint
+   highlight until she leaves the node, and can no longer be pressed. `enabled: false` is what fades it
+   (`.hotspot.is-disabled { opacity:.35 }`); the shared factory would delete it from the painting instead. */
+const mark = (id: EntityId, transform: Transform, real: boolean): EntityDef =>
+  blaze(id, transform, real, { visible: undefined, enabled: not(entityIs(id, "read")) });
 
 /* The painted bolts, bottom to top. She arrives clipped to the thick near cable that runs up from bottom-left. */
 const ANCHORS: Transform[] = [
@@ -25,7 +32,9 @@ const LIP: Transform = { yaw: 2, pitch: 5 };              // where the cable dis
 const RING: Transform = { yaw: 53, pitch: -29 };           // the big ring anchor at the right where the long cable ends (1092, 609)
 /* The thick cable running back down out of the picture: its painted core at x 538 spans y 683–694, so pitch −38 is its middle. */
 const NEAR_CABLE: Transform = { yaw: -12, pitch: -38, distance: 14 };
-const CLIMBERS: Transform = { yaw: 12, pitch: 11, distance: 30 };       // the lit face of the right wall, just under its skyline
+const CLIMBERS: Transform = { yaw: 12, pitch: 11, distance: 16 };       // the lit face of the right wall, just under its skyline (d 16: sizeVh is the height on screen)
+/** Things done in one movement, to a thing rather than a place: an E-key action. Below the painting so it never projects. */
+const OFFSCREEN: Transform = { yaw: 0, pitch: -88 };
 
 /* Every painted length of cable, foot to head. SEGMENTS[i] is the one that ends at ANCHORS[i], so at anchor h the
    cable below her is SEGMENTS[h] and the cable above her is SEGMENTS[h + 1]. `sag` is how far the painted cable
@@ -66,11 +75,6 @@ const carabinerAt = (key: string, side: -1 | 1) => (w: World): Transform => {
   if (seg === -1) return inHerHand(here, side);
   return seg > here ? onCableAbove(here, side) : onCableBelow(here, side);
 };
-/* The open gate shows only if she read the rule on the second plate (v4 §3.7): otherwise the lock is just a colour.
-   Until the art for the open gate exists the swap keeps the same picture and only adds a class — never a missing
-   file, which the view would hide, taking the one readable state of this whole scene with it. */
-const inHand = (key: string) => all(flag(key, { eq: -1 }), knows("E-carabinerRule"));
-
 const clipRound: WalkStep[] = [
   { type: "interact", entity: "carabiner-blue", verb: "clip" }, { type: "interact", entity: "carabiner-blue", verb: "clip" },
   { type: "interact", entity: "carabiner-orange", verb: "clip" }, { type: "interact", entity: "carabiner-orange", verb: "clip" },
@@ -94,12 +98,16 @@ export default defineScene({
   exitWhen: flag(STEP, { gte: TOTAL }),
   entities: [
     // The two carabiners, hanging at the anchor she stands at. Each click moves one; one always stays on the cable.
+    // Where each lock is, is read off the painting and nothing else: on the length below her, a hand's width out in
+    // front of her (the (side·3, −8) offset of `inHerHand`), or already on the length above. No sprite swap: the
+    // view drops `sprite.className` for hotspot images (only PropSprite passes it on), so a swap that changed
+    // nothing but the class was a state no player could ever see. The open gate is an art + engine request.
     { id: "carabiner-blue", transform: carabinerAt(A, -1), className: "carabiner-hotspot",
-      sprite: { src: "sprites/carabiner-blue.webp", layer: "hand", sizeVh: 6, swap: [{ when: inHand(A), src: "sprites/carabiner-blue.webp", className: "is-open" }] },
+      sprite: { src: "sprites/carabiner-blue.webp", layer: "hand", sizeVh: 6 },
       interactable: { verbs: ["clip"], label: "蓝锁", reveal: 14, cost: { minutes: 0 }, requires: worn("lanyard") },
       visible: flag(PHASE, { eq: "clip" }) },
     { id: "carabiner-orange", transform: carabinerAt(B, 1), className: "carabiner-hotspot",
-      sprite: { src: "sprites/carabiner-orange.webp", layer: "hand", sizeVh: 6, swap: [{ when: inHand(B), src: "sprites/carabiner-orange.webp", className: "is-open" }] },
+      sprite: { src: "sprites/carabiner-orange.webp", layer: "hand", sizeVh: 6 },
       interactable: { verbs: ["clip"], label: "橙锁", reveal: 14, cost: { minutes: 0 }, requires: worn("lanyard") },
       visible: flag(PHASE, { eq: "clip" }) },
     // Up one segment: the cable (six minutes, the hands) or the pale rock beside it (ten minutes, free).
@@ -110,25 +118,29 @@ export default defineScene({
       sprite: { src: "sprites/hold-knob.webp", layer: "prop", sizeVh: 6 },
       interactable: { verbs: ["hold"], label: "找岩点", reveal: 13, cost: { minutes: 10 } },
       hold: { ms: 1000, scaleWith: ["fatigue"] }, visible: flag(PHASE, { eq: "climb" }) },
-    // From the third anchor: the cable she came up on runs back down out of the picture, and the pass is under it.
-    // Two hotspots on the same cable, because a hotspot only ever fires its first verb (see requests.engine).
+    // From the third anchor: the cable she came up on runs back down out of the picture (v4 §6: 一分钟，一张照片).
+    // One hotspot on the painted cable, not two — a hotspot only ever fires verbs[0] (see requests.engine), and the
+    // second one was labelled with a verb instead of a thing.
     { id: "view-down", transform: NEAR_CABLE,
-      interactable: { verbs: ["inspect"], label: "往下的钢缆", reveal: 12, cost: { minutes: 0 } },
-      visible: flag(STEP, { gte: 2 }) },
-    { id: "view-down-shot", transform: offset(NEAR_CABLE, 4, 1.4),                 // further down the same cable (572, 674)
-      interactable: { verbs: ["photograph"], label: "拍一张", reveal: 12, cost: { minutes: 0 } },
+      interactable: { verbs: ["photograph"], label: "往下的钢缆", reveal: 12, cost: { minutes: 0 } },
       visible: flag(STEP, { gte: 2 }) },
     // Two dots high on the right wall: the only two people she will meet all day, an hour ahead of her.
     { id: "climbers-far", transform: CLIMBERS, sprite: { src: "sprites/climbers-far.webp", layer: "figure", sizeVh: 2.4 },
       gaze: { radius: 10, dwell: 900 }, visible: flag(STEP, { gte: 1 }) },
     // Three candidate marks: paint on the left wall beside the lowest rung, a rust streak on the right block, lichen on the loose boulder.
-    blaze("blaze-cable", { yaw: -24, pitch: -13 }, true),
-    blaze("rust-cable", { yaw: 41, pitch: -12 }, false),
-    blaze("lichen-cable", { yaw: -22, pitch: -32 }, false),
-    // The cap, when a gust takes it: snagged on the rock beside her until the next gust, unless she grabs it.
-    { id: "cap-loose", transform: (w) => offset(near(anchorAt(stepOf(w))), -11, -7), className: "hold-hotspot",
+    mark("blaze-cable", { yaw: -24, pitch: -13 }, true),
+    mark("rust-cable", { yaw: 41, pitch: -12 }, false),
+    mark("lichen-cable", { yaw: -22, pitch: -32 }, false),
+    // The cap, when a gust takes it (v4 §8: 风大时抓帽子): snagged on the rock beside her until the next gust.
+    // sprites/item-cap.webp is not drawn yet, so the cap on the rock is a prop with no ring — a snatch at something
+    // the painting does not show yet would be a circle round bare limestone. The grab is the E-key story action
+    // instead, which is where the engine puts things done in one movement; once the picture lands it can go back
+    // onto the rock as a hold hotspot.
+    { id: "cap-loose", transform: (w) => offset(near(anchorAt(stepOf(w))), -11, -7),
       sprite: { src: "sprites/item-cap.webp", layer: "prop", sizeVh: 7 },
-      interactable: { verbs: ["hold"], label: "帽子", reveal: 16 }, hold: { ms: 400, scaleWith: ["fatigue"] },
+      visible: flag(CAP, { eq: true }) },
+    { id: "cap-grab", transform: OFFSCREEN, tags: ["action"],
+      interactable: { verbs: ["take"], label: "抓住帽子", reveal: 0, cost: { minutes: 1 } },
       visible: flag(CAP, { eq: true }) },
     // The big ring where the long cable ends, off to the right. A hand on it, and the cable answers.
     { id: "anchor-ring", transform: RING, interactable: { verbs: ["inspect"], label: "锚环", reveal: 13, cost: { minutes: 0 } } },
@@ -161,12 +173,11 @@ export default defineScene({
       ctx.sfx("cloth", -0.6, 1); ctx.kick("jolt", 0.7); ctx.fx("gust", 1.2);
       ctx.say("帽子。", { tag: "cable-cap", priority: 1 });
     });
-    ctx.onHold("cap-loose", () => {
+    ctx.onInteract("cap-grab", () => {
+      if (!ctx.flag(CAP, false)) return;
       ctx.setFlag(CAP, false); ctx.setFlag("cable.capCaught", true);
       ctx.sfx("cloth"); ctx.kick("settle", 0.5); ctx.hand(ctx.transformOf("cap-loose"), "grip");
-      ctx.spend({ minutes: 1 }, "抓帽子");
     });
-    ctx.onRelease("cap-loose", () => capGone("没抓住"));
 
     /* Carabiners: any clipped one can come off; one in the hand goes onto the segment above. Both off is the one real scare:
        a lurch, three minutes, the hands, and both locks back on the segment below. She never falls. */
@@ -218,15 +229,14 @@ export default defineScene({
     ctx.onRelease("haul-cable", slipBack);
     ctx.onRelease("rock-holds", slipBack);
 
-    /* Looking. Down the cable from the third anchor: a minute, or a photograph. Up: two dots on the wall. */
+    /* Looking. Down the cable from the third anchor: she leans out, looks, and takes it — a minute for the lean and
+       the phone's own minute for the shutter. The line stays on what 04-cable actually paints down there: the thick
+       cable running out of the bottom of the picture, and nothing under it. */
     ctx.onInteract("view-down", () => {
       ctx.spend({ minutes: 1 }, "往下看");
       ctx.kick("glance", 0.6, { yaw: -2, pitch: -8 }); ctx.sfx("breath", -0.4, 0.6);
-      ctx.say("整条碎石路在下面变成一条线。", { tag: "cable-view" });
-    });
-    ctx.onInteract("view-down-shot", () => {
+      ctx.say("缆一直下到看不见。", { tag: "cable-view" });
       w.dispatch({ type: "phone:shoot" }); ctx.setFlag("cable.photoDown", true);
-      ctx.kick("glance", 0.4, { yaw: -1, pitch: -6 });
     });
     ctx.onGaze("climbers-far", () => {
       ctx.setFlag("cable.sawClimbers", true);
@@ -258,39 +268,35 @@ export default defineScene({
       if (stills % 3 === 0) ctx.sfx("clink", 0.2, 0.3);
     });
 
-    /* Leaving: whatever the wind still holds of the cap goes; without a confirmed mark the line out of the gully takes eight minutes (v4 §3.5). */
-    ctx.on("travel:begin", ({ from, to }) => {
+    /* Leaving: whatever the wind still holds of the cap goes. No penalty for leaving without a confirmed mark —
+       v4 §3.5 charges that on 草甸 / 碎石路·顶段 / 高原 / 夜森林, and not here: this段 goes up a cable that is
+       bolted to the rock, and there is no other line to take. */
+    ctx.on("travel:begin", ({ from }) => {
       if (from !== "cable") return;
       capGone("留在墙上");
-      if (to === "crack" && !ctx.flag("cable.certain", false)) {
-        ctx.spend({ minutes: 8 }, "没认记号，找了一段路");
-        ctx.kick("turn", 0.5);
-        ctx.say("走错了一小段。", { tag: "cable-lost", priority: 1 });
-      }
     });
   },
   walkthrough: [
     { type: "interact", entity: "blaze-cable", verb: "inspect" }, { wait: 300 },
-    ...route("haul-cable", 1800),
+    ...route("haul-cable", 2100),
   ],
   variants: {
     // Every anchor on the rock: ten minutes each, nothing on the hands. Leaves without a mark (eight minutes on the way out).
-    rock: route("rock-holds", 2400),
+    rock: route("rock-holds", 2900),
     // Both locks off at the first anchor: the lurch, three minutes, then the whole cable.
     slip: [
       { type: "interact", entity: "carabiner-blue", verb: "clip" }, { type: "interact", entity: "carabiner-orange", verb: "clip" }, { wait: 600 },
-      ...route("haul-cable", 1800),
+      ...route("haul-cable", 2100),
     ],
     // Everything the wall offers: the marks, the ring, the look down from the third anchor and its photograph, mixed climbing.
     thorough: [
       { type: "interact", entity: "lichen-cable", verb: "inspect" }, { wait: 300 },
       { type: "interact", entity: "blaze-cable", verb: "inspect" }, { wait: 300 },
       { type: "interact", entity: "anchor-ring", verb: "inspect" }, { wait: 300 },
-      ...round("rock-holds", 2400), ...round("haul-cable", 1800),
-      { type: "interact", entity: "view-down", verb: "inspect" }, { wait: 300 },
-      { type: "interact", entity: "view-down-shot", verb: "photograph" }, { wait: 300 },
+      ...round("rock-holds", 2900), ...round("haul-cable", 2100),
+      { type: "interact", entity: "view-down", verb: "photograph" }, { wait: 300 },
       { type: "interact", entity: "rust-cable", verb: "inspect" }, { wait: 300 },
-      ...round("rock-holds", 2400), ...round("haul-cable", 1800), ...round("haul-cable", 1800),
+      ...round("rock-holds", 2900), ...round("haul-cable", 2100), ...round("haul-cable", 2100),
       { type: "travel", entity: "go" },
     ],
   },

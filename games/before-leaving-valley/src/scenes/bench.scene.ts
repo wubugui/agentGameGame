@@ -1,6 +1,10 @@
-/* Canazei, the bench by the pass road, 11:50 on the third day. The phone is back in her hand and the bus that
-   leaves the valley has not come yet (SOURCE_TRANSCRIPT, day 3 §17: 等离开山谷的公交车时，她突然想起那封信，
-   因为只有这部手机拍下了它。翻译出来。这段话让她在长椅上泪流满面).
+/* The bench at the pass, 11:50 on the third day. The phone is back in her hand and the bus that leaves the
+   valley has not come yet (SOURCE_TRANSCRIPT, day 3 §17: 等离开山谷的公交车时，她突然想起那封信，因为只有这部
+   手机拍下了它。翻译出来。这段话让她在长椅上泪流满面).
+
+   22-bench paints Passo Sella — the Sassolungo wall, the same chalet and the same swing frame as 20-bus-stop,
+   the pass road — and the account puts her at the pass, so the place and altitude on the HUD are the pass's
+   (docs/ART_AUDIT.md, 22-bench: 画对了，应改地点与海拔，而不是改画).
 
    Nothing here costs anything and nothing here is timed: there is no clock on this bench — the bus arrives after
    she is done, never before (v4 §7, bench). The one thing she must do is read the page again, one line at a time,
@@ -33,8 +37,12 @@ const ZH_COUNT = LETTER_LINES_ZH.filter((line) => line.length > 0).length;
 /* Things painted in 22-bench, with the pixel each was read from. */
 const BENCH: Transform = { yaw: -33, pitch: -24, distance: 6 };        // the lower backrest plank of the wooden bench (358, 566)
 const NOTE_AT: Transform = { yaw: -24, pitch: -29, distance: 8 };      // the seat plank just right of the backrest post (435, 609)
-const BUS_AT: Transform = { yaw: -9, pitch: -14, distance: 14 };     // the tarmac where the road bends past the stop (563, 473)
-const DOOR_AT: Transform = { yaw: -10.5, pitch: -14, distance: 14 }; // the folding door behind its front wheel (550, 473)
+/* The 472, pulled in beside the stop. Its wheels have to be ON the tarmac, and where a thing lands is the
+   perspective camera's answer, not the plate's: screen row = 360·(1 − tan(pitch)/(cos(yaw)·tan 30°)) at 1280×720.
+   At 18vh the coach is 130 px tall, so its centre lands on row 575 and its wheels come down along row 640 —
+   sampled off the rendered view, that row is tarmac from x 538 rightwards and the coach starts at x 583. */
+const BUS_AT: Transform = { yaw: 5.5, pitch: -18.9, distance: 14 };   // stopped on the road by the stop (687, 522; wheels 566)
+const DOOR_AT: Transform = { yaw: 9, pitch: -19.9, distance: 14 };    // the folding door on this side of it (717, 531)
 
 /** The eight things worth raising her eyes to. Each one owns the last line of the letter if she is looking at it. */
 type Look = { id: EntityId; at: Transform; label: string; sound: SfxName; pan: number; strength: number; line: string };
@@ -51,18 +59,26 @@ const LOOKS: Look[] = [
 /** Nothing in reach of her eyes: the last line comes down on the bench she is sitting on. */
 const BENCH_LINE = "长椅是热的。";
 
-const lookEntity = (entry: Look): EntityDef => ({
-  id: entry.id, transform: entry.at,
-  interactable: { verbs: ["inspect", "photograph"], label: entry.label, reveal: entry.id === "chalet" || entry.id === "white-rock" ? 14 : 12, cost: { minutes: 0 } },
-  gaze: { radius: entry.id === "far-slope" ? 13 : 11, dwell: entry.id === "far-slope" ? 1400 : 900 },
-});
+/** GazeSystem reads `interactable.reveal` first and only falls back to `gaze.radius`, so the catch radius has to
+ *  be written where it is read: the two at the edges of the view and the slope she rests her eyes on are wider.
+ *  The verb list is `inspect` alone — view/Hotspot.tsx only ever dispatches verbs[0], and the last photograph of
+ *  the day is taken from the phone's own camera (see `phone:photo` in the script). */
+const REVEAL: Record<string, number> = { chalet: 14, "white-rock": 14, "far-slope": 14 };
+const lookEntity = (entry: Look): EntityDef => {
+  const reveal = REVEAL[entry.id] ?? 12;
+  return {
+    id: entry.id, transform: entry.at,
+    interactable: { verbs: ["inspect"], label: entry.label, reveal, cost: { minutes: 0 } },
+    gaze: { radius: reveal, dwell: entry.id === "far-slope" ? 1400 : 900 },
+  };
+};
 
 const translateSteps = (count: number): WalkStep[] =>
   Array.from({ length: count }).flatMap(() => [{ type: "ui:action", id: "bench:translate" } as WalkStep, { wait: 220 } as WalkStep]);
 
 export default defineScene({
   id: "bench",
-  day: 3, place: "Canazei · 公交站长椅", elevation: "1,460 m",
+  day: 3, place: "Passo Sella · 公交站长椅", elevation: "2,240 m",
   painting: "pano/22-bench.webp",
   body: "stand", material: "road",
   ambience: { wind: 0.6, windTone: 1100, birds: 0.3, crickets: 0, stream: 0, engine: 0, heater: 0 },
@@ -80,10 +96,12 @@ export default defineScene({
     ...LOOKS.map(lookEntity),
     // The slip of paper with their two numbers, once she has taken it out of the pack (v4 §6, bench).
     { id: "note", transform: NOTE_AT, visible: flag(NOTE),
-      sprite: { src: "sprites/contact-note.webp", layer: "prop", sizeVh: 7, swap: [{ when: flag(NOTE_READ), src: "sprites/contact-note-open.webp" }] },
+      sprite: { src: "sprites/contact-note.webp", layer: "prop", sizeVh: 4, swap: [{ when: flag(NOTE_READ), src: "sprites/contact-note-open.webp" }] },
       interactable: { verbs: ["inspect"], label: "他们写的纸", reveal: 12, cost: { minutes: 0 } } },
-    // The 472. It comes after she is done, and then it waits (v4 §7: 长椅上没有钟).
-    prop("bus", BUS_AT, "sprites/bus.webp", 11, { visible: flag(BUS) }),
+    /* The 472. It comes after she is done, and then it waits (v4 §7: 长椅上没有钟). Same redrawn coach as the one
+       that pulls in at busStop, and it is the one she gets on: it stands at the stop, a dozen metres off across
+       the road, not on the bend forty metres away — 6vh was the size of `bus-arriving`, seen coming (ART_AUDIT). */
+    prop("bus", BUS_AT, "sprites/bus-472.webp", 18, { visible: flag(BUS) }),
     { id: "board", transform: DOOR_AT, className: "go-hotspot", visible: flag(BUS),
       interactable: { verbs: ["step"], label: "上车", reveal: 24 } },
   ],
@@ -105,7 +123,7 @@ export default defineScene({
     { type: "interact", entity: "board", verb: "step" },
   ],
   variants: {
-    // Look up between every line: the last one comes down on the wall across the valley.
+    // Look up between every line; the last thing she looks up at is the wall, so the last line comes down on it.
     lookup: [
       { type: "interact", entity: "bench", verb: "use" }, { wait: 400 },
       { type: "ui:action", id: "phone:tab", value: "gallery" }, { wait: 400 },
@@ -127,7 +145,8 @@ export default defineScene({
       { type: "ui:action", id: "phone:tab", value: "gallery" }, { wait: 400 },
       ...LOOKS.map((entry): WalkStep => ({ type: "interact", entity: entry.id, verb: "inspect" })),
       { wait: 400 },
-      { type: "interact", entity: "sassolungo", verb: "photograph" }, { wait: 400 },
+      { type: "interact", entity: "sassolungo", verb: "inspect" }, { wait: 300 },
+      { type: "phone:shoot" }, { wait: 400 },
       ...translateSteps(ZH_COUNT),
       { wait: 500 },
       { type: "wait" }, { wait: 500 },
@@ -144,6 +163,23 @@ export default defineScene({
 
     // The third day has no objective written on the map any more.
     ctx.onEnter(() => { if (w.state.journal.objective) w.patch("journal", { objective: null }); });
+
+    /* 长椅上没有钟 (v4 §7), and §6 prices this whole stand at 免费. The engine does not know that: UISystem
+       charges `phone:shoot` a minute and one percent, PowerSystem charges every `phone:open` the same (see
+       requests.engine). Both handlers run before these two, so this puts the minute and the percent back. */
+    ctx.on("clock:advance", ({ minutes }) => {
+      const whole = Math.max(0, Math.round(minutes));
+      if (!whole) return;
+      w.patch("clock", { minuteOfDay: w.state.clock.minuteOfDay - whole });
+      w.patch("stats", { minutesSpent: Math.max(0, w.state.stats.minutesSpent - whole) });
+      w.set("phone", { ...w.state.phone, minuteOfDay: w.state.phone.minuteOfDay - whole });
+    });
+    ctx.on("power:drain", ({ source, value }) => {
+      if (source !== "phone" || !value || w.state.power.phone <= 0) return;
+      const battery = Math.min(100, w.state.power.phone + value);
+      w.patch("power", { phone: battery });
+      w.set("phone", { ...w.state.phone, battery: Math.round(battery) });
+    });
 
     /* --- She remembers the page. It is hers to remember: it arrives on the second breath she takes sitting here,
        or on the second thing she looks at, or the moment she opens the album. Never on a timer. --- */
@@ -170,12 +206,17 @@ export default defineScene({
       if (seen.size >= 2) remember();
     };
     for (const entry of LOOKS) {
-      ctx.onInteract(entry.id, (verb) => {
-        if (verb === "photograph") { w.dispatch({ type: "phone:shoot" }); glanceAt(entry.at, 0.3); ctx.setFlag(LOOKED_AT, entry.id); return; }
-        look(entry);
-      });
+      ctx.onInteract(entry.id, () => look(entry));
       ctx.onGaze(entry.id, () => look(entry));
     }
+
+    /* --- One last photograph, taken the way every other one this run was taken: from the phone's own camera.
+       Whatever it was pointed at is the thing her eyes were on, so it can still own the last line. --- */
+    ctx.on("phone:photo", ({ scene }) => {
+      if (scene !== "bench") return;
+      const target = landing();
+      if (target) ctx.setFlag(LOOKED_AT, target.id);
+    });
 
     /* --- Sitting down. Ten hours of walking were three days ago and her legs still know it. --- */
     ctx.onInteract("bench", () => {
@@ -214,18 +255,24 @@ export default defineScene({
       remember();
     });
 
-    /* --- Where the last line comes down: whatever her eyes are on when it lands, else the last thing they were on. --- */
+    /* --- Where the last line comes down: the last thing she actually raised her eyes to — a click on it, or the
+       pointer resting on it long enough for the dwell to fire, both go through `look()` and both write LOOKED_AT.
+       Only if she never looked up at anything does the pointer's own direction decide it. (Reading LOOKED_AT
+       second made the pointer win every time: far-slope sits 11° off the resting centre, so it took every line
+       however deliberately the player had turned to something else.) --- */
     const landing = (): Look | null => {
+      const last = ctx.flag<string>(LOOKED_AT, "");
+      const looked = LOOKS.find((entry) => entry.id === last);
+      if (looked) return looked;
       const gaze = w.rt.gaze;
       let best: Look | null = null;
-      let nearest = 26;
+      // About the width of a reveal: nearer than this she is looking at that thing, further and she is not.
+      let nearest = 14;
       for (const entry of LOOKS) {
         const degrees = Math.hypot(entry.at.yaw - gaze.yaw, (entry.at.pitch - gaze.pitch) * 1.4);
         if (degrees < nearest) { nearest = degrees; best = entry; }
       }
-      if (best) return best;
-      const last = ctx.flag<string>(LOOKED_AT, "");
-      return LOOKS.find((entry) => entry.id === last) ?? null;
+      return best;
     };
 
     /* --- The last line. The wind drops, the music comes in on the flag, and she stops being able to see straight. --- */

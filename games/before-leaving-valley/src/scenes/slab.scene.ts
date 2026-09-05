@@ -5,17 +5,17 @@
    changes no event; it is only how a lot of people find that letter. The only way out is back down the way she came.
    Every coordinate below was read off the 150°×84° grid of 05b-slab (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84);
    the pixel it came from (1280×720) is noted beside it. */
-import { flag, worn } from "../engine/condition";
+import { all, any, flag, worn } from "../engine/condition";
 import { defineScene, type WalkStep } from "../engine/scene";
 import type { Transform } from "../engine/types";
 import { backArrow, blaze, lookAt, wrongWay } from "./_shared";
 
 const SEEN = "slab.seenBox", LEANED = "slab.leaned", TOUCHED = "slab.touched";
-const PHOTO_BOX = "slab.photoBox", HUM = "slab.hum", RIDGE = "slab.ridge", TRIED = "slab.triedClip";
+const HUM = "slab.hum", RIDGE = "slab.ridge", TRIED = "slab.triedClip";
 
 /* Things painted in 05b-slab, with the pixel they were read from. */
 const BOLT: Transform = { yaw: -28.5, pitch: -6, distance: 12 };      // the anchor bolt clamped on the far rib (398, 412)
-const BOX: Transform = { yaw: -28, pitch: -12.5, distance: 12 };      // the rock face directly under the bolt (400, 467)
+const BOX: Transform = { yaw: -28, pitch: -8.5, distance: 12 };       // bolted to the rib beside it, one box-height down (400, 431)
 const SEAM: Transform = { yaw: -12, pitch: -4 };                      // the near lip of the vertical cleft (527, 383)
 const FACE: Transform = { yaw: 26, pitch: -5 };                       // the middle of the polished panel (862, 403)
 const STREAK: Transform = { yaw: 13, pitch: 0 };                      // the dark seam running across the slab (711, 360)
@@ -42,9 +42,12 @@ export default defineScene({
   entities: [
     // The far rib, across the cleft: the cable comes down through this bolt. A look, or a photograph of it.
     lookAt("route", BOLT, "对面的锚栓", 1, { interactable: { verbs: ["inspect", "photograph"], label: "对面的锚栓", reveal: 13, cost: { minutes: 1 } } }),
-    // Bolted to the rock beside it: a small dark box. Its lid only catches the light for someone whose eye rests on it.
+    /* Bolted to the rock beside it: a small dark box. One sprite in one state — the lid turning over in the light is
+       carried by the tick, the glance and her line, not by a second picture. (mailbox-far.webp is the box standing on a
+       boulder, painted three-quarters from above for a horizontal surface; on a vertical rib it reads as a lunchbox on a
+       floating stone, so this asks for its own face-on id instead.) */
     { id: "box", transform: BOX,
-      sprite: { src: "sprites/mailbox-far.webp", layer: "prop", sizeVh: 4, swap: [{ when: flag(SEEN), src: "sprites/mailbox-glint.webp" }] },
+      sprite: { src: "sprites/mailbox-wall.webp", layer: "prop", sizeVh: 4 },
       gaze: { radius: 12, dwell: 900 } },
     // The near lip of the cleft. Lean out over it and the far wall opens up all the way down.
     { id: "seam", transform: SEAM, className: "hold-hotspot",
@@ -54,9 +57,11 @@ export default defineScene({
     { id: "face", transform: FACE, className: "hold-hotspot",
       interactable: { verbs: ["hold"], label: "打磨过的石板", reveal: 14, cost: { minutes: 1, fatigue: 0.02 } },
       hold: { ms: 800, scaleWith: ["fatigue"] } },
-    // Two candidate marks, both of them not paint: a water streak on the upper slab, old colour from another line low on it.
-    blaze("streak-slab", STREAK, false),
-    blaze("oldpaint-slab", OLD_PAINT, false),
+    /* Two candidate marks, both of them not paint: a wet seam running down the upper slab, and old colour from another
+       line low on it. The factory's default false-blaze is a lichened pebble — a boulder silhouette glued to a polished
+       vertical panel, and not what she names — so each one carries the picture its word describes. */
+    blaze("streak-slab", STREAK, false, { sprite: { src: "sprites/blaze-streak-wet.webp", layer: "prop", sizeVh: 4 } }),
+    blaze("oldpaint-slab", OLD_PAINT, false, { sprite: { src: "sprites/blaze-arrow-old.webp", layer: "prop", sizeVh: 4 } }),
     // The deep cleft at the right edge. Three minutes of shuffling along the ledge to look into it.
     wrongWay("chimney", CHIMNEY, "右边的深缝", 3, "缝里过不去。"),
     // Her own ledge, and the two hundred metres of pass under it.
@@ -64,13 +69,18 @@ export default defineScene({
     lookAt("pass", PASS, "脚下的山口", 1),
     lookAt("road", ROAD, "盘山公路", 1),
     { id: "ridge", transform: RIDGE_AT, gaze: { radius: 13, dwell: 1100 } },
-    // Nothing on this side takes a carabiner. Her hand finds that out for itself.
+    // Nothing on this side takes a carabiner. Her hand finds that out for itself — but only once she has had her hands
+    // on this wall; a line on screen from the first frame telling her to clip in would be an instruction, not an idea.
     { id: "lanyard", transform: { yaw: 0, pitch: -88 }, tags: ["action"],
-      interactable: { verbs: ["clip"], label: "找地方挂挽索", reveal: 0, cost: { minutes: 0.5 } }, visible: worn("lanyard") },
+      interactable: { verbs: ["clip"], label: "找地方挂挽索", reveal: 0, cost: { minutes: 0.5 } },
+      visible: all(worn("lanyard"), any(flag(LEANED), flag(TOUCHED))) },
     // The only way out: down-climb the way she traversed in. Twenty minutes, there and back (v4 §7).
     backArrow("back", DOWN, "crack", "下攀回去", 20),
   ],
   exitWhen: undefined,
+  /* slab is a side scene: engine/dev.ts's warpTo walks MAIN_ORDER and never reaches it, so this never runs on ?node=.
+     It exists so that slab.seenBox (contract §6's cross-scene table) is right if the loop ever includes side scenes;
+     it must stay out of any main-line seed pass, or it would claim the box was seen by a player who never came here. */
   seed: (w) => { w.setFlag(SEEN, true); },
   script: (ctx) => {
     const w = ctx.world;
@@ -97,7 +107,6 @@ export default defineScene({
     ctx.onInteract("route", (verb) => {
       if (verb === "photograph") {
         w.dispatch({ type: "phone:shoot" });
-        if (ctx.flag(SEEN, false)) ctx.setFlag(PHOTO_BOX, true);
         ctx.kick("glance", 0.35, { yaw: -2, pitch: 0 });
         return;
       }
@@ -113,8 +122,8 @@ export default defineScene({
       ctx.kick("pull", 1.0, { yaw: -5, pitch: -3 });
       ctx.sfx("grip", -0.3);
       ctx.after(420, () => { ctx.sfx("slide", -0.4, 0.4); ctx.fx("dust", 0.35); ctx.kick("settle", 0.5); });
+      // The cable is painted across the cleft; she does not read the picture back. The lean's only word is the box's.
       findBox();
-      ctx.say("钢缆在那边。", { tag: "slab-lean" });
     });
     ctx.onRelease("seam", (progress) => {
       if (progress <= 0.25) return;
@@ -206,14 +215,14 @@ export default defineScene({
   walkthrough: [{ type: "travel", entity: "back" }],
   variants: {
     // Lean out over the cleft — the box turns over in the light — then down-climb.
-    look: [...hold("seam", 2400), { wait: 600 }, { type: "travel", entity: "back" }],
+    look: [...hold("seam", 2900), { wait: 600 }, { type: "travel", entity: "back" }],
     // Everything the terrace has: the far rib and a photograph of it, the lean, the panel, both marks,
     // the right-hand cleft, the ledge, the pass and the road, and the carabiner that finds nothing.
     thorough: [
       { type: "interact", entity: "route", verb: "inspect" }, { wait: 300 },
-      ...hold("seam", 2400), { wait: 500 },
+      ...hold("seam", 2900), { wait: 500 },
       { type: "interact", entity: "route", verb: "photograph" }, { wait: 300 },
-      ...hold("face", 2000), { wait: 400 },
+      ...hold("face", 2400), { wait: 400 },
       { type: "interact", entity: "streak-slab", verb: "inspect" }, { wait: 300 },
       { type: "interact", entity: "oldpaint-slab", verb: "inspect" }, { wait: 300 },
       { type: "interact", entity: "chimney", verb: "inspect" }, { wait: 700 },

@@ -9,19 +9,23 @@
 import { flag, not } from "../engine/condition";
 import { defineScene } from "../engine/scene";
 import type { EntityId, Transform } from "../engine/types";
-import { goArrow } from "./_shared";
+import { goArrow, prop } from "./_shared";
 
 /* Painted in 17-car. */
 const MIRROR: Transform = { yaw: 0.5, pitch: 19.5, distance: 8 };      // the glass of the rear-view mirror (644, 193)
 const VILLAGE: Transform = { yaw: 12, pitch: 9, distance: 40 };        // the village lights down in the valley (742, 283)
 const TREES: Transform = { yaw: -31, pitch: 21, distance: 22 };        // the spruce tops against the sky, left of the mirror (375, 180)
 const VENT: Transform = { yaw: -7.5, pitch: -11, distance: 6 };        // the left half of the vent grille, its slats (576, 454)
-const ROAD_AHEAD: Transform = { yaw: -10, pitch: 8, distance: 30 };    // the far stretch of road past the bend (555, 292)
-const WET_ROAD: Transform = { yaw: 2, pitch: -1, distance: 30 };       // the wet tarmac in front of the bonnet (657, 372)
+/* The road ahead stays at distance 16: past 16.7 `PanoStage`'s `Math.max(0.6, 10/distance)` clamp stops the sprite
+   shrinking and it renders `sizeVh × 0.06 × distance` instead of `sizeVh`. At or under it, sizeVh is the screen height. */
+const ROAD_AHEAD: Transform = { yaw: -11, pitch: 8.4, distance: 16 };  // where the road narrows into the trees (546, 288)
+const WET_ROAD: Transform = { yaw: 2, pitch: -1, distance: 16 };       // the wet tarmac in front of the bonnet (657, 372)
 /* Sprites: the things that glow, move or are handed over. Everything on the centre stack has to stay above her own
    knees, which the engine keeps painted across the bottom of the screen for the whole ride (`hands-lap`, body "ride"). */
-const NAV: Transform = { yaw: 13, pitch: -11, distance: 6 };           // clamped on the right half of the vent grille (751, 454)
-const GEAR: Transform = { yaw: 2, pitch: -21, distance: 5 };           // the gear lever out of the centre stack (657, 540)
+const NAV: Transform = { yaw: 7, pitch: -11, distance: 6 };            // clamped on the right slats of the vent grille (700, 454)
+/* The gear lever this painting actually has is at the very bottom of the centre stack (642, 693) = pitch −38.9: below
+   the viewport and behind `hands-lap`. What the plate does show of the two of them is the wheel, so his hand is there. */
+const WHEEL: Transform = { yaw: -16.2, pitch: -11.7, distance: 6 };    // the top right of the steering-wheel rim (502, 460)
 /* The bottle comes back over the right of the dash: an arm and a hand, and that is all of them the picture shows.
    Neither of them is ever drawn from the back seat — the account gives them no lines and the game gives them no face. */
 const WATER: Transform = { yaw: 31, pitch: -13, distance: 5 };         // an arm coming back over the right of the dash (905, 471)
@@ -41,7 +45,7 @@ const LOOKS: Array<{ id: EntityId; pan: number; sound: "cloth" | "tick" | "tock"
   { id: "village", pan: 0.35, sound: "breath" },
   { id: "roadside-trees", pan: -0.6, sound: "slide" },
   { id: "nav-screen", pan: 0.15, sound: "tick" },
-  { id: "their-hands", pan: 0, sound: "cloth" },
+  { id: "their-hand", pan: -0.2, sound: "cloth" },
   { id: "mirror", pan: 0, sound: "tock" },
 ];
 
@@ -58,9 +62,15 @@ export default defineScene({
   // v4 §8: 看过至少一样并到达酒店. Nothing else is required of her; the ride happens either way.
   exitWhen: flag(LOOKED, { gte: 1 }),
   entities: [
+    /* The four things in here that glow, move or are held out are drawn as props of their own, with the hotspot a
+       second entity on the same point: a `sprite` inside a `Hotspot` inherits the button's reveal opacity, and a
+       bottle held out to her — or a screen that is the only light on the dash — must not blink in and out with
+       where her eyes happen to be (hairpin does the same for its cars). */
     // Out of the glass. Three of them, and three of them alone are still worth three sentences (v4 §7: 只看窗外＝三句).
+    // A hundred-odd metres of wet road ahead: 1.3 vh is a car's back end at that range, smaller than the guardrail
+    // reflectors the plate already paints beside it.
+    prop("taillights-ahead", ROAD_AHEAD, "sprites/taillights-ahead.webp", 1.3),
     { id: "taillights", transform: ROAD_AHEAD,
-      sprite: { src: "sprites/taillights-ahead.webp", layer: "prop", sizeVh: 2.4 },
       interactable: { verbs: ["inspect"], label: "前面的尾灯", reveal: 12, cost: { minutes: 0 } },
       gaze: { radius: 10, dwell: 900 } },
     { id: "village", transform: VILLAGE,
@@ -69,21 +79,21 @@ export default defineScene({
     { id: "roadside-trees", transform: TREES,
       interactable: { verbs: ["inspect"], label: "窗外的杉树", reveal: 13, cost: { minutes: 0 } },
       gaze: { radius: 11, dwell: 1000 } },
-    // Inside the warm part of the car. The screen and their hands are sprites: they glow, they move, they are theirs.
+    // Inside the warm part of the car. The screen and his hand are sprites: they glow, they move, they are theirs.
+    prop("nav-phone", NAV, "sprites/nav-phone.webp", 12),
     { id: "nav-screen", transform: NAV,
-      sprite: { src: "sprites/nav-phone.webp", layer: "prop", sizeVh: 12 },
       interactable: { verbs: ["inspect"], label: "导航屏", reveal: 12, cost: { minutes: 0 } },
       gaze: { radius: 10, dwell: 900 } },
-    { id: "their-hands", transform: GEAR,
-      sprite: { src: "sprites/hands-gearstick.webp", layer: "prop", sizeVh: 15 },
-      interactable: { verbs: ["inspect"], label: "挡杆上的手", reveal: 13, cost: { minutes: 0 } },
+    prop("wheel-hand", WHEEL, "sprites/hand-on-wheel.webp", 18),
+    { id: "their-hand", transform: WHEEL,
+      interactable: { verbs: ["inspect"], label: "方向盘上的手", reveal: 13, cost: { minutes: 0 } },
       gaze: { radius: 11, dwell: 1000 } },
     { id: "mirror", transform: MIRROR,
       interactable: { verbs: ["inspect"], label: "后视镜", reveal: 12, cost: { minutes: 0 } },
       gaze: { radius: 10, dwell: 900 } },
     // The bottle, held back over the dash until she takes it. Holding is drinking (v4 §3.2: 车里接过那瓶水 −0.20).
+    prop("water-bottle", WATER, "sprites/water-bottle.webp", 30, { visible: not(flag(WATER_TAKEN)) }),
     { id: "water", transform: WATER, className: "hold-hotspot",
-      sprite: { src: "sprites/water-bottle.webp", layer: "hand", sizeVh: 30 },
       interactable: { verbs: ["hold"], label: "递过来的水", reveal: 15 },
       hold: { ms: 900, scaleWith: ["fatigue"] },
       visible: not(flag(WATER_TAKEN)) },
@@ -106,6 +116,8 @@ export default defineScene({
     { wait: 400 },
     { type: "travel", entity: "go" },
   ],
+  /* The 6500 ms between looks is the six-second line gap plus slack: look faster than that and the sentence keeps
+     for the next thing she rests her eyes on, which is the point — nothing here can be rushed into a wall of text. */
   variants: {
     // Only what is out of the glass: three of the five sentences, and she never learns whose anniversary tomorrow is.
     window: [
@@ -119,7 +131,7 @@ export default defineScene({
       { type: "hold:start", entity: "water" }, { wait: 2400 }, { type: "hold:end" }, { wait: 6500 },
       { type: "interact", entity: "vent", verb: "use" }, { wait: 800 },
       { type: "interact", entity: "nav-screen", verb: "inspect" }, { wait: 6500 },
-      { type: "interact", entity: "their-hands", verb: "inspect" }, { wait: 6500 },
+      { type: "interact", entity: "their-hand", verb: "inspect" }, { wait: 6500 },
       { type: "interact", entity: "mirror", verb: "inspect" }, { wait: 6500 },
       { type: "interact", entity: "taillights", verb: "inspect" }, { wait: 6500 },
       { type: "wait" }, { wait: 600 }, { type: "wait" }, { wait: 600 },
@@ -139,14 +151,32 @@ export default defineScene({
     /* Looking at one more thing gets one more sentence out of the front seats, up to five (v4 §7).
        Nothing on screen counts them; the only record is the notebook line she gets if she hears them all. */
     const seen = new Set<EntityId>();
+    /* v4 §10.2-6 / §12 C3: at least six seconds between any two lines, never queued. DialogueSystem only enforces
+       that below priority 1, and these have to be priority 2 or the adrenaline gate swallows them ten hours in — so
+       the six seconds are kept here. A look inside the window does not consume a sentence: it still counts, still
+       sounds, still turns her head, and the sentence waits for the next thing she rests her eyes on. Six targets
+       against five sentences leaves exactly one spare look. */
+    const LINE_GAP = 6000;
+    let lastLineAt = -Infinity;
+    let looks = 0;
     const look = (id: EntityId, pan: number, sound: "cloth" | "tick" | "tock" | "slide" | "breath") => {
       if (seen.has(id)) return;
+      const said = ctx.flag<number>(LINES_SAID, 0);
+      const due = said < CAR_LINES.length && w.rt.now - lastLineAt >= LINE_GAP;
+      if (!due && said < CAR_LINES.length) {
+        // Too soon after the last one: the road answers instead, and the sentence keeps for the next look.
+        ctx.sfx(sound, pan, 0.45);
+        glanceAt(ctx.transformOf(id), 0.4);
+        return;
+      }
       seen.add(id);
+      looks += 1;
       ctx.bump(LOOKED, 1);
       ctx.sfx(sound, pan, 0.45);
       glanceAt(ctx.transformOf(id), 0.5);
-      const said = ctx.flag<number>(LINES_SAID, 0);
+      if (looks % 3 === 0) ctx.sfx("slide", -0.35, 0.22);     // the tyres through the water under all of it
       if (said >= CAR_LINES.length) return;
+      lastLineAt = w.rt.now;
       ctx.setFlag(LINES_SAID, said + 1);
       // priority 2: ten hours in, she is past talking to herself — but she still passes on what they say.
       ctx.say(CAR_LINES[said], { priority: 2, tag: `car-line-${said}` });
@@ -164,6 +194,8 @@ export default defineScene({
       w.emit("body:rest", { seconds: 5 });
       ctx.hand({ ...WATER, pitch: WATER.pitch - 4 }, "grip");
       ctx.kick("settle", 0.8); ctx.sfx("exhale", 0, 0.85);
+      if (w.rt.now - lastLineAt < LINE_GAP) return;           // the same six seconds; the bottle needs no words
+      lastLineAt = w.rt.now;
       ctx.say("第一口水。", { priority: 2, tag: "car-water" });
     });
     ctx.onRelease("water", (progress) => {
@@ -171,22 +203,25 @@ export default defineScene({
       ctx.kick("glance", 0.3, { yaw: 2, pitch: -2 }); ctx.sfx("cloth", 0.3, 0.35);
     });
 
-    /* The vent: she holds her hands in front of it. The car gets warmer and that is all that happens. */
+    /* The vent: she holds her hands in front of it. The car gets warmer and that is all that happens — and it keeps
+       answering afterwards, because a hotspot that goes silent on the second press is a dead control (§12 D7). */
     ctx.onInteract("vent", () => {
+      ctx.hand(VENT, "grip"); ctx.kick("settle", 0.45); ctx.sfx("cloth", -0.1, 0.4);
       if (ctx.flag("car.heater", false)) return;
       ctx.setFlag("car.heater", true);
       w.emit("ambience", { overrides: { heater: 1, engine: 0.55 } });
       w.emit("body:rest", { seconds: 4 });
-      ctx.hand(VENT, "grip"); ctx.kick("settle", 0.45); ctx.sfx("cloth", -0.1, 0.4);
     });
 
-    /* Sitting still. The road answers: the tyres on the wet tarmac, and once, a single sweep of the wiper. */
+    /* Sitting still. The road answers under the wheels — not with the wiper: AudioSystem already sweeps one every
+       2.2 s in this scene, so a wiper here would be inaudible inside its own loop. (In `ride` the camera never holds
+       still enough for many of these; the tyres are also hung on the looks above, where they always land.) */
     let stills = 0;
     ctx.onWait(() => {
       stills += 1;
       ctx.kick("settle", 0.2);
-      if (stills === 2 && !ctx.flag("car.wiper", false)) { ctx.setFlag("car.wiper", true); ctx.sfx("wiper", 0.1, 0.7); return; }
-      if (stills % 3 === 0) ctx.sfx("slide", -0.35, 0.25);
+      if (stills === 2) { ctx.sfx("slide", -0.4, 0.45); return; }
+      if (stills % 3 === 0) ctx.sfx("cloth", 0.25, 0.25);
     });
 
     /* If the second car went past her and she had to run thirty seconds after it, she is still getting her breath back. */
@@ -205,6 +240,13 @@ export default defineScene({
       ctx.give("contactCard");
       ctx.sfx("shutter", 0.25, 0.7);
       ctx.flash("两个号码。一张合影。");
+    });
+    /* The night ends and the next morning starts — but only once the painting has changed. `travel:begin` runs 1.8 s
+       before `enterScene`, and moving the clock there put 7月30日 08:40 in the top bar over a night interior, with the
+       daylight tint already up (§12 D1). `scene:exit` fires inside enterScene; the day and the date that follow it
+       are set by the scene definition itself. */
+    ctx.on("scene:exit", ({ to }) => {
+      if (to !== "search") return;
       w.patch("clock", { minuteOfDay: 8 * 60 + 40 });
       w.set("phone", { ...w.state.phone, minuteOfDay: 8 * 60 + 40, date: { year: 2025, month: 7, day: 31 } });
     });
