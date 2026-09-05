@@ -262,12 +262,8 @@ export function phoneReducer(state: PhoneState, action: PhoneAction): PhoneState
         day: action.photo.day ?? state.date.day,
         isNew: true,
       };
-      return {
-        ...state,
-        ...advanceClock(state.date, state.minuteOfDay, 1),
-        battery: Math.max(0, state.battery - 2),
-        photos: [photo, ...state.photos],
-      };
+      // The engine owns the clock and the battery (ClockSystem / PowerSystem); the phone only stores the photo.
+      return { ...state, photos: [photo, ...state.photos] };
     }
     case "restore":
       return {
