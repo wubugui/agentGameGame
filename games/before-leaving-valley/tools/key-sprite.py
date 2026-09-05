@@ -39,7 +39,29 @@ else:
     g = g - spill
     # yellow-green fringe: also lift blue a little toward neutral inside the band
     b = np.where(band, b + spill_yg * 0.6, b)
-out = np.dstack([np.clip(r, 0, 255), np.clip(g, 0, 255), np.clip(b, 0, 255), alpha * 255.0]).astype(np.uint8)
+# Bleed the subject's edge colour outward into the transparent pixels. The engine scales sprites
+# bilinearly, which mixes in whatever RGB sits under alpha=0; leaving the green screen there is what
+# produces a green fringe at small sizes. 24 rings of nearest-neighbour fill covers any resample; the
+# far field gets the subject's mean colour.
+col = np.dstack([np.clip(r, 0, 255), np.clip(g, 0, 255), np.clip(b, 0, 255)]).astype(np.float32)
+solid = alpha > 0.02
+if solid.any():
+    mean_col = col[solid].mean(axis=0)
+    c = np.where(solid[..., None], col, 0.0)
+    f = solid.astype(np.float32)
+    for _ in range(24):
+        if f.min() > 0.5:
+            break
+        acc = np.zeros_like(c); accw = np.zeros_like(f)
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)):
+            acc += np.roll(np.roll(c, dy, 0), dx, 1) * np.roll(np.roll(f, dy, 0), dx, 1)[..., None]
+            accw += np.roll(np.roll(f, dy, 0), dx, 1)
+        upd = (accw > 0) & (f < 0.5)
+        c = np.where(upd[..., None], acc / np.maximum(accw, 1e-6)[..., None], c)
+        f = np.where(upd, 1.0, f)
+    c = np.where((f < 0.5)[..., None], mean_col, c)
+    col = c
+out = np.dstack([np.clip(col[..., 0], 0, 255), np.clip(col[..., 1], 0, 255), np.clip(col[..., 2], 0, 255), alpha * 255.0]).astype(np.uint8)
 img = Image.fromarray(out, "RGBA")
 ys, xs = np.where(alpha > 0.05)
 if len(xs) == 0:
