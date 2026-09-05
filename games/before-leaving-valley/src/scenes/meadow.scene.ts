@@ -4,9 +4,10 @@
    the real way is the faint track climbing the rise at the far-left end of the grass, under the wall.
    Every coordinate below was read off the 150°×84° grid of 01-meadow (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84);
    the pixel it came from (1280×720) is noted beside it. */
-import { after, all, before } from "../engine/condition";
+import { after, all, before, entityIs, not } from "../engine/condition";
+import type { EntityDef } from "../engine/entity";
 import { defineScene } from "../engine/scene";
-import type { Transform } from "../engine/types";
+import type { EntityId, Transform } from "../engine/types";
 import type { World } from "../engine/world";
 import { blaze, goArrow, lookAt, wrongWay } from "./_shared";
 
@@ -22,8 +23,18 @@ const BELL_TOWER: Transform = { yaw: 21, pitch: -10.5 };             // the belf
 const WALL_ROUTE: Transform = { yaw: -15, pitch: 9, distance: 24 };  // the dark cleft up the wall above the scree cone's apex (512, 283)
 const SASSOLUNGO: Transform = { yaw: 48, pitch: 6, distance: 40 };   // the main tower of the jagged wall across the road (1050, 309)
 const HUT: Transform = { yaw: 46.5, pitch: -14, distance: 18 };      // the wooden house on the road (1037, 480)
-const TRACK_BEND: Transform = { yaw: 21, pitch: -22 };               // where the track under her feet bends right toward the chapel (819, 549)
+const TRACK_BEND: Transform = { yaw: 23.5, pitch: -24.7 };           // on the dirt itself, where the track swings right toward the chapel and the road (840, 572)
 const FAR_TRACK: Transform = { yaw: -66, pitch: -8 };                // the faint pale track up the rise at the far-left end of the grass (77, 429)
+
+/* A mark that stays on its stone after she has read it (v4 §3.5 / §3.8 memory ③): the real one keeps a very faint
+   highlight on the painting until she leaves the node, a false one goes grey and can no longer be pressed.
+   The shared factory hides the whole entity once it is read; here the entity stays and only its state changes. */
+const mark = (id: EntityId, transform: Transform, real: boolean): EntityDef => blaze(id, transform, real, {
+  visible: undefined,
+  enabled: not(entityIs(id, "read")),
+  ...(real ? { sprite: { src: "sprites/blaze-red-white.webp", layer: "prop", sizeVh: 4,
+    swap: [{ when: entityIs(id, "read"), src: "sprites/blaze-red-white-dim.webp" }] } } as const : {}),
+});
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 /* The cloud shadow lies on the left half of the wall and drifts right across it as the minutes pass. */
@@ -44,15 +55,16 @@ export default defineScene({
   fallback: "半小时山路。墙就在草地尽头。",
   entities: [
     // Three candidate marks on the foreground white stones (v4 §3.5: 2–4 per outdoor node, indistinguishable until close).
-    blaze("blaze-meadow", BOULDER, true),
-    blaze("lichen-meadow", FLAT_STONE, false),
-    blaze("rust-meadow", FLOWER_STONES, false),
+    mark("blaze-meadow", BOULDER, true),
+    mark("lichen-meadow", FLAT_STONE, false),
+    mark("rust-meadow", FLOWER_STONES, false),
     // Things to look at (v4 §6: a minute each). None of them says anything she could read for herself.
     lookAt("chapel", CHAPEL, "白色小教堂", 1),
     lookAt("wall", WALL_ROUTE, "石墙上的路线", 1),
     lookAt("sassolungo", SASSOLUNGO, "对面的锯齿石墙", 1),
     lookAt("hut", HUT, "公路边的木屋", 1),
     // The cloud shadow: a sprite that exists only in its window and moves with the clock; the beat fires when the gaze rests on it.
+    // Art: sprites/cloud-shadow.webp and the class .cloud-shadow-sprite (multiply, no drop shadow) are both requested with this scene.
     { id: "cloud-shadow", transform: cloudAt,
       sprite: { src: "sprites/cloud-shadow.webp", layer: "back", sizeVh: 14, className: "cloud-shadow-sprite" },
       gaze: { radius: 14, dwell: 1200 }, visible: all(after(CLOUD_FROM), before(CLOUD_TO)) },
@@ -130,8 +142,8 @@ export default defineScene({
       ctx.say("云影从墙上走过去。", { tag: "meadow-cloud" });
     });
 
-    // The bell at ten: the clock crossing the hour while she is still on the meadow. Three strikes off to the right, her head
-    // turns to them; the line comes on the third strike and gives way to anything she is already saying.
+    // The bell at ten: the clock crossing the hour while she is still on the meadow. Three strikes off to the right and
+    // her head turns to them. No line: the strikes are the world telling the hour, and the hour is the sun's and the phone's to give.
     ctx.on("clock:advance", ({ minutes }) => {
       if (ctx.flag("meadow.bell", false) || w.state.ui.travel) return;
       const now = ctx.minute();
@@ -140,7 +152,6 @@ export default defineScene({
       ctx.setFlag("meadow.bell", true);
       ctx.sfx("clink", 0.55, 0.9); ctx.after(420, () => ctx.sfx("clink", 0.55, 0.8)); ctx.after(840, () => ctx.sfx("clink", 0.55, 0.7));
       glanceAt(BELL_TOWER, 0.8);
-      ctx.after(900, () => ctx.say("钟声。十点了。", { tag: "meadow-bell" }));
     });
 
     // The marks. The real one is settled by the journal (hand, cloth, the first lesson); a false one gets her hand, a glance and a word.

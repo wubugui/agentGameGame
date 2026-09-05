@@ -5,7 +5,7 @@
    Coordinates read off the 150°×84° grid of 09-plateau (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84). */
 import { has } from "../engine/condition";
 import { defineScene } from "../engine/scene";
-import type { Transform } from "../engine/types";
+import type { Transform, Verb } from "../engine/types";
 import { blaze, goArrow, lookAt, prop, windy, wrongWay } from "./_shared";
 
 const CERTAIN = "plateau.certain";
@@ -14,13 +14,19 @@ const STILL = "plateau.stillness";
 const MARKS = "plateau.marks";
 const SLIP_FATIGUE = 0.45;          // the snow shortcut slides once under tired legs (v4 §7)
 const LOST_MINUTES = 15;            // going by the general direction across the karst (v4 §3.5: plateau = 15)
-const STILL_WAITS = 3;              // 4 s + 8 s + 8 s of standing still = twenty seconds
+const STILL_HOLD = 16000;           // GazeSystem's waits land at 4 s, 12 s, 20 s: 4 + 16 = twenty seconds standing
+const STILL_GAP = 26000;            // a longer silence than this between waits means she moved: start counting again
 const STILL_MS = 19000;             // how long the wind stays down
 
-/* Every candidate mark costs a minute here: there is no path between them, only stone (v4 §6 "各 1 分"). */
-const markCost = { verbs: ["inspect"] as const, label: "石头上的记号", reveal: 12, cost: { minutes: 1 } };
-const mark = (id: string, t: Transform, real: boolean, sprite?: string) =>
-  blaze(id, t, real, { interactable: { ...markCost, verbs: ["inspect"] }, ...(sprite ? { sprite: { src: sprite, layer: "prop" as const, sizeVh: 3 } } : {}) });
+/* A candidate mark costs a minute (v4 §7 "认记号每次 −1 分钟"). The false ones are charged by JournalSystem
+   on blaze:confirm, so the scene must not charge them a second time — all four end up costing exactly 1. */
+const mark = (id: string, t: Transform, real: boolean, sizeVh?: number) =>
+  blaze(id, t, real, {
+    interactable: { verbs: ["inspect"] as Verb[], label: "石头上的记号", reveal: 12, cost: { minutes: real ? 1 : 0 } },
+    ...(sizeVh
+      ? { sprite: { src: real ? "sprites/blaze-red-white.webp" : "sprites/blaze-false.webp", layer: "prop" as const, sizeVh } }
+      : {}),
+  });
 
 const TOWERS: Transform = { yaw: -30, pitch: 15, distance: 25 };   // the left flat-topped tower (x≈385, y≈230)
 const CAIRN: Transform = { yaw: -2, pitch: -4, distance: 14 };     // the little stack behind the stepped slab (x≈625, y≈395)
@@ -33,14 +39,14 @@ export default defineScene({
   ambience: { wind: 0.75, windTone: 1300, birds: 0.1, crickets: 0, stream: 0, engine: 0, heater: 0 },
   weather: { motes: "dust", clouds: true, gusty: true, windPan: 0.3 },
   arriveAt: 15 * 60 + 35,
-  idleLook: true,
   fallback: "灰白的石头一直铺到天边。",
   entities: [
     // Four candidates, all labelled the same (v4 §6): two paint stripes, a lichen rosette on the big boulder, an old survey mark on a rib.
-    mark("blaze-plateau-a", { yaw: -4, pitch: -8 }, true),                       // front face of the stepped slab's top step (x≈606, y≈428)
+    // sizeVh is the rendered height × distance/10 (Hotspot.tsx:39): a 25 cm mark 11 m out is ~2 vh, one 4 m out is ~4 vh.
+    mark("blaze-plateau-a", { yaw: -4, pitch: -8 }, true, 2),                    // front face of the stepped slab's top step (x≈606, y≈428)
     mark("blaze-plateau-b", { yaw: 38, pitch: -13 }, true),                      // the left lobe of the big boulder (x≈964, y≈471)
     mark("lichen-plateau", { yaw: 50, pitch: -14.5 }, false),                    // the pale patch on the boulder's right lobe (x≈1065, y≈485)
-    mark("survey-plateau", { yaw: -24, pitch: -22, distance: 8 }, false, "sprites/survey-mark.webp"),   // the top of the second rib at her feet (x≈435, y≈548)
+    mark("survey-plateau", { yaw: -24, pitch: -22, distance: 8 }, false, 5),     // the top of the second rib at her feet (x≈435, y≈548)
     // Things to look at: the ometto somebody built, the towers with nobody under them, the cloud coming over.
     { id: "cairn", transform: CAIRN, interactable: { verbs: ["inspect"], label: "石堆", reveal: 12, cost: { minutes: 1 } } },
     lookAt("towers-far", TOWERS, "远处的石塔", 1),
@@ -51,10 +57,11 @@ export default defineScene({
     }),
     // The flat bench on the left looks like a walkway. Ten minutes to nowhere.
     wrongWay("bench-west", { yaw: -48, pitch: -12 }, "左边的平石台", 10, "石台走到头，下面是空的。不是这条。"),
-    // The lip of the plateau, off to the right: six minutes there, six back, nothing but the view (ledge is its own scene).
-    { id: "ledge-route", transform: { yaw: 62, pitch: 1 }, className: "go-hotspot", tags: ["exit"],
-      exit: { to: "ledge", kind: "detour", label: "右边的高原边缘", minutes: 6 },
-      interactable: { verbs: ["inspect"], label: "右边的高原边缘", reveal: 20 } },
+    // Where the pavement steps down on the right: a low pale shelf running out that way. Six minutes there, six back,
+    // nothing but the view. This plate paints no lip — the label names the terrace, and 09c-ledge paints the drop.
+    { id: "ledge-route", transform: { yaw: 67, pitch: -4, distance: 20 }, className: "go-hotspot", tags: ["exit"],
+      exit: { to: "ledge", kind: "detour", label: "往右的低石台", minutes: 6 },
+      interactable: { verbs: ["inspect"], label: "往右的低石台", reveal: 20 } },
     // Two ways across, both always open (D6): along the stone rib is slow and sure; over the snow is faster and, tired, slides once.
     goArrow("ridge-route", { yaw: 12, pitch: -10 }, { to: "hutView", minutes: 35, label: "沿岩脊横切", kind: "walk" }),
     goArrow("snow-route", { yaw: 25, pitch: -20 }, { to: "hutView", minutes: 28, label: "从雪斑上抄过去", kind: "run" }),
@@ -66,8 +73,10 @@ export default defineScene({
     const glance = (dir: { yaw: number; pitch: number }, strength = 0.4) => ctx.kick("glance", strength, dir);
     const shoot = () => w.dispatch({ type: "phone:shoot" });
 
-    // --- The stillness. Stand without moving for twenty seconds and the wind stops: no words, no gusts, one breath. Once a game. ---
-    let waits = 0, lastWaitAt = -Infinity, stillSince = 0, still = false;
+    // --- The stillness. Stand without moving for twenty seconds and the wind stops: no words, no gusts, one breath. Once a game.
+    //     No idleLook on this node: a scene whose subject is standing still must not wander the camera, or the engine's
+    //     gaze-moved test keeps firing and the waits never arrive in a row. ---
+    let firstWaitAt = -Infinity, lastWaitAt = -Infinity, stillSince = 0, still = false;
     const windStops = () => {
       still = true; stillSince = rt.now;
       ctx.setFlag(STILL, true);
@@ -82,18 +91,20 @@ export default defineScene({
       w.emit("ambience", { overrides: {} });
       rt.gustT = 0; rt.nextGust = 1.5;                 // the first gust back is what ends it
     };
+    const moved = () => { firstWaitAt = -Infinity; lastWaitAt = -Infinity; windReturns(); };
     ctx.onWait(() => {
       const now = rt.now;
-      waits = now - lastWaitAt > 9500 ? 1 : waits + 1;   // waits come every 8 s while she stands; a longer gap means she moved
+      if (now - lastWaitAt > STILL_GAP) firstWaitAt = now;   // the first wait of a new spell of standing still
       lastWaitAt = now;
       if (still) { if (now - stillSince >= STILL_MS) windReturns(); return; }
-      if (waits >= STILL_WAITS && !ctx.flag(STILL, false)) windStops();
+      if (now - firstWaitAt >= STILL_HOLD && !ctx.flag(STILL, false)) windStops();
     });
-    ctx.on("interact:attempt", () => { waits = 0; windReturns(); });
-    ctx.on("gaze:enter", windReturns);
-    ctx.on("gaze:leave", windReturns);
-    ctx.on("phone:open", windReturns);
-    ctx.on("overlay", ({ id }) => { if (id) windReturns(); });
+    ctx.on("interact:attempt", moved);
+    ctx.on("phone:open", moved);
+    ctx.on("overlay", ({ id }) => { if (id) moved(); });
+    // Turning her head across a hotspot's edge counts as moving — but only when the gaze really travelled this frame.
+    ctx.on("gaze:enter", () => { if (w.rt.gazeMoved) moved(); });
+    ctx.on("gaze:leave", () => { if (w.rt.gazeMoved) moved(); });
 
     // --- Marks on the stones. Real ones are settled by the journal (hand, cloth, certain); she counts them. False ones: a hand, a look, a minute. ---
     ctx.on("blaze:confirm", ({ entity, real }) => {
@@ -176,9 +187,11 @@ export default defineScene({
       { type: "interact", entity: "blaze-plateau-b", verb: "inspect" }, { wait: 400 },
       { type: "travel", entity: "ridge-route" },
     ],
-    // Twenty seconds without moving: the wind stops. Then the far mark, then the rib.
+    // Twenty seconds without moving: no commands at all, the pointer simply rests and GazeSystem's own waits
+    // arrive at 4 s / 12 s / 20 s (PanoStage clamps dt at 50 ms, so a slow headless renderer stretches that
+    // wall-clock cadence — hence the generous wait). Then the far mark, then the rib.
     still: [
-      { type: "wait" }, { wait: 200 }, { type: "wait" }, { wait: 200 }, { type: "wait" }, { wait: 600 },
+      { wait: 44000 },
       { type: "interact", entity: "blaze-plateau-b", verb: "inspect" }, { wait: 400 },
       { type: "travel", entity: "ridge-route" },
     ],

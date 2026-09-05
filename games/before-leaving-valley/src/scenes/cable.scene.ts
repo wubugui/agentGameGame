@@ -23,8 +23,28 @@ const HAUL: Transform[] = [{ yaw: 26, pitch: -24.5 }, { yaw: 10, pitch: -16 }, {
 const ROCK: Transform[] = [{ yaw: 9, pitch: -22 }, { yaw: 14, pitch: -13 }, { yaw: -2, pitch: -10 }, { yaw: 8, pitch: -5 }, { yaw: -7, pitch: -3 }];
 const LIP: Transform = { yaw: 2, pitch: 5 };              // where the cable disappears over the top of the gully (655, 317)
 const RING: Transform = { yaw: 53, pitch: -29 };           // the big ring anchor at the right where the long cable ends (1092, 609)
-const NEAR_CABLE: Transform = { yaw: -12, pitch: -36, distance: 14 };   // the thick cable running back down out of the picture
+/* The thick cable running back down out of the picture: its painted core at x 538 spans y 683–694, so pitch −38 is its middle. */
+const NEAR_CABLE: Transform = { yaw: -12, pitch: -38, distance: 14 };
 const CLIMBERS: Transform = { yaw: 12, pitch: 11, distance: 30 };       // the lit face of the right wall, just under its skyline
+
+/* Every painted length of cable, foot to head. SEGMENTS[i] is the one that ends at ANCHORS[i], so at anchor h the
+   cable below her is SEGMENTS[h] and the cable above her is SEGMENTS[h + 1]. `sag` is how far the painted cable
+   hangs below the straight line between the two bolts at each end (degrees of pitch, read off the grid): only the
+   top two lengths have enough slack in the picture to matter. */
+type Segment = { foot: Transform; head: Transform; sagFoot: number; sagHead: number };
+const SEGMENTS: Segment[] = [
+  { foot: NEAR_CABLE, head: ANCHORS[0], sagFoot: 0, sagHead: 0 },      // up out of the gully floor to A
+  { foot: ANCHORS[0], head: ANCHORS[1], sagFoot: 0, sagHead: 0 },      // A → B
+  { foot: ANCHORS[1], head: ANCHORS[2], sagFoot: 0, sagHead: 0 },      // B → the pins → F
+  { foot: ANCHORS[2], head: ANCHORS[3], sagFoot: 0, sagHead: 0 },      // F → G
+  { foot: ANCHORS[3], head: ANCHORS[4], sagFoot: 0.4, sagHead: 0.8 },  // G → H: the rung dips and stays low at its left bolt
+  { foot: ANCHORS[4], head: ANCHORS[5], sagFoot: 0.8, sagHead: 0 },    // H → I: it leaves H from a ring under the bolt
+];
+/** A point on a painted length of cable: t = 0 at its foot, 1 at its head. */
+const along = (seg: Segment, t: number): Transform => ({
+  yaw: seg.foot.yaw + (seg.head.yaw - seg.foot.yaw) * t,
+  pitch: seg.foot.pitch + (seg.head.pitch - seg.foot.pitch) * t - (seg.sagFoot + (seg.sagHead - seg.sagFoot) * t),
+});
 
 const STEP = "cable.step", A = "cable.a", B = "cable.b", PHASE = "cable.phase", CAP = "cable.capLoose";
 const stepOf = (w: World) => w.flag<number>(STEP, 0);
@@ -32,16 +52,23 @@ const anchorAt = (index: number) => ANCHORS[Math.max(0, Math.min(index, TOTAL))]
 const segmentOf = (w: World) => Math.min(stepOf(w), TOTAL - 1);
 const near = (t: Transform): Transform => ({ ...t, distance: 9 });
 
-/* Where a carabiner hangs: on the segment below the anchor, in her hand, or already on the segment above. */
+/* Where a carabiner rides: on the length of cable below her, in her hand, or already on the length above. The two
+   locks sit a hand apart, and the lead runs the opposite way on the two cables so that the moment one is up and the
+   other still down they never cover each other (at the fourth bolt the two cables pass within 1.2° of one another).
+   Checked against the grid: all twenty resulting points are 0–3.6 px off painted cable. */
+const LEAD = 0.07;
+const onCableBelow = (here: number, side: -1 | 1) => near(along(SEGMENTS[here], 0.72 + side * LEAD));
+const onCableAbove = (here: number, side: -1 | 1) => near(along(SEGMENTS[here + 1], 0.28 - side * LEAD));
+const inHerHand = (here: number, side: -1 | 1) => offset(near(anchorAt(here)), side * 3, -8);
 const carabinerAt = (key: string, side: -1 | 1) => (w: World): Transform => {
   const here = segmentOf(w);
   const seg = w.flag<number>(key, 0);
-  const at = near(anchorAt(here));
-  if (seg === -1) return offset(at, side * 3, -8);
-  if (seg > here) return offset(at, side * 4, 4);
-  return offset(at, side * 4, -4);
+  if (seg === -1) return inHerHand(here, side);
+  return seg > here ? onCableAbove(here, side) : onCableBelow(here, side);
 };
-/* The open gate shows only if she read the rule on the second plate (v4 §3.7): otherwise the lock is just a colour. */
+/* The open gate shows only if she read the rule on the second plate (v4 §3.7): otherwise the lock is just a colour.
+   Until the art for the open gate exists the swap keeps the same picture and only adds a class — never a missing
+   file, which the view would hide, taking the one readable state of this whole scene with it. */
 const inHand = (key: string) => all(flag(key, { eq: -1 }), knows("E-carabinerRule"));
 
 const clipRound: WalkStep[] = [
@@ -63,16 +90,16 @@ export default defineScene({
   ambience: { wind: 0.95, windTone: 1450, birds: 0.1, crickets: 0, stream: 0, engine: 0, heater: 0 },
   weather: { gusty: true, windPan: 0.45 },
   arriveAt: 10 * 60 + 30,
-  fallback: "一开始就是 C 级，很快就是 D 级。",
+  fallback: "风从缝里往上灌。",
   exitWhen: flag(STEP, { gte: TOTAL }),
   entities: [
     // The two carabiners, hanging at the anchor she stands at. Each click moves one; one always stays on the cable.
     { id: "carabiner-blue", transform: carabinerAt(A, -1), className: "carabiner-hotspot",
-      sprite: { src: "sprites/carabiner-blue.webp", layer: "hand", sizeVh: 6, swap: [{ when: inHand(A), src: "sprites/carabiner-blue-open.webp" }] },
+      sprite: { src: "sprites/carabiner-blue.webp", layer: "hand", sizeVh: 6, swap: [{ when: inHand(A), src: "sprites/carabiner-blue.webp", className: "is-open" }] },
       interactable: { verbs: ["clip"], label: "蓝锁", reveal: 14, cost: { minutes: 0 }, requires: worn("lanyard") },
       visible: flag(PHASE, { eq: "clip" }) },
     { id: "carabiner-orange", transform: carabinerAt(B, 1), className: "carabiner-hotspot",
-      sprite: { src: "sprites/carabiner-orange.webp", layer: "hand", sizeVh: 6, swap: [{ when: inHand(B), src: "sprites/carabiner-orange-open.webp" }] },
+      sprite: { src: "sprites/carabiner-orange.webp", layer: "hand", sizeVh: 6, swap: [{ when: inHand(B), src: "sprites/carabiner-orange.webp", className: "is-open" }] },
       interactable: { verbs: ["clip"], label: "橙锁", reveal: 14, cost: { minutes: 0 }, requires: worn("lanyard") },
       visible: flag(PHASE, { eq: "clip" }) },
     // Up one segment: the cable (six minutes, the hands) or the pale rock beside it (ten minutes, free).
@@ -80,12 +107,16 @@ export default defineScene({
       interactable: { verbs: ["hold"], label: "拉钢缆", reveal: 13, cost: { minutes: 6, fatigue: 0.06 } },
       hold: { ms: 700, scaleWith: ["fatigue"] }, visible: flag(PHASE, { eq: "climb" }) },
     { id: "rock-holds", transform: (w) => near(ROCK[segmentOf(w)]), className: "climb-hotspot",
-      sprite: { src: "sprites/rock-hold-light.webp", layer: "prop", sizeVh: 6 },
+      sprite: { src: "sprites/hold-knob.webp", layer: "prop", sizeVh: 6 },
       interactable: { verbs: ["hold"], label: "找岩点", reveal: 13, cost: { minutes: 10 } },
       hold: { ms: 1000, scaleWith: ["fatigue"] }, visible: flag(PHASE, { eq: "climb" }) },
     // From the third anchor: the cable she came up on runs back down out of the picture, and the pass is under it.
+    // Two hotspots on the same cable, because a hotspot only ever fires its first verb (see requests.engine).
     { id: "view-down", transform: NEAR_CABLE,
-      interactable: { verbs: ["inspect", "photograph"], label: "往下的钢缆", reveal: 12, cost: { minutes: 0 } },
+      interactable: { verbs: ["inspect"], label: "往下的钢缆", reveal: 12, cost: { minutes: 0 } },
+      visible: flag(STEP, { gte: 2 }) },
+    { id: "view-down-shot", transform: offset(NEAR_CABLE, 4, 1.4),                 // further down the same cable (572, 674)
+      interactable: { verbs: ["photograph"], label: "拍一张", reveal: 12, cost: { minutes: 0 } },
       visible: flag(STEP, { gte: 2 }) },
     // Two dots high on the right wall: the only two people she will meet all day, an hour ahead of her.
     { id: "climbers-far", transform: CLIMBERS, sprite: { src: "sprites/climbers-far.webp", layer: "figure", sizeVh: 2.4 },
@@ -143,7 +174,7 @@ export default defineScene({
       ctx.setFlag(A, here); ctx.setFlag(B, here);
       w.emit("body:slip", { entity: "carabiner-blue", severity: 1 });
       ctx.sfx("slip", 0, 1.2); ctx.sfx("thud", 0, 0.6); ctx.kick("slip", 1.4, { yaw: 0, pitch: -14 });
-      ctx.hand(offset(near(anchorAt(here)), 0, -6), "carabiner", true);
+      ctx.hand(onCableBelow(here, -1), "carabiner", true);
       ctx.spend({ minutes: 3 }, "两把锁同时离缆");
       ctx.bump("cable.bothOff", 1);
       ctx.say("手心一凉。挂回去。", { tag: "cable-bothoff", priority: 1 });
@@ -151,16 +182,15 @@ export default defineScene({
     const clip = (mine: string, other: string, side: -1 | 1) => {
       const here = step();
       if (here >= TOTAL) return;
-      const at = near(anchorAt(here));
       if (rung(mine) !== -1) {
         if (rung(other) === -1) return bothOff(here);
         ctx.setFlag(mine, -1);
-        ctx.sfx("tock", side * 0.3); ctx.kick("clink", 0.6); ctx.hand(offset(at, side * 3, -8), "carabiner");
+        ctx.sfx("tock", side * 0.3); ctx.kick("clink", 0.6); ctx.hand(inHerHand(here, side), "carabiner");
         return;
       }
       const next = here + 1;
       ctx.setFlag(mine, next);
-      ctx.sfx("clink", side * 0.3); ctx.kick("clink"); ctx.hand(offset(at, side * 4, 4), "carabiner");
+      ctx.sfx("clink", side * 0.3); ctx.kick("clink"); ctx.hand(onCableAbove(here, side), "carabiner");
       if (rung(other) === next) { ctx.setFlag(PHASE, "climb"); ctx.kick("settle", 0.4); }
     };
     ctx.onInteract("carabiner-blue", () => clip(A, B, -1));
@@ -189,11 +219,14 @@ export default defineScene({
     ctx.onRelease("rock-holds", slipBack);
 
     /* Looking. Down the cable from the third anchor: a minute, or a photograph. Up: two dots on the wall. */
-    ctx.onInteract("view-down", (verb) => {
-      if (verb === "photograph") { w.dispatch({ type: "phone:shoot" }); ctx.setFlag("cable.photoDown", true); ctx.kick("glance", 0.4, { yaw: -1, pitch: -6 }); return; }
+    ctx.onInteract("view-down", () => {
       ctx.spend({ minutes: 1 }, "往下看");
       ctx.kick("glance", 0.6, { yaw: -2, pitch: -8 }); ctx.sfx("breath", -0.4, 0.6);
       ctx.say("整条碎石路在下面变成一条线。", { tag: "cable-view" });
+    });
+    ctx.onInteract("view-down-shot", () => {
+      w.dispatch({ type: "phone:shoot" }); ctx.setFlag("cable.photoDown", true);
+      ctx.kick("glance", 0.4, { yaw: -1, pitch: -6 });
     });
     ctx.onGaze("climbers-far", () => {
       ctx.setFlag("cable.sawClimbers", true);
@@ -255,7 +288,7 @@ export default defineScene({
       { type: "interact", entity: "anchor-ring", verb: "inspect" }, { wait: 300 },
       ...round("rock-holds", 2400), ...round("haul-cable", 1800),
       { type: "interact", entity: "view-down", verb: "inspect" }, { wait: 300 },
-      { type: "interact", entity: "view-down", verb: "photograph" }, { wait: 300 },
+      { type: "interact", entity: "view-down-shot", verb: "photograph" }, { wait: 300 },
       { type: "interact", entity: "rust-cable", verb: "inspect" }, { wait: 300 },
       ...round("rock-holds", 2400), ...round("haul-cable", 1800), ...round("haul-cable", 1800),
       { type: "travel", entity: "go" },

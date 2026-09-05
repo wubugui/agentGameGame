@@ -2,13 +2,16 @@
    an older plate below them with its lettering gone, the first cable running up from the lower ring anchor past
    the plates to the two pegs where it goes over the edge, the gear on the gravel at her feet, the red paint on
    the pale rock below the cable, and the pass far behind her on the left.
-   Coordinates read off the 150°×84° grid of 03-plaque (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84). */
+   Coordinates read off the 150°×84° grid of 03-plaque (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84).
+   Time: nothing this scene owns is both mandatory and priced — clipping is free, everything with a price is optional.
+   The four minutes the fastest route still spends are the engine's dressing (pack open/close 0.5→1 each, helmet 1, lanyard 1),
+   which v4 §3.6 makes compulsory here and §3.1 counts as player action on top of the 10:25 baseline; the walk stays 5 分 per §3.1. */
 import { all, flag, not, worn } from "../engine/condition";
 import { defineScene } from "../engine/scene";
 import type { EntityId, Transform } from "../engine/types";
 import { blaze, goArrow, prop, readable } from "./_shared";
 
-const BLUE = "plaque.blue", ORANGE = "plaque.orange", CLIPPED = "plaque.clipped";
+const BLUE = "plaque.blue", ORANGE = "plaque.orange", CLIPPED = "plaque.clipped", PULLED = "plaque.pulled";
 const ANCHOR: Transform = { yaw: 13, pitch: -14 };                // the lower ring anchor the cable starts from (752, 482)
 const CABLE_GO: Transform = { yaw: 23, pitch: 7 };                // on the cable between the orange carabiner and the upper ring (836, 300)
 const CABLE_TOP: Transform = { yaw: 17, pitch: 20 };              // the two pegs where the cable goes over the edge (770–803, 165–193)
@@ -31,7 +34,7 @@ export default defineScene({
     // The four plates (v4 §6): ① name and 1912, ② grade and the rule, ③ the sketch and 2941 m, ④ the white sheet under glass.
     readable("plate-name", { yaw: 33, pitch: 11 }, "铜牌", {                       // top-left bronze plate with the badge (918, 263)
       kind: "plaque", title: "VIA FERRATA PÖSSNECKER",
-      lines: ["Via ferrata Pössnecker", "Sez. Pössneck del D.u.Ö.A.V. · 1912", "Piz Selva 2941 m"],
+      lines: ["Via ferrata Pössnecker (Mesules)", "1912", "Piz Selva 2941 m"],
       entry: "E-possnecker", minutes: 1,
     }),
     readable("plate-grade", { yaw: 41, pitch: 11 }, "第二块牌子", {                 // top-right bronze plate, the wide one (990, 265)
@@ -53,27 +56,29 @@ export default defineScene({
     { id: "plate-old", transform: { yaw: 26, pitch: 0 },                             // (862, 363)
       interactable: { verbs: ["inspect"], label: "旧牌子", reveal: 12, cost: { minutes: 0 } } },
     // The lower anchor: where the cable starts. She can take hold of it and pull — the cable answers, nothing more.
+    // One minute, once: after she has felt it hold, her hand goes out and comes back (hold:start honours `requires`).
     { id: "anchor-start", transform: ANCHOR, className: "hold-hotspot",
-      interactable: { verbs: ["hold"], label: "钢缆起点", reveal: 13, cost: { minutes: 0.5 } },
+      interactable: { verbs: ["hold"], label: "钢缆起点", reveal: 13, cost: { minutes: 1 }, requires: not(flag(PULLED)) },
       hold: { ms: 500, scaleWith: ["fatigue"] } },
     // The two carabiners, hanging on the cable above the anchor. They only appear once helmet and lanyard are on (v4 §4: she would not go to clip otherwise).
     { id: "carabiner-blue", transform: { yaw: 15, pitch: -10.5 },                    // on the cable just above the ring (768, 450)
       sprite: { src: "sprites/carabiner-blue.webp", layer: "hand", sizeVh: 6 }, className: "carabiner-hotspot",
-      interactable: { verbs: ["clip"], label: "蓝锁", reveal: 14, cost: { minutes: 0.5 }, requires: dressed }, visible: dressed, enabled: not(flag(BLUE)) },
+      interactable: { verbs: ["clip"], label: "蓝锁", reveal: 14, cost: { minutes: 0 }, requires: dressed }, visible: dressed, enabled: not(flag(BLUE)) },
     { id: "carabiner-orange", transform: { yaw: 19, pitch: -2.5 },                   // on the cable halfway to the plates (802, 381)
       sprite: { src: "sprites/carabiner-orange.webp", layer: "hand", sizeVh: 6 }, className: "carabiner-hotspot",
-      interactable: { verbs: ["clip"], label: "橙锁", reveal: 14, cost: { minutes: 0.5 }, requires: dressed }, visible: dressed, enabled: not(flag(ORANGE)) },
+      interactable: { verbs: ["clip"], label: "橙锁", reveal: 14, cost: { minutes: 0 }, requires: dressed }, visible: dressed, enabled: not(flag(ORANGE)) },
     // The gear on the gravel at her feet. Opens the cloth; gone from the ground once helmet and lanyard are on her.
     prop("gear-cloth", GEAR, "sprites/gear.webp", 16, {
       interactable: { verbs: ["use"], label: "装备", reveal: 14, cost: { minutes: 0 } },
       visible: not(dressed),
     }),
-    // Two candidate marks: the red paint on the pale rock below the cable, and the green lichen on the face right of the gully.
+    // Two candidate marks: the red paint on the pale rock below the cable, and the crustose lichen on the slab above it.
     blaze("blaze-plaque", { yaw: 4, pitch: -33 }, true),                             // the orange-red paint (677, 645)
-    blaze("lichen-plaque", { yaw: 5.5, pitch: 13.5 }, false),                        // the green patch on the slab (687, 243)
+    blaze("lichen-plaque", { yaw: 5.5, pitch: 13.5 }, false),                        // the lichened patch on the slab (687, 243); sprites/blaze-false.webp is orange-grey, so her line names no colour
     // Where the cable goes over the edge, and the pass behind her. Looking is free (gaze); a 360 shot costs a minute, or three from the pack.
-    { id: "cable-up", transform: { ...CABLE_TOP, distance: 14 }, interactable: { verbs: ["photograph"], label: "往上的钢缆", reveal: 14, cost: { minutes: 1 } }, gaze: { radius: 12, dwell: 900 } },
-    { id: "pass-view", transform: PASS, interactable: { verbs: ["photograph"], label: "山口草甸", reveal: 14, cost: { minutes: 1 } }, gaze: { radius: 12, dwell: 900 } },
+    // (The minute of a shot is charged by `phone:shoot`; the two extra minutes for digging the camera out are charged in shoot().)
+    { id: "cable-up", transform: { ...CABLE_TOP, distance: 14 }, interactable: { verbs: ["photograph"], label: "往上的钢缆", reveal: 14, cost: { minutes: 0 } }, gaze: { radius: 12, dwell: 900 } },
+    { id: "pass-view", transform: PASS, interactable: { verbs: ["photograph"], label: "山口草甸", reveal: 14, cost: { minutes: 0 } }, gaze: { radius: 12, dwell: 900 } },
     goArrow("go", CABLE_GO, { to: "cable", minutes: 5, label: "上墙", kind: "walk" }),
   ],
   seed: (w) => {
@@ -185,7 +190,7 @@ export default defineScene({
     // The marks. The real one is settled by the journal (hand, cloth, the lesson if it is her first); the lichen costs a minute.
     ctx.on("blaze:confirm", ({ entity, real }) => {
       if (entity === "blaze-plaque" && real) { glance(-3, 0.5); ctx.sfx("step", 0.1, 0.4); return; }
-      if (entity === "lichen-plaque") { ctx.hand(ctx.transformOf(entity)); glance(2, 0.4); ctx.say("地衣，绿的。", { tag: "plaque-lichen" }); }
+      if (entity === "lichen-plaque") { ctx.hand(ctx.transformOf(entity)); glance(2, 0.4); ctx.say("地衣。不是漆。", { tag: "plaque-lichen" }); }
     });
 
     // Looking up the cable and back at the pass: free, and she only breathes at one of them.
@@ -204,7 +209,8 @@ export default defineScene({
     const shoot = (id: EntityId) => {
       if (!inv().hands.includes("camera360")) { ctx.spend({ minutes: 2 }, "从包里翻出相机"); ctx.sfx("zip", 0, 0.6); glance(-6, 0.5); }
       ctx.spend({ camera: 1 }, "全景相机");
-      ctx.sfx("shutter", id === "pass-view" ? -0.4 : 0.2); ctx.kick("glance", 0.35, { yaw: 0, pitch: id === "cable-up" ? 3 : -1 });
+      ctx.world.dispatch({ type: "phone:shoot" });                                    // the shot itself: one minute, and it lands in the album
+      ctx.kick("glance", 0.35, { yaw: 0, pitch: id === "cable-up" ? 3 : -1 });
       ctx.bump("plaque.shots", 1);
     };
     ctx.onInteract("cable-up", (verb) => { if (verb === "photograph") shoot("cable-up"); });
@@ -216,7 +222,7 @@ export default defineScene({
       const entries = ctx.world.state.journal.entries;
       if (!entries.includes("E-grade") || !entries.includes("E-coach")) return;
       ctx.setFlag("plaque.compared", true);
-      ctx.spend({ minutes: 0.3 }, "把 C/D 和备忘录并排看了一眼");
+      ctx.spend({ minutes: 1 }, "把 C/D 和备忘录并排看了一眼");         // v4 §6 prices it at 1 分（ClockSystem 会把 <0.5 直接丢掉）
       ctx.world.emit("body:rest", { seconds: 2 });
       ctx.kick("settle", 0.5); ctx.sfx("exhale", 0, 0.7);
       ctx.say("C 到 D。教练说的是 easy。", { tag: "plaque-compare", priority: 1 });

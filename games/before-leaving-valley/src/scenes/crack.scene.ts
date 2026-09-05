@@ -22,12 +22,13 @@ const REAL = CRACK_HOLDS.filter((h): h is typeof h & { order: number } => h.orde
 const FALSE = CRACK_HOLDS.filter((h) => h.order === null);
 const TOTAL = REAL.length;
 const PLACE: Record<string, Transform> = {
-  "hold-step": { yaw: 10, pitch: -24 },     // foot: the seam under the middle block, left of the crack (725, 568)
-  "hold-edge": { yaw: 22, pitch: -5 },      // hand: the crack's left lip, moss beside it (828, 403)
-  "hold-knob": { yaw: 6, pitch: -1 },       // foot: a nub on the lip of the upper block, where its seam runs into the crack (691, 369)
-  "hold-slot": { yaw: 24, pitch: 13 },      // hand: inside the crack, between the two moss tufts (845, 249)
-  "hold-flake": { yaw: -25, pitch: 17 },    // the sliver of the upper-left block, just left of the painted hairline (427, 214)
-  "hold-groove": { yaw: 35, pitch: 11 },    // the seam under the top-right block, right of the crack (939, 264)
+  "hold-step": { yaw: 10, pitch: -24, distance: 9 },   // foot: the seam under the middle block, left of the crack (725, 566)
+  "hold-edge": { yaw: 22, pitch: -5, distance: 9 },    // hand: the crack's left lip, moss beside it (828, 403)
+  "hold-knob": { yaw: 6, pitch: -1, distance: 9 },     // foot: a nub on the lip of the upper block, where its seam runs into the crack (691, 369)
+  "hold-slot": { yaw: 24, pitch: 13, distance: 9 },    // hand: inside the crack, between the two moss tufts (845, 249)
+  // Both false holds stand inside the same reach envelope as the real ones, one arm span either side of the crack.
+  "hold-flake": { yaw: 14, pitch: 7, distance: 9 },    // a thin flake propped on the block edge just left of the crack (760, 300)
+  "hold-groove": { yaw: 35, pitch: 11, distance: 9 },  // the seam under the top-right block, right of the crack: the tempting long reach (939, 266)
 };
 const MINUTES = [4, 5, 5, 8];              // 22 on the holds + 38 to the box = the hour of v4 §3.1
 const HOLD_MS = [700, 900, 900, 1100];
@@ -45,13 +46,14 @@ const isFoot = (order: number) => order % 2 === 0;
 /* A true hold: only the one for the step she is on is there to be seen; each is a foot or a hand in turn. */
 const realHold = (h: typeof REAL[number]): EntityDef => ({
   id: h.id, transform: PLACE[h.id] ?? h, className: "hold-hotspot",
-  sprite: { src: h.sprite, layer: "prop", sizeVh: 9 },
+  sprite: { src: h.sprite, layer: "prop", sizeVh: h.id === "hold-step" ? 7 : 6 },
   interactable: { verbs: ["hold"], label: h.label, reveal: 13, cost: { minutes: MINUTES[h.order] }, requires: atStep(h.order) },
   hold: { ms: HOLD_MS[h.order], scaleWith: ["fatigue"] },
   visible: atStep(h.order),
 });
 
-/* A false hold: a thin flake with a hairline, a shallow seam that seeps. Look at it 0.8 s and her hand will not go there. */
+/* A false hold: a thin flake whose own sprite carries the hairline, a shallow seam that seeps. Look at it 0.8 s
+   and her hand will not go there. Both sit within reach of the climbing line, so refusing them is a real choice. */
 const falseHold = (h: typeof FALSE[number], seen: string, sizeVh: number): EntityDef => ({
   id: h.id, transform: PLACE[h.id] ?? h, className: "hold-hotspot",
   sprite: { src: h.sprite, layer: "prop", sizeVh, swap: [{ when: entityIs(h.id, "read"), src: seen }] },
@@ -76,11 +78,11 @@ export default defineScene({
   exitWhen: flag(STEP, { gte: TOTAL }),
   entities: [
     ...REAL.map(realHold),
-    falseHold(FALSE[0], "sprites/hold-flake-cracked.webp", 7),
-    falseHold(FALSE[1], "sprites/hold-groove-wet.webp", 9),
+    falseHold(FALSE[0], "sprites/hold-flake-cracked.webp", 6),
+    falseHold(FALSE[1], "sprites/hold-groove-wet.webp", 6),
     // The last move: past the slot straight to the lip of the crack — one move fewer, a tenth of her hands, one in four does not reach.
     { id: "crack-lip", transform: LIP, className: "hold-hotspot",
-      interactable: { verbs: ["hold"], label: "裂缝顶端", reveal: 14, cost: { minutes: 2, fatigue: 0.1 }, requires: lastStep },
+      interactable: { verbs: ["hold"], label: "裂缝顶端", reveal: 14, cost: { minutes: 2, fatigue: 0.1 }, requires: all(lastStep, not(flag(MISSED))) },
       hold: { ms: 1500, scaleWith: ["fatigue"] }, visible: all(lastStep, not(flag(MISSED))) },
     // Deep inside the chimney: only a gaze that goes into the dark finds the shelf.
     { id: "crack-deep", transform: DEEP, gaze: { radius: 14, dwell: 900 }, visible: all(onWall, not(flag(LEDGE))) },
@@ -97,8 +99,8 @@ export default defineScene({
     blaze("rust-crack", { yaw: 42, pitch: -21 }, false),
     // Mid-way, the smooth terrace to the right looks far easier. It is not the route; slab's back arrow carries the twenty minutes.
     { id: "slab-way", transform: { yaw: 46, pitch: 3 }, className: "go-hotspot", tags: ["exit"],
-      exit: { to: "slab", kind: "detour", label: "右边平滑的岩台", minutes: 0, condition: all(mid, not({ kind: "visited", scene: "slab" })) },
-      interactable: { verbs: ["inspect"], label: "右边平滑的岩台", reveal: 20 } },
+      exit: { to: "slab", kind: "detour", label: "右边平滑的大石板", minutes: 0, condition: all(mid, not({ kind: "visited", scene: "slab" })) },
+      interactable: { verbs: ["inspect"], label: "右边平滑的大石板", reveal: 20 } },
     goArrow("go", { yaw: 23, pitch: 28 }, { to: "mailbox", minutes: 38, label: "往上", kind: "walk" }),
   ],
   seed: (w) => {
@@ -202,11 +204,11 @@ export default defineScene({
       if (waits % 3 === 0) { ctx.fx("gust", 0.35); ctx.kick("settle", 0.3); }
     });
 
-    // Looking down the chimney: a glance and a breath; the photograph is the phone's shutter on top of the minute.
+    // Looking down the chimney: a glance and a breath, and no words for the thing she is already looking at;
+    // the photograph is the phone's shutter laid on top of the minute.
     ctx.onInteract("view-down", (verb) => {
       if (verb === "photograph") { w.dispatch({ type: "phone:shoot" }); ctx.setFlag(PHOTO, true); ctx.kick("glance", 0.3, { yaw: 0, pitch: -4 }); return; }
       ctx.kick("glance", 0.6, { yaw: 0, pitch: -8 }); ctx.sfx("breath", 0.4, 0.6);
-      ctx.say("裂缝下面是整个山口。", { tag: "crack-down" });
     });
     // The clouds over the lip: once, the wind comes down the chimney.
     ctx.onGaze("sky", () => {
@@ -233,13 +235,21 @@ export default defineScene({
       if (to === "mailbox" && !ctx.flag("crack.certain", false)) { ctx.spend({ minutes: 8 }, "没认记号，找了一段路"); ctx.kick("turn", 0.5); ctx.say("走错了一小段。", { tag: "crack-lost", priority: 1 }); }
     });
   },
-  walkthrough: [...TO_THE_KNOB, ...grab("hold-slot", 2400), { type: "travel", entity: "go" }],
+  // Fastest legal line: the paint costs 0 minutes and saves the 8 that travel:begin charges for leaving unsure.
+  walkthrough: [
+    { type: "interact", entity: "blaze-crack", verb: "inspect" }, { wait: 300 },
+    ...TO_THE_KNOB, ...grab("hold-slot", 2400), { type: "travel", entity: "go" },
+  ],
   variants: {
     // Two holds up, then the terrace that looks easier: leaves for `slab` (whose back arrow returns here with the twenty minutes).
     detour: [...grab("hold-step", 1600), ...grab("hold-edge", 2000), { type: "travel", entity: "slab-way" }],
     // The stretch: if it misses, the honest last hold follows; if it lands, that hold is simply refused.
     lunge: [...TO_THE_KNOB, ...grab("crack-lip", 3400), ...grab("hold-slot", 2400), { type: "travel", entity: "go" }],
     // The seam grabbed without looking: wet hands, the wipe, then the honest way up.
+    // Replay this one WITHOUT ?reveal=1 (`crack&nosave=1`): reveal pins GazeSystem's radius at 999, so both false
+    // holds are already "read" on the first frame and the grab is refused in silence. Unflagged it costs 2 minutes
+    // and 0.04 fatigue, and crack.wet is back to false after the wipe (measured: reaches mailbox at minute 790,
+    // i.e. 2 for the seep plus the 8 this variant pays for never confirming the mark).
     fumble: [
       ...grab("hold-step", 1600), ...grab("hold-edge", 2000),
       ...grab("hold-groove", 1200), { wait: 400 },

@@ -1,8 +1,9 @@
 /* The top section, 13:25. The cable is intermittent here: one last span from the post stamped 12 (front right)
    across to the foot of the tower, with a painted bolt half-way. Above the cable's end, a ledge where the only two
-   people she met all day stand waiting for the cable to clear. Below her feet the flagstones climb to the notch left
-   of the tower. Three lines look walkable from here — the flagstones, the pale scree on the left, the scree right of
-   the tower — and only one of them has a mark. Looking back down the cable, the box is a dot on the slope below.
+   people she met all day stand waiting for the cable to clear. Below her feet the flagstones climb up-left and merge
+   into the grey shoulder at the tower's foot. Three lines look walkable from here — the flagstones, the pale scree on
+   the left, the scree right of the tower — and only one of them has a mark. Looking back down the cable, the box is a
+   dot on the pale slope below it.
    Coordinates read off the 150°×84° grid of 07-exit (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84). */
 import { all, flag, not, worn } from "../engine/condition";
 import { defineScene, type WalkStep } from "../engine/scene";
@@ -14,17 +15,19 @@ const STEP = "exit.step", PHASE = "exit.phase", SLAB_TOP = "exit.slabTop";
 const SEEN = "exit.seen", NODDED = "exit.nodded", PHOTO = "exit.photo", PASSED = "exit.passed";
 const TOTAL = 2;
 
-/* Two anchors on the painted cable: the eye of the post stamped 12 (1025,475) and the bolt half-way along (635,462). */
-const CLIP_AT: Transform[] = [{ yaw: 45, pitch: -11.5 }, { yaw: -0.6, pitch: -12 }];
-/* Mid-span on the sagging cable for each segment. */
-const HAUL_AT: Transform[] = [{ yaw: 22, pitch: -15.5 }, { yaw: -7, pitch: -10 }];
+/* Two anchors: the eye of the post stamped 12 (1024,459), then the cable itself where the painted bolt sits half-way
+   along it (635,490). Both read off the painted cable in plain/07-exit.png, traced column by column. */
+const CLIP_AT: Transform[] = [{ yaw: 45, pitch: -11.5 }, { yaw: -0.6, pitch: -15.2 }];
+/* Mid-span on the sagging cable for each segment (traced: yaw 22 -> pitch -16.3, yaw -7 -> pitch -13.0). */
+const HAUL_AT: Transform[] = [{ yaw: 22, pitch: -16.3 }, { yaw: -7, pitch: -13 }];
 /* The tower's foot beside each segment: dark rock above the cable's right half, the pale mossy foot above its left half. */
 const ROCK_AT: Transform[] = [{ yaw: 27, pitch: -7 }, { yaw: -8, pitch: -4 }];
 /* Where the cable ends at the foot of the tower (528,432). */
 const CABLE_END: Transform = { yaw: -13, pitch: -8.5 };
-/* The ledge above the cable's end where the two climbers stand; the cable below the post where they are after passing. */
+/* The ledge above the cable's end where the two climbers stand; the down-going cable right of the post, where they are
+   after passing (traced: yaw 56 -> pitch -20.5). */
 const LEDGE: Transform = { yaw: -8, pitch: -5.5, distance: 14 };
-const BELOW: Transform = { yaw: 56, pitch: -14.5, distance: 13 };
+const BELOW: Transform = { yaw: 56, pitch: -20.5, distance: 13 };
 /* The flagstones, mid-path. */
 const SLABS: Transform = { yaw: -12, pitch: -20 };
 
@@ -53,7 +56,7 @@ export default defineScene({
   fallback: "钢缆到这里就断断续续的了。",
   exitWhen: flag(SLAB_TOP),
   entities: [
-    // The two carabiners, at whichever anchor is next: the post's eye, then the bolt half-way along.
+    // The two carabiners, at whichever anchor is next: the post's eye, then the cable at the bolt half-way along.
     { id: "clip", transform: (w) => ({ ...at(CLIP_AT, w), distance: 9 }), className: "carabiner-hotspot",
       sprite: { src: "sprites/carabiner-pair.webp", layer: "hand", sizeVh: 7 },
       interactable: { verbs: ["clip"], label: "锚点", reveal: 13, cost: { minutes: 1 }, requires: worn("lanyard") },
@@ -65,38 +68,37 @@ export default defineScene({
     { id: "rock-holds", transform: (w) => at(ROCK_AT, w), className: "climb-hotspot",
       interactable: { verbs: ["hold"], label: "找岩点", reveal: 13, cost: { minutes: 10 } },
       hold: { ms: 1000, scaleWith: ["fatigue"] }, visible: climbing },
-    // After the cable: the flagstones up to the notch. Walking them is what ends the section.
+    // After the cable: the flagstones up to the grey shoulder. Walking them is what ends the section.
     { id: "slabs", transform: SLABS, className: "foot-hotspot",
       interactable: { verbs: ["step"], label: "石板路", reveal: 14, cost: { minutes: 8 }, once: true },
       visible: all(flag(STEP, { gte: TOTAL }), not(flag(SLAB_TOP))) },
     // The only two people she met all day. They stand on the ledge until she is on the cable, then come down past her.
     { id: "climbers", transform: (w) => (w.flag(PASSED, false) ? BELOW : LEDGE),
-      sprite: { src: "sprites/climbers-pair.webp", layer: "figure", sizeVh: 8, swap: [
+      sprite: { src: "sprites/climbers-pair.webp", layer: "figure", sizeVh: 5, swap: [
         { when: flag(PASSED), src: "sprites/climbers-far.webp" },
-        { when: flag(NODDED), src: "sprites/climbers-pair-nod.webp" },
       ] },
       gaze: { radius: 14, dwell: 600 } },
-    { id: "climbers-nod", transform: LEDGE, interactable: { verbs: ["wave"], label: "两位攀登者", reveal: 14, cost: { minutes: 2 }, once: true },
+    { id: "climbers-nod", transform: LEDGE, interactable: { verbs: ["wave"], label: "两位攀登者", reveal: 14, cost: { minutes: 1 }, once: true },
       visible: all(flag(SEEN), not(flag(NODDED)), not(flag(PASSED))) },
     { id: "climbers-photo", transform: LEDGE, interactable: { verbs: ["photograph"], label: "两位攀登者", reveal: 14, cost: { minutes: 0 }, once: true },
       visible: all(flag(NODDED), not(flag(PHOTO)), not(flag(PASSED))) },
-    // Three candidate marks, one per line: the dark rock at the top of the flagstones, the boulder on the left ridge, the tower's foot on the right.
-    blaze("blaze-exit-a", { yaw: -19, pitch: -10 }, true),
+    // Three candidate marks, one per line: the white-topped stone where the flagstones end, the boulder on the left scree, the tower's foot on the right.
+    blaze("blaze-exit-a", { yaw: -20, pitch: -11.5 }, true),
     blaze("blaze-exit-b", { yaw: -33, pitch: -11.5 }, false),
     blaze("blaze-exit-c", { yaw: 16, pitch: -4 }, false),
     // The two other lines that look walkable from here. Twelve minutes each, a slide or a dead face, then back.
-    { id: "wrong-left", transform: { yaw: -44, pitch: -18 }, className: "wrong-hotspot", tags: ["wrongWay"],
+    { id: "wrong-left", transform: { yaw: -38, pitch: -22 }, className: "wrong-hotspot", tags: ["wrongWay"],
       interactable: { verbs: ["inspect"], label: "左边的碎石坡", reveal: 18, cost: { minutes: 12, fatigue: 0.1 }, once: true } },
     { id: "wrong-right", transform: { yaw: 33, pitch: -4 }, className: "wrong-hotspot", tags: ["wrongWay"],
       interactable: { verbs: ["inspect"], label: "石塔右边的碎石", reveal: 18, cost: { minutes: 12, fatigue: 0.1 }, once: true } },
     // The valley floor off to the right: roads, a stream, a white roof. A minute to look; a shot from the phone.
     lookAt("valley", { yaw: 62, pitch: -8, distance: 20 }, "谷底", 1),
-    // Looking back down the cable: the box is a dot on the slope below. Its lid catches the light if it was never opened.
-    { id: "mailbox-below", transform: { yaw: 66, pitch: -33, distance: 26 },
-      sprite: { src: "sprites/mailbox-glint.webp", layer: "prop", sizeVh: 1.8, swap: [{ when: flag("mailbox.opened"), src: "sprites/mailbox-far.webp" }] },
+    // Looking back down the cable: the box is a dot on the pale slope under it. One tick of attention, nothing said.
+    { id: "mailbox-below", transform: { yaw: 54, pitch: -28, distance: 26 },
+      sprite: { src: "sprites/mailbox-far.webp", layer: "prop", sizeVh: 1.2 },
       gaze: { radius: 12, dwell: 900 } },
-    backArrow("back", { yaw: 70, pitch: -22 }, "mailbox", "回头", 12),
-    goArrow("go", { yaw: -23, pitch: 0 }, { to: "summit", minutes: 88, label: "往上", kind: "walk" }),
+    backArrow("back", { yaw: 66, pitch: -27.3 }, "mailbox", "回头", 12),
+    goArrow("go", { yaw: -17, pitch: -5.5 }, { to: "summit", minutes: 88, label: "往上", kind: "walk" }),
   ],
   seed: (w) => {
     w.setFlag(STEP, TOTAL); w.setFlag(PHASE, "done"); w.setFlag(SLAB_TOP, true); w.setFlag(PASSED, true); w.setFlag("exit.certain", true);
@@ -202,8 +204,7 @@ export default defineScene({
     });
     ctx.onGaze("mailbox-below", () => {
       ctx.setFlag("exit.lookedBack", true);
-      const opened = ctx.flag("mailbox.opened", false);
-      ctx.sfx("tick", 0.6, opened ? 0.3 : 0.6); ctx.kick("glance", 0.35, { yaw: 3, pitch: -3 });
+      ctx.sfx("tick", 0.6, 0.35); ctx.kick("glance", 0.35, { yaw: 3, pitch: -3 });
     });
 
     /* Standing still: once, the cable ticks against the post off to the right and a gust comes round the tower.

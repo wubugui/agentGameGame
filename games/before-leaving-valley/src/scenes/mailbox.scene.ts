@@ -2,8 +2,12 @@
    one page dated 28/07/2025. To have hands she must first hang the lanyard on that anchor (no hint: her hand simply
    comes back from the box). The box opens; the pad turns through its rain-soaked leaves; the 28/07 page is read and,
    with no signal, photographed. Wanting to take the page is the one time in the game her hand comes back on its own.
-   Coordinates read off the 150°×84° grid of 06-mailbox: the anchor hanger top right (1195, 462), the cable running
-   down-left from it, pale rock under the cable where the box sits, the whole pass 180 m below to the left. */
+   Coordinates read off the 150°×84° grid of 06-mailbox (yaw = (x/1280 − 0.5)·150, pitch = (0.5 − y/720)·84):
+   the cable enters bottom left over the forest at (666, 637), climbs right across the pale wall — (1000, 499),
+   (1152, 474), (1180, 470) — and reaches the bolted hanger plate at (1200..1250, 390..530) before leaving the frame
+   at (1280, 445). Everything on the box itself is placed against the rendered mailbox sprite, not guessed: the box
+   sprite measures 164 × 173 px on screen, and the pad drawn inside it occupies fractions x 0.31..0.70, y 0.35..0.56
+   of that rectangle. The pass lies 180 m below to the left. */
 import { LETTER_LINES_IT } from "../data/letter";
 import { all, entityIs, flag, not, worn } from "../engine/condition";
 import { defineScene, type WalkStep } from "../engine/scene";
@@ -17,17 +21,18 @@ const FLIPS = "mailbox.flips", VALLEY_SHOT = "mailbox.photoValley";
 const LEAVES = 4;               // the pad: three rain-soaked leaves and the one that matters
 const LETTER_LEAF = 2;          // the third leaf is the 28/07 page
 
-/* Painted things. The hanger where the cable is bolted to the rock, top right; the box on the rock just under the cable
-   beside it; the lower end of the cable at her feet, bottom centre. */
-const ANCHOR: Transform = { yaw: 65, pitch: -12 };                    // the cable hanger on the plate (1195, 462)
+/* Painted things. The hanger where the cable is bolted to the rock, top right; the box on the wall just under the
+   cable beside it; the cable's lower run at her feet, bottom left. */
+const ANCHOR: Transform = { yaw: 65, pitch: -12 };                    // the cable at the foot of the hanger plate (1195, 463)
 const LANYARD_ON_ANCHOR: Transform = { yaw: 64.5, pitch: -15.5, distance: 9 };   // the carabiner hanging from it
-const BOX: Transform = { yaw: 52, pitch: -23.5, distance: 9 };        // the box, on pale rock under the cable (1084, 581)
-const LID: Transform = { yaw: 52, pitch: -17 };                       // its lid
-const PAD: Transform = { yaw: 52, pitch: -24.5, distance: 9 };        // the Memo pad lying in the open box
-const PAD_EDGE: Transform = { yaw: 48, pitch: -28 };                  // the corner you turn the leaves by
-const PAGE_AT: Transform = { yaw: 53, pitch: -22 };                   // the page itself
-const PAGE_CORNER: Transform = { yaw: 57.5, pitch: -26 };             // the loose corner of the page
-const CABLE_FOOT: Transform = { yaw: 3, pitch: -34 };                 // where the cable comes up over the rock at her feet
+const BOX: Transform = { yaw: 52, pitch: -23.5, distance: 9 };        // the box, on the wall under the cable (1084, 561)
+const LID: Transform = { yaw: 52.7, pitch: -20.1 };                   // its lid: fraction (0.55, 0.24) of the closed sprite
+const PAD: Transform = { yaw: 51.6, pitch: -22.6, distance: 9 };      // the leaf standing up in the open box (0.47, 0.42)
+const PAD_EDGE: Transform = { yaw: 50.6, pitch: -23.9 };              // the pad's near left corner (0.385, 0.51)
+const PAGE_AT: Transform = { yaw: 52.4, pitch: -22.2 };               // the writing on that leaf (0.53, 0.40)
+const PAGE_CORNER: Transform = { yaw: 53.2, pitch: -24.2 };           // its loose bottom right corner (0.60, 0.575)
+const CABLE_UP: Transform = { yaw: 60, pitch: -13.4 };                // the cable itself, rising past the box (1152, 474)
+const CABLE_FOOT: Transform = { yaw: 3, pitch: -32.3 };               // the cable's lower run, dropping away left (666, 637)
 
 /** The only photograph of that page: taken with this phone, at this box. */
 const LETTER_PHOTO = {
@@ -70,13 +75,14 @@ export default defineScene({
       interactable: { verbs: ["clip"], label: "锚点", reveal: 14, cost: { minutes: 1 }, requires: worn("lanyard") },
       visible: not(flag(CLIPPED)) },
     { id: "anchor-lanyard", transform: LANYARD_ON_ANCHOR, sprite: { src: "sprites/carabiner-blue.webp", layer: "hand", sizeVh: 7 }, visible: flag(CLIPPED) },
-    // The box on the rock under the cable: closed until she has both hands; the lid is the thing she opens.
+    // The box on the wall under the cable: closed until she has both hands; the lid is the thing she opens.
     { id: "mailbox", transform: BOX, sprite: { src: "sprites/mailbox-closed.webp", layer: "prop", sizeVh: 24, swap: [{ when: flag(OPENED), src: "sprites/mailbox-open.webp" }] } },
     { id: "mailbox-lid", transform: LID,
       interactable: { verbs: ["use"], label: "金属盒", reveal: 13, cost: { minutes: 1 }, requires: handsFree },
       visible: not(flag(OPENED)) },
-    // The Memo pad inside: rain-soaked leaves, and the one dated 28/07.
-    { id: "memo-pad", transform: PAD, sprite: { src: "sprites/memo-page-wet.webp", layer: "prop", sizeVh: 12, swap: [{ when: flag(PAGE, { eq: LETTER_LEAF }), src: "sprites/memo-page.webp" }] }, visible: flag(OPENED) },
+    // The Memo pad inside is painted into the open box: three rain-soaked leaves. Landing on the fourth turns one leaf
+    // up against the lid — the only leaf with writing on it, and the only one this sprite ever shows.
+    { id: "memo-pad", transform: PAD, sprite: { src: "sprites/memo-page.webp", layer: "prop", sizeVh: 8 }, visible: onLetterLeaf },
     { id: "memo-flip", transform: PAD_EDGE,
       interactable: { verbs: ["use"], label: "便签本", reveal: 12, cost: { minutes: 0.5 }, requires: handsFree },
       visible: flag(OPENED) },
@@ -91,11 +97,11 @@ export default defineScene({
     lookAt("road", { yaw: -46, pitch: -33, distance: 16 }, "盘山公路", 1),
     lookAt("houses", { yaw: 12, pitch: -15.5, distance: 16 }, "公路边的房子", 1),
     { id: "far-peak", transform: { yaw: -36, pitch: 24, distance: 30 }, gaze: { radius: 12, dwell: 1000 } },
-    // Two candidate marks: red paint on the wall above the cable, and a rust streak on the rock at her feet.
+    // Two candidate marks: red paint on the wall above the cable, and a rust streak on the pale rock at her feet.
     blaze("blaze-mailbox", { yaw: 41, pitch: -8 }, true),
-    blaze("rust-mailbox", { yaw: 10, pitch: -31 }, false),
-    // On: along the cable past the anchor. Back: down the cable to the crack, always open.
-    goArrow("go", { yaw: 71, pitch: 6 }, { to: "exit", minutes: 18, label: "往上", kind: "walk" }),
+    blaze("rust-mailbox", { yaw: 15, pitch: -31.5 }, false),
+    // On: up the cable itself, the stretch between the box and the hanger. Back: down the cable to the crack, always open.
+    goArrow("go", CABLE_UP, { to: "exit", minutes: 15, label: "往上", kind: "walk" }),
     backArrow("back", CABLE_FOOT, "crack", "回头", 15),
   ],
   seed: (w) => {
@@ -135,7 +141,8 @@ export default defineScene({
       ctx.sfx("tock", 0.4); ctx.after(350, () => ctx.sfx("thud", 0.4, 0.35));
       ctx.kick("settle", 0.5); ctx.hand(LID, "grip");
     });
-    // Turning the leaves. With gloves on, the first turn costs a glove. Landing on the dated page: a tick of attention.
+    // Turning the leaves. With gloves on, the first turn costs a glove. Landing on the dated page: a tick of attention,
+    // and the leaf comes up where the three soaked ones showed nothing.
     ctx.onInteract("memo-flip", () => {
       const flips = ctx.bump(FLIPS, 1);
       if (flips === 1 && w.state.inventory.worn.includes("gloves")) { ctx.spend({ minutes: 40 / 60 }, "脱一只手套"); ctx.sfx("cloth", 0.3, 0.6); }
@@ -149,7 +156,7 @@ export default defineScene({
     ctx.onInteract("letter-take", () => {
       ctx.hand(PAGE_CORNER, "grip");
       ctx.after(500, () => { ctx.sfx("paper", 0.3, 0.7); ctx.kick("settle", 0.4); ctx.hand(PAD, "grip"); });
-      ctx.say("它得留在这里。", { tag: "mailbox-keep", priority: 1 });
+      ctx.say("它得留在这里。", { tag: "mailbox-keep" });
     });
 
     // Looking down. Each look is a glance and a minute; a photograph is the phone's shutter on top of that.
@@ -185,13 +192,22 @@ export default defineScene({
     // Back down from the top section: a drop onto the ledge.
     ctx.onEnter((from) => { if (from === "exit") { ctx.kick("land", 0.6); ctx.sfx("step", 0.2, 0.7); } });
     // Leaving either way: the page, if read, has been photographed; the lanyard goes back on the cable.
-    ctx.on("travel:begin", ({ from }) => {
+    // Going on without having settled which mark is paint costs the same eight minutes crack charges for the same doubt.
+    ctx.on("travel:begin", ({ from, to }) => {
       if (from !== "mailbox") return;
       if (pageRead()) shoot();
       if (ctx.flag(CLIPPED, false)) { ctx.setFlag(CLIPPED, false); ctx.sfx("clink", 0.3); ctx.kick("clink", 0.5); }
+      if (to !== "exit" || ctx.flag("mailbox.certain", false)) return;
+      ctx.spend({ minutes: 8 }, "没认记号，找了一段路");
+      ctx.kick("turn", 0.5);
+      ctx.say("走错了一小段。", { tag: "mailbox-lost" });
     });
   },
-  walkthrough: [...TO_THE_PAGE, { type: "travel", entity: "go" }],
+  // Fastest legal line: the paint costs 0 minutes and saves the 8 that travel:begin charges for leaving unsure.
+  walkthrough: [
+    { type: "interact", entity: "blaze-mailbox", verb: "inspect" }, { wait: 300 },
+    ...TO_THE_PAGE, { type: "travel", entity: "go" },
+  ],
   variants: {
     // Everything the ledge offers: the mark, three looks and the best photograph of the day, the other leaves, the corner of the page.
     thorough: [
@@ -207,7 +223,8 @@ export default defineScene({
       { type: "interact", entity: "letter-take", verb: "take" }, { wait: 800 },
       { type: "travel", entity: "go" },
     ],
-    // The box before the anchor: her hand comes back, twice, then she hangs the lanyard and it opens. The rust for a mark.
+    // The box before the anchor: her hand comes back, twice, then she hangs the lanyard and it opens. The rust for a mark,
+    // and eight minutes on the top section for never having settled which one was paint.
     fumble: [
       { type: "interact", entity: "mailbox-lid", verb: "use" }, { wait: 400 },
       { type: "interact", entity: "rust-mailbox", verb: "inspect" }, { wait: 300 },
