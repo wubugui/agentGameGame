@@ -111,6 +111,7 @@ export function createWorld(options: { systems: System[]; state?: GameState; see
     handlers: new Map(), queue: [], log: [], headless: Boolean(options.headless), booted: false, hasSave: false,
   };
   const disposers: Array<() => void> = [];
+  let lastGaze = { yaw: 0, pitch: 0 };
 
   const world: World = {
     get state() { return state; },
@@ -144,7 +145,8 @@ export function createWorld(options: { systems: System[]; state?: GameState; see
     emit: bus.emit,
     on: bus.on,
     tick(dt, gaze) {
-      rt.gazeMoved = Math.abs(gaze.yaw - rt.gaze.yaw) > 0.05 || Math.abs(gaze.pitch - rt.gaze.pitch) > 0.05;
+      rt.gazeMoved = Math.abs(gaze.yaw - lastGaze.yaw) > 0.05 || Math.abs(gaze.pitch - lastGaze.pitch) > 0.05;
+      lastGaze = { yaw: gaze.yaw, pitch: gaze.pitch };
       rt.gaze = gaze;
       for (const system of options.systems) system.tick?.(world, dt);
       if (dirty) world.notify();

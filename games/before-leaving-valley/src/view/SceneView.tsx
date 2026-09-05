@@ -37,11 +37,11 @@ export function SceneView() {
   useEffect(() => { world.rt.stage = stageRef.current; });
   useEffect(() => { const timer = window.setInterval(() => { world.rt.stage = stageRef.current; }, 500); return () => window.clearInterval(timer); }, [world]);
 
-  const onFrame = useCallback((dt: number, gaze: { yaw: number; pitch: number }) => {
-    world.rt.now = performance.now();
-    if (world.state.ui.travel) progressRef.current = Math.min(1, (world.rt.now - world.state.ui.travel.started) / world.state.ui.travel.ms);
+  // The renderer reports the gaze; the engine loop in boot.ts does the ticking.
+  const onFrame = useCallback((_dt: number, gaze: { yaw: number; pitch: number }) => {
+    world.rt.gaze = gaze;
+    if (world.state.ui.travel) progressRef.current = Math.min(1, (performance.now() - world.state.ui.travel.started) / world.state.ui.travel.ms);
     else progressRef.current = 0;
-    world.tick(dt, gaze);
   }, [world]);
 
   const worldMove = (event: React.PointerEvent) => {
