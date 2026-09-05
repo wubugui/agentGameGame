@@ -25,7 +25,14 @@ const ROOM_PHONE: Transform = { yaw: -33, pitch: -13.5, distance: 6 };  // desk 
 const LAMP: Transform = { yaw: -33, pitch: 5, distance: 8 };            // the lit shade of the desk lamp (358, 317)
 const JACKET: Transform = { yaw: -25, pitch: -18, distance: 7 };        // the back of the chair (427, 514)
 const WALL_PICTURE: Transform = { yaw: -43, pitch: 19, distance: 12 };  // the framed alpine meadow on the panelling (270, 200)
-const PACK: Transform = { yaw: -10, pitch: -35.5, distance: 7 };        // the boards between desk and radiator (555, 664)
+/* The pack is the only diegetic way into §3.6's empty slot, so it has to be on the painting the player is
+   already looking at: a perspective camera puts (yaw, pitch) on screen row 360·(1 − tan(pitch)/(cos(yaw)·tan30°)),
+   and −35.5° put the whole bag and its hotspot out under the bottom edge. −28.3° is the highest the boards go
+   at this yaw — sampled down the plate at x 555, the pale wall runs to row 590 and the boards start at 598 — and
+   it stands the bag on them with 110 of its 130 px inside the resting frame, its base on the wood at plate row
+   625 and its body against the wall. The node itself sits just under the edge: a bag on the floor is a thing you
+   put your head down to, and a glance down brings the whole of it into reach. */
+const PACK: Transform = { yaw: -10, pitch: -28.3, distance: 7 };        // the boards between desk and radiator (555, 603)
 const RADIATOR: Transform = { yaw: -2, pitch: -20.5, distance: 8 };     // the bare white fins left of the towel (623, 536)
 const VILLAGE: Transform = { yaw: 26.5, pitch: 3, distance: 40 };       // the church tower and the village lights (866, 334)
 const OPEN_WINDOW: Transform = { yaw: 52, pitch: 6, distance: 9 };      // the casement standing open on the right (1084, 309)

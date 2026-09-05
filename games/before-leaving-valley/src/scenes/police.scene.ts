@@ -12,6 +12,7 @@
 
    Coordinates read off the 150°×84° grid of 21-police (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84,
    W×H = 1280×720); the pixel each one came from is noted beside it. */
+import { ENTRIES } from "../data/entries";
 import { all, flag, not } from "../engine/condition";
 import { defineScene } from "../engine/scene";
 import type { Transform } from "../engine/types";
@@ -25,9 +26,18 @@ const DESK_PHONE: Transform = { yaw: 7, pitch: -17 };       // the green rotary 
 const COUNTER: Transform = { yaw: -16, pitch: -25 };        // the bare counter top at its near end, left of the pad (503, 574)
 const WINDOW: Transform = { yaw: 54, pitch: 13, distance: 40 };  // the mountains through the open window (1101, 249)
 const GERANIUM: Transform = { yaw: 54, pitch: -5.5 };       // the geranium on the windowsill (1101, 407)
-const DOORWAY_OUT: Transform = { yaw: 42, pitch: -31 };     // the tiles and the mat by the way out (1000, 626)
+/* 21-police paints no door on this side of the room, so the way out is the mat somebody put down in front of
+   it: the grey-green doormat between the counter's end and the big rug runs plate x 942–995, y 627–677, and at
+   {42, −31} the arrow stood on the bare terracotta beside it. */
+const DOORWAY_OUT: Transform = { yaw: 37.5, pitch: -32.7 }; // the doormat by the way out (960, 640)
 /* Sprites: the man behind the counter, and her phone on the green desk pad in front of him. */
-const OFFICER: Transform = { yaw: -4, pitch: -12 };         // behind the counter, in the open doorway (606, 463; cut off at the counter line, 550)
+/* He is cut off by the counter, so the cut has to land ON the counter. Sampled down the plate at x 606: the
+   wooden back panel runs to row 528, the counter's top lip is 531 and the green pad has 533–575 — and that lip
+   projects to screen row 587. At 34vh the sprite is 245 px tall in the running view, so its bottom edge sat at
+   615, thirty pixels down the middle of the desk pad: a hard waist cut floating over the blotter instead of
+   reading as the counter in front of him. −9.7° lifts him until the cut is on the lip (bottom 589) with the
+   phone on the pad still clear below him. */
+const OFFICER: Transform = { yaw: -4, pitch: -9.7 };        // behind the counter, in the open doorway (606, 443; cut off at the counter line, 531)
 const PAD: Transform = { yaw: -3, pitch: -23.2 };           // the middle of the green desk pad, where he sets it down (614, 559)
 const OFFSCREEN: Transform = { yaw: 0, pitch: -88 };        // story actions: E-key prompts, never drawn on the painting
 
@@ -73,11 +83,14 @@ export default defineScene({
       interactable: { verbs: ["hold"], label: "我的手机", reveal: 15 },
       hold: { ms: 700, scaleWith: ["fatigue"] },
       visible: ON_PAD },
-    // The valley map on the noticeboard: Val Lasties is on it, a finger wide (v4 §6). Free, and she says nothing about it.
+    /* The valley map on the noticeboard: Val Lasties is on it, a finger wide (v4 §6). Free, and she says nothing
+       about it. The notebook page for it is requested (E-valleyMap) and does not exist yet, so the id is written
+       only when data/entries.ts actually has it (the guard hotel and busStop already use) — otherwise every read
+       of this map, and every downstream save, logged「[journal] unknown entry」and wrote a bare id into the book. */
     readable("wall-map", WALL_MAP, "墙上的山谷地图", {
       kind: "board", title: "Gruppo del Sella · Val di Fassa",
       lines: ["Passo Sella 2240", "Piz Selva 2941", "Val Lasties 2455", "656 · Plan de Roces", "Canazei 1460"],
-      entry: "E-valleyMap", minutes: 0,
+      ...(ENTRIES["E-valleyMap"] ? { entry: "E-valleyMap" as const } : {}), minutes: 0,
     }),
     // The typed sheet pinned under the map. Italian, and that is as far as she gets.
     { id: "notice", transform: NOTICE,
@@ -119,9 +132,8 @@ export default defineScene({
     // Two nights of sleep between the forest and this counter: the body she carries into the last scene is rested.
     if (w.state.body.fatigue > 0) w.emit("body:fatigue", { delta: -1, reason: "第三天" });
     if (w.state.body.fear > 0) w.emit("body:fear", { delta: -1, reason: "第三天" });
-    // Through the same door the played path uses: JournalSystem drops an id data/entries.ts does not have yet,
-    // so a warped save and a played one show the same page instead of one of them printing a bare id.
-    w.emit("journal:entry", { entry: "E-valleyMap", source: null });
+    // Through the same door the played path uses, and only when the page it names exists (see requests.entries).
+    if (ENTRIES["E-valleyMap"]) w.emit("journal:entry", { entry: "E-valleyMap", source: null });
   },
   walkthrough: [
     { type: "interact", entity: "describe", verb: "talk" },
@@ -264,6 +276,17 @@ export default defineScene({
       const battery = Math.min(100, w.state.power.phone + (charged ? 1 : 0));
       w.patch("power", { phone: battery });
       w.set("phone", { ...phone, minuteOfDay: phone.minuteOfDay - 1, battery: Math.round(battery) });
+    });
+
+    /* §6 names three things to look at in this room — 柜台、墙上的山谷地图、手机的锁屏 — and the lock screen had
+       no beat of its own: the only way to it was the P key, and the room said nothing back. The first time the
+       screen lights up in her own hand again, her head goes down to it and it makes the sound it makes. */
+    ctx.on("phone:open", () => {
+      if (!ctx.flag(RETURNED, false) || ctx.flag("police.lockScreen", false)) return;
+      ctx.setFlag("police.lockScreen", true);
+      ctx.sfx("tick", -0.05, 0.5);
+      glance(0, -6, 0.5);
+      ctx.after(420, () => { ctx.sfx("cloth", -0.05, 0.35); ctx.kick("settle", 0.3); });
     });
 
     /* The album: every shutter of that day except one is the player's own (v4 §12 D8). */

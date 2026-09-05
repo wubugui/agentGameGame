@@ -11,8 +11,11 @@
 import { entityIs, flag, not } from "../engine/condition";
 import type { EntityDef } from "../engine/entity";
 import { defineScene } from "../engine/scene";
-import type { EntityId, SfxName, Transform } from "../engine/types";
+import type { EntityId, ItemId, SfxName, Transform } from "../engine/types";
 import { backArrow, goArrow, prop } from "./_shared";
+
+/** What she is still wearing on the second morning (the same three `search` leaves her in). */
+const DAY_TWO_WORN: ItemId[] = ["backpack", "cap", "redJacket"];
 
 const TURNED = "searchWall.turned";      // how many of this stand's three places she has been through
 const LOG_DONE = "searchWall.log";       // the log is a hold, and holds never write entity.used
@@ -34,12 +37,18 @@ const DEW_MOSS: Transform = { yaw: -5, pitch: -31, distance: 9 };     // the nea
 const SCREE_FAN: Transform = { yaw: -28, pitch: -7, distance: 25 };   // the scree this wall pours out of its own gullies (401, 420)
 const WALL: Transform = { yaw: 12, pitch: 25, distance: 30 };         // the jagged summit of the wall above her (742, 146)
 const MOVED_STONE: Transform = { yaw: 24, pitch: -20, distance: 11 }; // the grass just below the heap (845, 531)
-const PACK_DOWN: Transform = { yaw: 20, pitch: -33 };                 // the grass right of the sandy line (811, 643)
+/* The pack has to be inside the resting frame: at pitch −33 the whole bag sat under the bottom edge. Measured in
+   the running view, this puts it on row ≈653 on the grass in front of her, clear of the way back down the sand
+   on its right (that node runs 759–825) and of the log and the way home on its left. */
+const PACK_DOWN: Transform = { yaw: 4, pitch: -24.5 };                // the grass this side of the sandy line (674, 570)
 /* Both ways out are read off the painting AND measured in the running 1280×720 view: a perspective camera puts a
    point at (yaw, pitch) on screen row 360·(1 − tan(pitch)/(cos(yaw)·tan 30°)), so the further off centre a thing
    is, the lower it lands. Everything below −25° at these yaws falls out under the bottom edge, arrow and all. */
 const DOWN_PATH: Transform = { yaw: 13.7, pitch: -22.9 };             // the sand of the trail, going back down the way she came (757, 556)
-const HOME_SLOPE: Transform = { yaw: -37, pitch: -19.3 };             // the grass streak above the scrub, falling away to the left (324, 525)
+/* The way home walks off down the green. At {−37, −19.3} it stood on the pale scree fan instead — the whole row
+   there is dry grass and stone (R≈G, 179/176/137) and the solid green only starts fifteen pixels down and right
+   (358, 555) = 73/82/66 — so the arrow that says 顺草坡 was standing on the scree it is walking away from. */
+const HOME_SLOPE: Transform = { yaw: -33, pitch: -22.8 };             // the green slope falling away to the left (358, 555)
 
 const TO_SEARCH = 12;      // the twelve minutes search charges to walk over here, paid again going back
 const TO_HOTEL = 35;       // those twelve plus the twenty-five from the path down to the village
@@ -63,13 +72,21 @@ export default defineScene({
       id: spot.id, transform: spot.transform, className: "search-hotspot",
       interactable: { verbs: ["inspect"], label: spot.label, reveal: 13, cost: { minutes: 12 }, once: true },
     })),
-    /* The fallen log: wet, heavier than it looks, and it takes both hands to bring it over. No `enabled` guard —
-       once it is over, the requires clause answers a second grab the same way the other five do: the hand goes
-       out to it and comes back, one dry knock, and it is never a dead button. */
+    /* The fallen log: wet, heavier than it looks, and it takes both hands to bring it over. Two entities for the
+       two states of one log, the way hotel does laptop / laptop-shut. It has to be two: view/Hotspot.tsx sends a
+       `hold` node straight to hold:start, and InteractionSystem's hold:start branch answers an unmet `requires`
+       with a bare tock — no hand, no kick — so a single hold entity could never come back the way the other five
+       once-hotspots do. Once it is over, the log is an `inspect` with `once`, and the second press goes down the
+       scene's own interact:refused path: the hand out to it and back, one dry knock, no text. */
     { id: "wall-log", transform: LOG,
-      sprite: { src: "sprites/fallen-log.webp", layer: "prop", sizeVh: 7, swap: [{ when: flag(LOG_DONE), src: "sprites/fallen-log-rolled.webp" }] },
+      sprite: { src: "sprites/fallen-log.webp", layer: "prop", sizeVh: 7 },
       hold: { ms: 1100, scaleWith: ["fatigue"] },
-      interactable: { verbs: ["hold"], label: "草里那段倒木", reveal: 13, cost: { minutes: 12 }, requires: not(flag(LOG_DONE)) } },
+      interactable: { verbs: ["hold"], label: "草里那段倒木", reveal: 13, cost: { minutes: 12 } },
+      visible: not(flag(LOG_DONE)) },
+    { id: "wall-log-rolled", transform: LOG, className: "search-hotspot",
+      sprite: { src: "sprites/fallen-log-rolled.webp", layer: "prop", sizeVh: 7 },
+      interactable: { verbs: ["inspect"], label: "草里那段倒木", reveal: 13, cost: { minutes: 0 }, once: true },
+      visible: flag(LOG_DONE) },
     // The gap under the slab: the one place on this slope something could actually have slid into. It has not.
     { id: "wall-crack", transform: CRACK, className: "search-hotspot",
       interactable: { verbs: ["inspect"], label: "石板底下的缝", reveal: 12, cost: { minutes: 4 }, once: true } },
@@ -88,7 +105,8 @@ export default defineScene({
     // One stone lifted out of the heap and left lying beside it.
     prop("moved-stone", MOVED_STONE, "sprites/stone-turned.webp", 4, { visible: entityIs("wall-rocks", "used") }),
     // The pack comes off her back the first time she kneels, and stays on the grass.
-    prop("pack-down", PACK_DOWN, "sprites/backpack-floor.webp", 14, { visible: flag(TURNED, { gte: 1 }) }),
+    // 12vh: the same bag at the same size as the other two outdoor stands (a 0.45 m pack about three metres off).
+    prop("pack-down", PACK_DOWN, "sprites/backpack-floor.webp", 12, { visible: flag(TURNED, { gte: 1 }) }),
     // Both ways out, on the painting from the first minute.
     backArrow("back", DOWN_PATH, "search", "沿沙路走回去", TO_SEARCH),
     goArrow("go-hotel", HOME_SLOPE, { to: "hotel", minutes: TO_HOTEL, label: "顺草坡回酒店", kind: "walk" }),
@@ -137,6 +155,14 @@ export default defineScene({
     ctx.onEnter(() => {
       if (w.state.journal.objective) w.patch("journal", { objective: null });
       if (w.state.body.fatigue > 0 || w.state.body.fear > 0) w.patch("body", { fatigue: 0, fear: 0, breath: "calm" });
+      /* Same reason, same fix as `search`: the ferrata kit came off in the hotel room last night and the light
+         went back in the pack, so a warped save must not stand here in a helmet and a lanyard. */
+      const worn = w.state.inventory.worn.filter((item) => DAY_TWO_WORN.includes(item));
+      const hands = w.state.inventory.hands.filter((item) => item !== "fillLight");
+      if (worn.length !== w.state.inventory.worn.length || hands.length !== w.state.inventory.hands.length) {
+        w.patch("inventory", { worn, hands });
+      }
+      if (w.state.power.lampMode) w.patch("power", { lampMode: null });
     });
 
     const spotList = () => String(ctx.flag("search.spots", "")).split(",").filter(Boolean);
@@ -192,6 +218,13 @@ export default defineScene({
     });
     // Let go halfway and it settles back into its own hollow.
     ctx.onRelease("wall-log", () => { ctx.kick("slip", 0.4); ctx.sfx("slide", -0.3, 0.45); });
+    /* The log on its back. A hand on the wet underside once more, and nothing under it the second time either. */
+    ctx.onInteract("wall-log-rolled", () => {
+      ctx.hand(LOG, "grip");
+      ctx.kick("glance", 0.35, { yaw: 0, pitch: -5 });
+      ctx.sfx("cloth", -0.3, 0.4);
+      ctx.after(440, () => ctx.sfx("breath", -0.3, 0.35));
+    });
 
     // The gap under the slab: an arm in to the shoulder, and it comes back cold.
     ctx.onInteract("wall-crack", () => {

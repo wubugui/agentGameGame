@@ -9,8 +9,15 @@
 import { any, entityIs } from "../engine/condition";
 import type { EntityDef } from "../engine/entity";
 import { defineScene } from "../engine/scene";
-import type { EntityId, SfxName, Transform } from "../engine/types";
+import type { EntityId, ItemId, SfxName, Transform } from "../engine/types";
 import { goArrow, prop } from "./_shared";
+
+/* What she is still wearing on the second morning. The ferrata hardware came off in the hotel room the night
+   before — 头盔、挽索、手套 are the first day's kit (v4 §3.6) — and the补光灯 went back in the pack when it got
+   light. Nothing upstream takes them off, so the second day does it, and hotel / busStop / police / bench
+   inherit a woman in her own jacket instead of one waiting for the 472 in a climbing helmet. */
+const DAY_TWO_WORN: ItemId[] = ["backpack", "cap", "redJacket"];
+const undressFerrata = (worn: ItemId[]) => worn.filter((item) => DAY_TWO_WORN.includes(item));
 
 /** The three places she turns over here. Ids and labels are the ones in data/descent.ts SEARCH_SPOTS, scene "search";
  *  the coordinates below are read off the repainted 18-search, and the third spot is the heap of loose stones the
@@ -27,7 +34,11 @@ const SPOTS: Spot[] = [
 
 const THREAD: Transform = { yaw: -8, pitch: -19 };             // a sprig higher up the same creeping pine (572, 523)
 const MOVED_STONE: Transform = { yaw: 19.5, pitch: -17 };      // the bare ground right of the heap (806, 506)
-const PACK_DOWN: Transform = { yaw: 13, pitch: -33 };          // clear sand below the standing stone, clear of it (751, 643)
+/* The pack sits where the resting camera can see it: a perspective camera puts (yaw, pitch) on screen row
+   360·(1 − tan(pitch)/(cos(yaw)·tan 30°)), and at pitch −33 the whole bag fell out under the bottom edge, so
+   「她把包卸下来了」was a beat nobody saw. Measured in the running view, −22° lands it on row ≈629, between the
+   loose stones above it (their node ends at 537) and the arrow home and the standing stone below it (664, 674). */
+const PACK_DOWN: Transform = { yaw: 14, pitch: -22 };          // the open sand below the loose stones (759, 549)
 const STANDING_STONE: Transform = { yaw: 21, pitch: -26 };     // the upright stone in the middle of the sand (819, 583)
 const SASSOLUNGO: Transform = { yaw: 6, pitch: 19, distance: 30 };  // the jagged wall across the valley (691, 205)
 const WALL_FOOT: Transform = { yaw: 13, pitch: 5 };            // the dark green scrub belt under the wall (751, 318)
@@ -62,9 +73,10 @@ export default defineScene({
       visible: searched("dwarf-pines") },
     // One stone lifted out of the heap and left lying beside it, with the damp print it came off.
     prop("moved-stone", MOVED_STONE, "sprites/stone-turned.webp", 5, { visible: searched("path-stones") }),
-    /* The pack comes off her back the first time she kneels down, and stays on the sand. 14vh is the height the
-       same pack has in the other two outdoor stands (searchWall, searchPath): one bag, one size on the ground. */
-    prop("pack-down", PACK_DOWN, "sprites/backpack-floor.webp", 14, { visible: any(...SPOTS.map((spot) => searched(spot.id))) }),
+    /* The pack comes off her back the first time she kneels down, and stays on the sand. 12vh is what a bag lying
+       three metres off actually measures (0.45 m ≈ 143·0.45/1.65/3.4 vh) and it is the height the same pack has in
+       the other two outdoor stands (searchWall, searchPath): one bag, one size on the ground. */
+    prop("pack-down", PACK_DOWN, "sprites/backpack-floor.webp", 12, { visible: any(...SPOTS.map((spot) => searched(spot.id))) }),
     // The stone standing in the sand: nothing under it, but her hand knows it (v4 §7: 她记得抓过的那块石头).
     { id: "standing-stone", transform: STANDING_STONE, className: "search-hotspot",
       interactable: { verbs: ["inspect"], label: "沙地上立着的石头", reveal: 12, cost: { minutes: 2 }, once: true } },
@@ -89,6 +101,12 @@ export default defineScene({
     /* A hotel bed stands between the forest and this path: the second day is walked on legs that have slept
        (v4 §1.3, §3.2 — day two lifts the resource pressure). Nobody upstream of here zeroes them, so this does. */
     w.patch("body", { fatigue: 0, fear: 0, breath: "calm" });
+    // And the first day's hardware is off: the helmet, the lanyard, the gloves, the light out of her hands.
+    w.patch("inventory", {
+      worn: undressFerrata(w.state.inventory.worn),
+      hands: w.state.inventory.hands.filter((item) => item !== "fillLight"),
+    });
+    w.patch("power", { lampMode: null });
   },
   walkthrough: [
     { type: "overlay:close" },
@@ -158,6 +176,14 @@ export default defineScene({
       w.patch("body", { fatigue: 0, fear: 0, breath: "calm" });
       // The first day's objective (656 · Plan de Roces) was answered by the road two nights ago.
       if (w.state.journal.objective) w.patch("journal", { objective: null });
+      /* And she is not still in the helmet. The kit came off in the room last night; what walks back up the
+         path is a woman in a red jacket and a cap, which is what the pack cloth has to show from here on. */
+      const worn = undressFerrata(w.state.inventory.worn);
+      const hands = w.state.inventory.hands.filter((item) => item !== "fillLight");
+      if (worn.length !== w.state.inventory.worn.length || hands.length !== w.state.inventory.hands.length) {
+        w.patch("inventory", { worn, hands });
+      }
+      if (w.state.power.lampMode) w.patch("power", { lampMode: null });
     });
 
     // The screen she has been staring at since breakfast: a circle, not a point (v4 §8, entrance overlay).

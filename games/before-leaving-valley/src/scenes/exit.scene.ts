@@ -5,11 +5,25 @@
    the left, the scree right of the tower — and only one of them has a mark. Looking back down the cable, the box is a
    dot on the pale slope below it.
    Coordinates read off the 150°×84° grid of 07-exit (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84). */
-import { all, flag, not, worn } from "../engine/condition";
+import { all, entityIs, flag, not, worn } from "../engine/condition";
+import type { EntityDef } from "../engine/entity";
 import { defineScene, type WalkStep } from "../engine/scene";
 import type { Transform } from "../engine/types";
 import type { World } from "../engine/world";
 import { backArrow, blaze, goArrow, lookAt } from "./_shared";
+
+/* §3.5: a mark that has been settled stays on the painting. The `blaze` factory's default
+   `visible: not(entityIs(id,"read"))` takes the whole thing off the slope the moment she has looked at it; overriding
+   `visible` (an `all` of nothing is true) leaves it there, and `once` carries "already settled": the second press comes
+   back as `interact:refused` and the script answers with her hand. Not `enabled` — PanoStage writes an inline opacity
+   onto every hotspot with a reveal every frame (PanoStage.tsx:427), so `.hotspot.is-disabled` never reaches the screen
+   and a disabled mark would be a silent dead button. The grey of a ruled-out mark and the faint highlight of the paint
+   hang off these two classes, as `filter` rather than opacity; that rule is the integrator's and is in the requests. */
+const settled = (real: boolean): Partial<EntityDef> => ({
+  visible: all(),
+  className: real ? "blaze-found" : "blaze-ruled-out",
+  interactable: { verbs: ["inspect"], label: "石头上的记号", reveal: 12, cost: { minutes: 0 }, once: true },
+});
 
 const STEP = "exit.step", PHASE = "exit.phase", SLAB_TOP = "exit.slabTop";
 const SEEN = "exit.seen", NODDED = "exit.nodded", PHOTO = "exit.photo", PASSED = "exit.passed";
@@ -83,9 +97,9 @@ export default defineScene({
     { id: "climbers-photo", transform: LEDGE, interactable: { verbs: ["photograph"], label: "两位攀登者", reveal: 14, cost: { minutes: 0 }, once: true },
       visible: all(flag(NODDED), not(flag(PHOTO)), not(flag(PASSED))) },
     // Three candidate marks, one per line: the white-topped stone where the flagstones end, the boulder on the left scree, the tower's foot on the right.
-    blaze("blaze-exit-a", { yaw: -20, pitch: -11.5 }, true),
-    blaze("blaze-exit-b", { yaw: -33, pitch: -11.5 }, false),
-    blaze("blaze-exit-c", { yaw: 16, pitch: -4 }, false),
+    blaze("blaze-exit-a", { yaw: -20, pitch: -11.5 }, true, settled(true)),
+    blaze("blaze-exit-b", { yaw: -33, pitch: -11.5 }, false, settled(false)),
+    blaze("blaze-exit-c", { yaw: 16, pitch: -4 }, false, settled(false)),
     // The two other lines that look walkable from here. Twelve minutes each, a slide or a dead face, then back.
     { id: "wrong-left", transform: { yaw: -38, pitch: -22 }, className: "wrong-hotspot", tags: ["wrongWay"],
       interactable: { verbs: ["inspect"], label: "左边的碎石坡", reveal: 18, cost: { minutes: 12, fatigue: 0.1 }, once: true } },
@@ -198,6 +212,18 @@ export default defineScene({
       if (entity !== "wrong-left" && entity !== "wrong-right") return;
       ctx.say(entity === "wrong-left" ? "碎石一直往下滑。不是这条。" : "石塔右边绕不过去。不是这条。", { tag: "exit-wrong" });
     });
+    /* Pressed again — either wrong line, or a mark she has already settled: the thing is still there to be looked at,
+       it simply has nothing left to tell her. The hand goes out, one dry knock, and comes back; no text, no minute,
+       never a dead button (as meadow, search). */
+    ctx.on("interact:refused", ({ entity, reason }) => {
+      if (reason !== "gone") return;
+      const def = ctx.scene.entities.find((one) => one.id === entity);
+      if (!def?.interactable?.once) return;
+      const where = ctx.transformOf(entity);
+      ctx.hand(where, "grip");
+      ctx.kick("glance", 0.3, { yaw: 0, pitch: -4 });
+      ctx.sfx("tock", Math.max(-1, Math.min(1, where.yaw / 60)), 0.3);
+    });
 
     /* Looking. The valley floor: a breath and a glance, or the phone. The box below: a tick of light, nothing said. */
     ctx.onInteract("valley", (verb) => {
@@ -248,6 +274,7 @@ export default defineScene({
     // Both wrong lines, a false mark, then the right one; no mark confirmed on the way out would cost twelve more.
     wrong: [
       { type: "interact", entity: "wrong-left", verb: "inspect" }, { wait: 800 },
+      { type: "interact", entity: "wrong-left", verb: "inspect" }, { wait: 400 },
       { type: "interact", entity: "wrong-right", verb: "inspect" }, { wait: 800 },
       { type: "interact", entity: "blaze-exit-b", verb: "inspect" }, { wait: 300 },
       { type: "interact", entity: "blaze-exit-a", verb: "inspect" }, { wait: 300 },

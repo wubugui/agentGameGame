@@ -6,6 +6,7 @@
    the next forty minutes are readable (v4 §7 "纯粹是看", §8 "死路（值得走的死路）").
    Every coordinate below was read off the 150°×84° grid of 09c-ledge (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84);
    the pixel it came from (1280×720) is noted beside it. */
+import { ENTRIES } from "../data/entries";
 import { after, flag, has } from "../engine/condition";
 import type { EntityDef } from "../engine/entity";
 import { defineScene } from "../engine/scene";
@@ -20,6 +21,7 @@ const LEANED = "ledge.leaned";
 const HUT_SEEN = "ledge.hutSeen";
 const CLOUD = "ledge.cloud";
 const ROAD_HEARD = "ledge.roadHeard";
+const DESCENT = "E-descent";        // the notebook line for the way down — still to be added to data/entries.ts
 const HUT_LIT = 17 * 60;            // ClockSystem's hut-window-lit mark
 const BACK_MINUTES = 6;             // 6 out (plateau's ledge-route) + 6 back = the twelve minutes of v4 §7
 
@@ -93,7 +95,7 @@ export default defineScene({
     w.setFlag(SKETCHED, true);
     w.setFlag(LEANED, true);
     w.setFlag(HUT_SEEN, true);
-    w.emit("journal:entry", { entry: "E-descent", source: null });
+    if (ENTRIES[DESCENT]) w.emit("journal:entry", { entry: DESCENT, source: null });
   },
   script: (ctx) => {
     const w = ctx.world;
@@ -203,10 +205,13 @@ export default defineScene({
       if (!ctx.flag(TRACED, false) || ctx.flag(SKETCHED, false)) return;
       ctx.setFlag(SKETCHED, true);
       ctx.spend({ minutes: 2 }, "在本子上把这条线画下来");
-      // The pencil is the scene's own: E-descent is not in data/entries.ts yet, and the journal is silent about ids it does not know.
-      ctx.sfx("pencil", 0, 0.6);
-      ctx.learn("E-descent");
-      ctx.flash("本子上多了一条线");
+      /* The line only says "本子上多了一条线" when a line really went into the notebook. E-descent is not in
+         data/entries.ts yet (it is in the requests): JournalSystem drops ids it does not know, so asking for it would
+         warn and write nothing while the corner of the screen claimed otherwise. Until the entry lands the beat is the
+         pencil alone — one sound, no second sentence; when it lands the journal's own pencil covers it and the flash
+         becomes true. */
+      if (ENTRIES[DESCENT]) { ctx.learn(DESCENT); ctx.flash("本子上多了一条线"); }
+      else ctx.sfx("pencil", 0, 0.6);
     });
 
     /* --- The blocks on the left shoulder: she walks out along them, they end on grass, she comes back. --- */
@@ -217,6 +222,15 @@ export default defineScene({
       w.emit("body:fatigue", { delta: 0.03, reason: "乱石堆往返" });
       ctx.after(620, () => { ctx.kick("settle", 0.6); ctx.sfx("step", -0.3); });
       ctx.say("只有石头。没有路。", { tag: "ledge-blocks" });
+    });
+    /* Pressed again once she has been out there: the blocks are still on the shoulder and still take her hand, they
+       just have nothing more in them. The hand goes out, one dry knock, and comes back (as meadow, search). */
+    ctx.on("interact:refused", ({ entity, reason }) => {
+      if (entity !== "blocks" || reason !== "gone") return;
+      roadOut();
+      ctx.hand(BLOCKS, "grip");
+      glanceAt(BLOCKS, 0.3);
+      ctx.sfx("tock", Math.max(-1, Math.min(1, BLOCKS.yaw / 60)), 0.3);
     });
 
     /* --- Standing still. The wind comes up the face once; a while later a car runs along the road down there. --- */
@@ -263,6 +277,7 @@ export default defineScene({
     // Out along the blocks first, then the fan, then back.
     wrong: [
       { type: "interact", entity: "blocks", verb: "inspect" }, { wait: 900 },
+      { type: "interact", entity: "blocks", verb: "inspect" }, { wait: 400 },
       { type: "interact", entity: "scree-fan", verb: "inspect" }, { wait: 400 },
       { type: "travel", entity: "back" },
     ],

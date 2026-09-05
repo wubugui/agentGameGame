@@ -49,7 +49,7 @@ const BLOCK: Transform[] = [
   { yaw: 20.8, pitch: -21.9, distance: 12 },  // (818, 548)
   { yaw: 29.9, pitch: -23.1, distance: 11 },  // (895, 558)
   { yaw: 37.3, pitch: -27.5, distance: 11 },  // (958, 596)
-  { yaw: 32.8, pitch: -30.8, distance: 10 },  // the top of the low block at the foot of the heap (920, 624)
+  { yaw: 33.6, pitch: -30.2, distance: 10 },  // the body of the low block at the foot of the heap, below its top edge (927, 619)
   { yaw: 40.8, pitch: -32.2, distance: 10 },  // the last block, where the heap runs back out into sand (988, 636)
 ];
 
@@ -60,7 +60,13 @@ const FAR_ROCK_MARK: Transform = { yaw: 52.7, pitch: -12.8, distance: 16 }; // t
 const CLOUDS: Transform = { yaw: 38, pitch: 28, distance: 16 };          // the peach cloud bank over the right-hand sky (964, 120)
 const SUN: Transform = { yaw: 50, pitch: 16, distance: 16 };             // the warm band of sky low over the right terraces (1067, 231)
 const WALL_BACK: Transform = { yaw: -55.1, pitch: 25.1, distance: 16 };  // the grey towers filling the left edge, above and behind her (170, 145)
-const STAR: Transform = { yaw: -29.3, pitch: 36.2, distance: 16 };       // the blue gap of sky between the towers and the massif (390, 50)
+/* The gap of sky between the left towers and the massif runs from pitch 36 down to about 26 before the painted
+   rock closes it. 36 is unreachable in practice: at 16:9 the camera's pitch limit resolves to about 10.4° and the
+   pointer adds 27°, so the highest a player can look is ~37.4° and the star sat 1.2° inside that, with the breath
+   moving the gaze around it. 30 is still open sky (measured at x 384–397, y 96–110 on the grid) and comfortably
+   inside the cone. It belongs to genuinely late players either way: nothing on any measured route is still on the
+   slope at half past eight. */
+const STAR: Transform = { yaw: -29.3, pitch: 30, distance: 16 };         // the blue gap of sky between the towers and the massif (390, 103)
 const GREEN: Transform = { yaw: 35.2, pitch: -4.7, distance: 16 };       // the layered rock terraces across the gully, grass on their tops (940, 400)
 /* Nothing is painted here but sand: the loose panel of it immediately left of the rubble heap, which looks from
    above like the straight way down and is not one. The label names the sand, because the sand is what is drawn. */

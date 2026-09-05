@@ -5,7 +5,6 @@
    look (v4 §6 deer: 完整的一群 → 几个影子 → 两点反光; v4 §7 deer: 停住 / 绕开 / 直接走过去).
    Every coordinate was read off the 150°×84° grid of 12-deer (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84);
    the pixel it came from (1280×720) is noted beside it. */
-import type { Condition } from "../engine/condition";
 import { all, any, entityIs, flag, not } from "../engine/condition";
 import type { EntityDef } from "../engine/entity";
 import { defineScene } from "../engine/scene";
@@ -28,13 +27,22 @@ const TO_FOREST_EDGE = 55;       // v4 §3.1: deer 19:20 → forestEdge 20:15
 const LOST_MINUTES = 12;         // no confirmed mark: v4 §3.5 charges 12 for this terrain band (scree uses 12 too)
 
 // Things painted in 12-deer, with the pixel they were read from.
-/* The herd sprite is 1032x549 with a band of spruce across its top 45%, so its anchor is set from the picture it
-   has to sit in, not from the middle of the grass: at 25 vh (15 deg, 129 px of the 1280x720 grid) its painted tree
-   bases land on the painted tree bases at y 595 and its deer stand on the grass between y 600 and y 646, each
-   animal about 5.8 vh - a 1.4 m deer at twenty metres. */
-const HERD: Transform = { yaw: 9.5, pitch: -27, distance: 14 };       // the herd standing at the wood edge above the open grass (721, 591)
-const HERD_RUN: Transform = { yaw: 15, pitch: -28, distance: 12 };    // where they go up, half a step nearer the trees (768, 600)
-const FAWN_AT: Transform = { yaw: 11, pitch: -33.5, distance: 11 };   // the open grass two steps nearer, in front of the herd (734, 647)
+/* deer-herd.webp is 1032x549 and carries its own band of spruce across the top: row-scanned, its tree tops start
+   at 4.6% of the file's height, its tree bases are at 52.8% and its lowest hooves at 94.7%. The old anchor (25 vh
+   at pitch -27) put all of that in the wrong place: measured in the running engine, the sprite rendered 338x180
+   with its tree band standing on the painted open meadow in front of the real wood, and its front row fell off
+   the bottom of the frame (box bottom 767 of 720).
+   Re-measured live and set from what the frame does. At 18 vh the sprite renders 244x130 px and the projection
+   runs 12.1 px per degree here, so with the anchor at pitch -24 its tree tops land at pitch -19.1, its tree bases
+   at -24.3 (grid y 568, inside the painted wood) and its hooves at -28.8 (grid y 607, out on the painted grass;
+   12-deer draws the wood-to-grass line at grid y 585). The herd therefore straddles the wood edge with its front
+   rows in the open, which is where §6 puts it, and the whole sprite is inside the 720 px frame. The animals come
+   out 4.1 vh (back row) to 6.2 vh (front row): a 1.4 m deer at thirty down to twenty metres.
+   What placement cannot fix is the palette - the sprite's blue-green spruce is not the painting's autumn larch -
+   and only a herd re-cut with no trees in it will; that is an ART request. */
+const HERD: Transform = { yaw: 9.5, pitch: -24, distance: 14 };       // the herd at the wood edge, its front rows out on the grass (721, 566)
+const HERD_RUN: Transform = { yaw: 15, pitch: -25.5, distance: 12 };  // where they go up, half a step nearer the trees (768, 578)
+const FAWN_AT: Transform = { yaw: 11, pitch: -30, distance: 11 };     // the open grass two steps nearer, in front of the herd's front row (734, 617)
 const PRESS: Transform = { yaw: 12.3, pitch: -30.1, distance: 10 };   // the grass they were standing in, left of the sand (745, 618)
 const HOOF: Transform = { yaw: 23.5, pitch: -32, distance: 9 };       // the wide sandy path in front of her feet; the sand runs 804-875 here (841, 634)
 const TREELINE: Transform = { yaw: 12, pitch: -15.5 };                // the tall dark spruce where the scree runs into the wood (745, 493)
@@ -45,13 +53,11 @@ const SUNSET: Transform = { yaw: 32, pitch: 26, distance: 16 };       // the ora
 const SASSO: Transform = { yaw: 44.5, pitch: 8.7, distance: 16 };     // the jagged grey wall across the valley (1020, 285)
 const TRAIL_IN: Transform = { yaw: 41, pitch: -27.5 };                // where the sandy path runs out under the first larches (1007, 597)
 
-/* Two light thresholds. lightOf() is 1 at 18:45 and 0 from 20:15 on, so these are the two moments
-   at which the herd stops being a herd: first shapes, then two points of reflected light. */
-const DIM: Condition = { kind: "light", lt: 0.3 };
-const DARK: Condition = { kind: "light", lt: 0.001 };
+/* The two light thresholds §6 hangs the herd on are 19:48 (lightOf < 0.3, 几个影子) and 20:15 (0, 两点反光).
+   They are not conditions in this file yet: the three dusk faces they would switch to do not exist, and a
+   condition that resolves to a missing file empties the frame instead of changing it (ART request). */
 const HERE = all(not(flag(GONE)), not(flag(BOLTED)));
 const AFTERWARDS = any(flag(BOLTED), flag(GONE));
-const HEADS_UP = any(flag(ALERT), flag(WATCH));
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 const pan = (t: Transform) => clamp(t.yaw / 45, -1, 1);
@@ -77,31 +83,34 @@ export default defineScene({
   exitWhen: undefined,
   entities: [
     /* The herd, standing at the wood edge in the grass: the whole subject of the node, and it has to be on the
-       screen. deer-herd.webp (fourteen animals with their own band of spruce behind them) is what exists, so it is
-       what is used, placed and scaled so its trees sit on the painted tree line and its deer on the painted grass.
+       screen. deer-herd.webp (thirteen animals with their own band of spruce behind them) is what exists, so it is
+       what is used, placed and scaled so its trees sit inside the painted wood and its deer on the painted grass.
        Running is a separate entity, not a swap, because deer-fleeing.webp is six animals filling its frame and a
-       swap entry cannot carry its own sizeVh — at the herd's 25 vh those six would be four metres tall.
-       The two dusk faces stay pointed at art that does not exist yet: with no lit herd to show after 19:48 there is
-       nothing up there to see, which is what the picture should say. The re-cut family is an ART request. */
+       swap entry cannot carry its own sizeVh — at the herd's 18 vh those six would be three metres tall.
+       NO DUSK SWAPS. deer-shadows.webp, deer-shadows-alert.webp and deer-eyeshine.webp do not exist, and the view
+       hides a sprite whose file is missing — so the swaps that were here deleted the herd out of the frame from
+       19:48 on while the node went on charging three minutes to count it. §6's 完整的一群 → 几个影子 → 两点反光
+       is a real progression and it needs those three faces to exist; until they do the base herd stands at every
+       hour and the count says what the frame shows (ART request, P0). */
     { id: "herd", transform: HERD,
-      sprite: { src: "sprites/deer-herd.webp", layer: "figure", sizeVh: 25, swap: [
-        { when: DARK, src: "sprites/deer-eyeshine.webp" },
-        { when: all(DIM, HEADS_UP), src: "sprites/deer-shadows-alert.webp" },
-        { when: DIM, src: "sprites/deer-shadows.webp" },
-      ] },
-      interactable: { verbs: ["inspect"], label: "草坡上的鹿群", reveal: 16, cost: { minutes: 3 }, once: true },
+      sprite: { src: "sprites/deer-herd.webp", layer: "figure", sizeVh: 18 },
+      interactable: { verbs: ["inspect", "photograph"], label: "草坡上的鹿群", reveal: 16, cost: { minutes: 3 }, once: true },
       gaze: { radius: 16, dwell: 700 },
       visible: all(HERE, not(flag(FLEEING))) },
     // The eight hundred milliseconds of them actually going. Nothing to click: it is over before a hand could move.
-    prop("herd-running", HERD_RUN, "sprites/deer-fleeing.webp", 6.5, { visible: flag(FLEEING) }),
-    // The smallest one, once she has stood still long enough for it to risk two steps.
+    prop("herd-running", HERD_RUN, "sprites/deer-fleeing.webp", 5.5, { visible: flag(FLEEING) }),
+    // The smallest one, once she has stood still long enough for it to risk two steps. sprites/deer-fawn.webp is
+    // an ART request; until it lands the two steps are carried by the two footfalls and the line, and there is
+    // nothing standing on the grass in front of the herd.
     { id: "fawn", transform: FAWN_AT,
-      sprite: { src: "sprites/deer-fawn.webp", layer: "figure", sizeVh: 5.5 },
+      sprite: { src: "sprites/deer-fawn.webp", layer: "figure", sizeVh: 5 },
       gaze: { radius: 12, dwell: 600 },
       visible: all(flag(FAWN), not(flag(BOLTED))) },
     // Keeping to the trees instead of crossing the open grass: six minutes, and she gets to watch them longer.
+    // `once`: the walk round only changes the herd the first time, and six minutes that buy nothing new would be
+    // a hole in a node whose entire currency is minutes.
     { id: "treeline", transform: TREELINE,
-      interactable: { verbs: ["step"], label: "林线下的那排云杉", reveal: 14, cost: { minutes: 6 } },
+      interactable: { verbs: ["step"], label: "林线下的那排云杉", reveal: 14, cost: { minutes: 6 }, once: true },
       visible: HERE },
     // What is left afterwards, and all there ever is if she made a noise coming down.
     // The prints are the one deer thing that is actually drawn, and she reads them after dark: no night swap, or
@@ -196,7 +205,14 @@ export default defineScene({
     const herdGone = () => ctx.flag(BOLTED, false) || ctx.flag(GONE, false);
 
     /* Arriving. The sound comes first and it comes from one side (v4 §3.8) — no line, no camera grab.
-       If she shouted somewhere on the way down, the grass is already empty and the prints are all there is. */
+       If she made a noise somewhere on the way down, the grass is already empty and the prints are all there is
+       (§8: 如果在林缘前喊过，鹿已经走了，只剩蹄印). The branch is correct and it is currently unreachable:
+       UISystem refuses the `shout` command outside forestEdge / forest1 / forest2, and all three come after this
+       node in MAIN_ORDER, so shout.at stays 0 and nothing ever writes scree.shouted or signpost.shouted. §3.8
+       and §8 also disagree about which node the shout belongs to. It is left switched on and wired to all three
+       flags so that whichever way the author rules, the fork lands here without a rewrite; letting the sand slide
+       on the scree stand in for the shout is NOT the answer — the fastest line slides, and the node would lose
+       its herd on the main route. (Escalated as an ENGINE + DESIGN request.) */
     ctx.onEnter(() => {
       if (herdGone()) return;
       if (ctx.flag<number>("shout.at", 0) > 0 || ctx.flag("scree.shouted", false) || ctx.flag("signpost.shouted", false)) {
@@ -216,12 +232,15 @@ export default defineScene({
       ctx.say("前面有响动。", { tag: "deer-see" });
     });
 
-    /* Counting them: three minutes, and what the count comes to depends only on how late she got here. */
-    ctx.onInteract("herd", () => {
+    /* Counting them: three minutes. The count is supposed to depend on how late she got here — 完整的一群 →
+       几个影子 → 两点反光 (§6) — and the two dark lines are held back until the three dusk faces exist, because
+       the only herd the frame can draw today is the whole one and she does not describe a picture that is not
+       there. The line follows the sprite, not the clock. */
+    ctx.onInteract("herd", (verb) => {
+      if (verb === "photograph") return shoot(HERD);
       ctx.setFlag(SEEN, true); ctx.setFlag(COUNTED, true);
       ctx.sfx("breath", pan(HERD), 0.5); ctx.kick("glance", 0.3, { yaw: 0, pitch: -1 });
-      const light = ctx.light();
-      ctx.say(light <= 0 ? "两点反光。就这些了。" : light < 0.3 ? "数不清。都是影子。" : "十几只。", { tag: "deer-count" });
+      ctx.say("十几只。", { tag: "deer-count" });
     });
 
     /* A photograph of them: the day's only picture that is not a rock. The shutter does not frighten them. */

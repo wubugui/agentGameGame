@@ -18,10 +18,11 @@
    Every coordinate was read off the 150°×84° grid of 20-bus-stop (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84);
    the pixel it came from (1280×720) is noted beside it. */
 import { ENTRIES } from "../data/entries";
-import { all, flag, has, not } from "../engine/condition";
+import { all, any, flag, has, not } from "../engine/condition";
 import { defineScene } from "../engine/scene";
 import type { Transform } from "../engine/types";
-import { goArrow, offset } from "./_shared";
+import { phoneDispatch } from "../systems/UISystem";
+import { goArrow } from "./_shared";
 
 const HEARD = "busStop.heard";            // she has asked at least once
 const ASKS = "busStop.asks";              // how many times the question has been put to her (she asks twice)
@@ -37,7 +38,10 @@ const WINDOW = "busStop.window";          // seconds left of the forty; −1 unt
 const BOARDED = "busStop.boarded";
 
 const WINDOW_SECONDS = 40;
-const COST_ASK = 12, COST_SHOT = 12, COST_OTHER = 15, COST_WAIT = 8;
+/* v4 §12 A6: 这 40 秒里只允许做完两件事. At fifteen a third one still fitted — ask 12 + shot 12 + look 15 = 39 —
+   so a player could answer, call after her, photograph her and still turn round to the playground. At twenty no
+   three of them ever add up to forty or less, and any two of them always do. */
+const COST_ASK = 12, COST_SHOT = 12, COST_OTHER = 20, COST_WAIT = 8;
 /* If she spends the morning looking round instead of standing still. hotel hands the clock over at 09:10, so this
    has to sit far enough past that for "逛了一会儿" and "站着不动" to be two different ways of getting to her. */
 const WOMAN_MINUTE = 9 * 60 + 18;
@@ -46,6 +50,20 @@ const WOMAN_MINUTE = 9 * 60 + 18;
 const ASK_LINE = "Have you lost your phone?";
 const QUESTURA = "这个公交车去警察局";
 const OBJ_LEAVE = "离开多洛米蒂，在山口等 472";
+
+/* The two frames this morning can leave behind. Every other shutter in the game writes into `phone.photos`, and
+   these two have to as well or they do not exist the moment the scene ends: §6 wants the day-one frame lying next
+   to the first morning's in the album at the counter, and §7 wants the woman's back to be the picture the credits
+   roll over. The 360 is the camera (the phone is in a Carabinieri drawer), so the cost is the 360's battery and
+   the phone's own clock and charge must not move — `roll` below puts them back. */
+const SAME_FRAME_PHOTO = {
+  asset: "pano/20-bus-stop.webp", title: "第一天站的地方", place: "Passo Sella · 公交站",
+  position: { x: 50, y: 30 }, zoom: 1.2, day: 3,
+};
+const BACK_PHOTO = {
+  clear: { asset: "art/woman-back-clear.webp", title: "那位女士的背影", place: "Passo Sella · 公交站", position: { x: 50, y: 50 }, zoom: 1, day: 3 },
+  blur: { asset: "art/woman-back-blur.webp", title: "那位女士的背影", place: "Passo Sella · 公交站", position: { x: 50, y: 50 }, zoom: 1, day: 3 },
+};
 
 /* Things painted in 20-bus-stop, with the pixel they were read from. */
 const SASSOLUNGO: Transform = { yaw: 9, pitch: 16, distance: 40 };       // the great grey wall across the road (720, 220)
@@ -58,9 +76,13 @@ const FAR_ROAD: Transform = { yaw: 52, pitch: -15, distance: 16 };       // the 
    FOOT, not its middle: a sprite's foot sits at (its pixel row) + sizeVh·5.14/2 on the 1280×720 plate, and the
    tarmac's far edge runs (600, 618) → (760, 582) → (920, 542) → (1080, 502), so anything standing on the road
    has to have its wheels below that line at its own x. */
-/* The coach is pulled two degrees further along the road than it used to be: at 26vh it is 337 px across at
-   most, and at yaw 28 its nose and tail came down on the chalets hotspot and the plate with nothing to spare. */
-const BUS_AT: Transform = { yaw: 30, pitch: -20, distance: 16 };         // stopped on the near lane, wheels on the tarmac (896, 531; wheels 585)
+/* The coach stands in a 406 px gap: the chalets hotspot lands at screen x 795 and the blue plate at x 1201, and
+   yaw 30 is the middle of it. What was wrong was the size, not the place — at 26vh the 472 was 187 px tall, which
+   is a three-metre coach eleven metres away, and it left barely thirty pixels either side. 18vh is the same
+   three metres at the sixteen the transform says (260/d vh), it is the size the same coach has at `bench`
+   (18vh at d14 → 16 m would be 15.75), and it fits the gap with eighty pixels of daylight on both sides.
+   Its wheels still come down at screen row ≈687 = plate row 570, below the tarmac's far edge (545 at this x). */
+const BUS_AT: Transform = { yaw: 30, pitch: -20, distance: 16 };         // stopped on the near lane, wheels on the tarmac (896, 531; wheels 570)
 const BUS_DOOR: Transform = { yaw: 34, pitch: -19, distance: 16 };       // the folding door on this side of it (930, 523)
 /* She stands where the frame can hold all of her: at −25.5° her boots were 26 px under the bottom edge of the
    static view, so the player's first sight of her was a woman cut off at the ankles (measured in the DOM). */
@@ -72,6 +94,12 @@ const OFFSCREEN: Transform = { yaw: 0, pitch: -88 };                     // stor
 
 const womanHere = all(flag(HEARD), not(flag(RUNNING)));
 const womanGoing = all(flag(RUNNING), not(flag(GONE)));
+/* Whether one more of the free looks still fits in what is left of the forty seconds. Before she answers the
+   window is unset and everything is free; once it is running, a look she cannot pay for does not happen — her
+   hand goes out to it and comes back, which is what InteractionSystem does with an unmet `requires`.
+   Without this the window only ever charged a look *after* it had happened, so ask 12 + shot 12 + look still
+   went through and she did three things inside forty seconds (v4 §12 A6: 只允许做完两件事). */
+const HAS_TIME = any(flag(WINDOW, { lt: 0 }), flag(WINDOW, { gte: COST_OTHER }));
 
 export default defineScene({
   id: "busStop",
@@ -88,24 +116,24 @@ export default defineScene({
   entities: [
     /* The same four things as the first morning, three days older. A minute each; the camera is the only one left
        that works (the phone is still in somebody else's hands), so a photograph costs the 360's battery, not the
-       phone's. view/Hotspot.tsx only ever dispatches verbs[0], so anything the player must be able to press is
-       verbs[0] on its own entity: looking and shooting are two hotspots, the way cable and exit already do it. */
+       phone's. One hotspot with the mountain's name on it, not two: view/Hotspot.tsx only ever dispatches
+       verbs[0], so `photograph` is verbs[0] and the look is what the hand does on the way to the shutter. A
+       second label reading「拍一张」floated on the same blank rock face twelve degrees from this one, and 拍一张
+       is a verb, not the name of anything painted (SCENE_AUTHORING §0.5) — cable and exit split their entities the
+       same way, but both halves there name the thing (往下的钢缆 / 两位攀登者). §6: 与第一天同机位的一张. */
     { id: "sassolungo", transform: SASSOLUNGO,
-      interactable: { verbs: ["inspect"], label: "对面的锯齿石墙", reveal: 12, cost: { minutes: 1 } } },
-    // The frame she stood in on the first morning, on the wall's left shoulder (614, 257). §6: 与第一天同机位的一张.
-    { id: "sassolungo-shot", transform: offset(SASSOLUNGO, -12, -4),
-      interactable: { verbs: ["photograph"], label: "拍一张", reveal: 12, cost: { minutes: 1 } } },
+      interactable: { verbs: ["photograph"], label: "对面的锯齿石墙", reveal: 12, cost: { minutes: 1 }, requires: HAS_TIME } },
     { id: "playground", transform: PLAYGROUND,
-      interactable: { verbs: ["inspect"], label: "儿童游乐架", reveal: 12, cost: { minutes: 1 } } },
+      interactable: { verbs: ["inspect"], label: "儿童游乐架", reveal: 12, cost: { minutes: 1 }, requires: HAS_TIME } },
     { id: "chalets", transform: CHALETS,
-      interactable: { verbs: ["inspect"], label: "木屋", reveal: 12, cost: { minutes: 1 } } },
+      interactable: { verbs: ["inspect"], label: "木屋", reveal: 12, cost: { minutes: 1 }, requires: HAS_TIME } },
     { id: "bench", transform: BENCH,
-      interactable: { verbs: ["inspect"], label: "长椅", reveal: 12, cost: { minutes: 0 } },
+      interactable: { verbs: ["inspect"], label: "长椅", reveal: 12, cost: { minutes: 0 }, requires: HAS_TIME },
       gaze: { radius: 12, dwell: 900 } },
     /* The blue plate she is standing under. No timetable on it: the account never gives one (v4 §12 B9). */
     { id: "bus-sign", transform: BUS_SIGN,
       sprite: { src: "sprites/busstop-sign.webp", layer: "prop", sizeVh: 5 },
-      interactable: { verbs: ["inspect"], label: "蓝色站牌", reveal: 12, cost: { minutes: 0 } } },
+      interactable: { verbs: ["inspect"], label: "蓝色站牌", reveal: 12, cost: { minutes: 0 }, requires: HAS_TIME } },
     /* Everything she owns, down on the grass beside her boots, until she picks it up to get on. */
     { id: "backpack", transform: BAG,
       sprite: { src: "sprites/backpack-grass.webp", layer: "prop", sizeVh: 11 },
@@ -118,7 +146,7 @@ export default defineScene({
       gaze: { radius: 13, dwell: 700 },
       visible: not(flag(BUS_IN)) },
     { id: "bus", transform: BUS_AT,
-      sprite: { src: "sprites/bus-472.webp", layer: "figure", sizeVh: 26 },
+      sprite: { src: "sprites/bus-472.webp", layer: "figure", sizeVh: 18 },
       visible: flag(BUS_IN) },
 
     /* The woman. She is not a timer: she comes over when the player stands still, or when enough of the morning
@@ -168,6 +196,14 @@ export default defineScene({
     });
     /* The 360 spent the night on a hotel charger; the phone is still gone. (Belongs to `hotel`; see requests.) */
     if (w.state.power.camera <= 0) w.patch("power", { camera: 100 });
+    /* And the frame she did get. It has to be in the roll, not only in a flag: the album at the counter shows it
+       an hour later and the credits roll over it (v4 §6, §7). The phone is in a drawer in Canazei, so its own
+       clock and charge are handed straight back — a shutter up here is the 360's. */
+    if (!w.state.phone.photos.some((photo) => photo.title === BACK_PHOTO.clear.title)) {
+      const before = w.state.phone;
+      phoneDispatch(w, { type: "capture_photo", photo: BACK_PHOTO.clear });
+      w.set("phone", { ...w.state.phone, battery: before.battery, minuteOfDay: before.minuteOfDay, date: before.date });
+    }
     w.patch("body", { fatigue: Math.min(w.state.body.fatigue, 0.2), fear: 0 });
   },
 
@@ -196,7 +232,7 @@ export default defineScene({
     /* Everything the stop offers: the wall from the first morning's frame, the playground, the houses, the bench,
        the plate, the bus down the road — then she comes over, asks twice, and there is still time for one shot. */
     thorough: [
-      { type: "interact", entity: "sassolungo-shot", verb: "photograph" }, { wait: 700 },
+      { type: "interact", entity: "sassolungo", verb: "photograph" }, { wait: 700 },
       { type: "interact", entity: "playground", verb: "inspect" }, { wait: 500 },
       { type: "interact", entity: "chalets", verb: "inspect" }, { wait: 500 },
       { type: "interact", entity: "bench", verb: "inspect" }, { wait: 500 },
@@ -224,11 +260,20 @@ export default defineScene({
       const here = w.rt.gaze;
       ctx.kick("glance", strength, { yaw: clamp((target.yaw - here.yaw) * 0.14, 6), pitch: clamp((target.pitch - here.pitch) * 0.14, 4) });
     };
-    /* The phone is still somewhere in a Carabinieri drawer, so every shutter here is the 360's. */
-    const shoot = (target: Transform) => {
+    /* The phone is still somewhere in a Carabinieri drawer, so every shutter here is the 360's — and the frame
+       has to end up somewhere it can be looked at afterwards, or the whole forty seconds vanish with the scene.
+       `roll` puts it in the album and then hands the phone back its own clock and charge: it is lying in a
+       drawer in Canazei and nothing that happens up here may move them. */
+    const roll = (photo: typeof SAME_FRAME_PHOTO) => {
+      const before = w.state.phone;
+      phoneDispatch(w, { type: "capture_photo", photo });
+      w.set("phone", { ...w.state.phone, battery: before.battery, minuteOfDay: before.minuteOfDay, date: before.date });
+    };
+    const shoot = (target: Transform, photo: typeof SAME_FRAME_PHOTO) => {
       ctx.spend({ camera: 2 }, "举起相机");
       ctx.sfx("shutter", 0, 0.7);
       glanceAt(target, 0.35);
+      roll(photo);
     };
 
     /* The third morning: she has one bag, a charged 360 and an empty pocket. */
@@ -264,9 +309,17 @@ export default defineScene({
       burn(left);
       return false;
     };
-    /* Anything at all she does in those seconds spends them: the mountain, the houses, the plate. */
+    /* Anything at all she does in those seconds spends them: the mountain, the houses, the plate. Whether it
+       fits is decided before it happens, by HAS_TIME on each of those hotspots; here it is only paid for. */
     const PRICED = new Set(["answer", "call-after", "woman-away", "woman-far"]);
     ctx.on("interact:done", ({ entity }) => { if (!PRICED.has(entity)) burn(COST_OTHER); });
+    /* And the reach that did not fit spends the rest of them: the hand comes back, and by the time it does the
+       woman is past the houses. (The engine has already given the hand, the glance and the knock.) */
+    ctx.on("interact:refused", ({ entity, reason }) => {
+      if (reason !== "condition" || PRICED.has(entity)) return;
+      const left = ctx.flag<number>(WINDOW, -1);
+      if (left > 0) burn(left);
+    });
 
     /* ---- The woman. She is a person who walks up, not an event that fires. ---- */
     const ask = () => {
@@ -335,7 +388,7 @@ export default defineScene({
       if (!affords(COST_SHOT, blurred ? WOMAN_FAR : WOMAN_AWAY)) return;
       burn(COST_SHOT);
       ctx.setFlag(PHOTO, blurred ? "blur" : "clear");
-      shoot(blurred ? WOMAN_FAR : WOMAN_AWAY);
+      shoot(blurred ? WOMAN_FAR : WOMAN_AWAY, blurred ? BACK_PHOTO.blur : BACK_PHOTO.clear);
       ctx.kick("glance", 0.4, { yaw: -6, pitch: 0 });
     };
     ctx.onInteract("woman-away", () => shootBack());
@@ -352,13 +405,15 @@ export default defineScene({
     });
 
     /* ---- The first morning's four things, three days on. ---- */
+    /* The wall. Her head goes back, and the first time it does the camera comes up with it: one frame from the
+       stand she stood on three mornings ago, which is the one §6 wants lying beside the first morning's in the
+       album. She has that frame after the first press; every look after it is only a look. */
     ctx.onInteract("sassolungo", () => {
-      glanceAt(SASSOLUNGO, 0.7); ctx.sfx("exhale", 0.3, 0.6); ctx.setFlag("busStop.sassolungo", true);
-    });
-    ctx.onInteract("sassolungo-shot", () => {
-      shoot(SASSOLUNGO);
-      if (ctx.flag(SAME, false)) return;
+      glanceAt(SASSOLUNGO, 0.7);
+      ctx.setFlag("busStop.sassolungo", true);
+      if (ctx.flag(SAME, false)) { ctx.sfx("exhale", 0.3, 0.6); return; }
       ctx.setFlag(SAME, true);
+      shoot(SASSOLUNGO, SAME_FRAME_PHOTO);
       ctx.say("第一天就站在这里。", { tag: "bus-same" });
     });
     ctx.onInteract("playground", () => {

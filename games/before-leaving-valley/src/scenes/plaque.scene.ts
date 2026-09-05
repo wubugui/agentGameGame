@@ -13,12 +13,13 @@ import type { EntityDef } from "../engine/entity";
 import { defineScene } from "../engine/scene";
 import type { EntityId, Transform } from "../engine/types";
 import { blaze, goArrow, prop, readable } from "./_shared";
+import { phoneDispatch } from "../systems/UISystem";
 
 /* A mark that stays on its stone after she has read it (v4 §3.5 / §3.8 memory ③): the paint keeps a very faint
    highlight until she leaves the node, and can no longer be pressed. `enabled: false` is what fades it
    (`.hotspot.is-disabled { opacity:.35 }`); the shared factory would delete it from the painting instead. */
-const mark = (id: EntityId, transform: Transform, real: boolean): EntityDef =>
-  blaze(id, transform, real, { visible: undefined, enabled: not(entityIs(id, "read")) });
+const mark = (id: EntityId, transform: Transform, real: boolean, extra: Partial<EntityDef> = {}): EntityDef =>
+  blaze(id, transform, real, { visible: undefined, enabled: not(entityIs(id, "read")), ...extra });
 
 const BLUE = "plaque.blue", ORANGE = "plaque.orange", CLIPPED = "plaque.clipped", PULLED = "plaque.pulled";
 const ANCHOR: Transform = { yaw: 13, pitch: -14 };                // the lower ring anchor the cable starts from (752, 482)
@@ -51,9 +52,13 @@ export default defineScene({
       lines: ["Difficoltà: C / D", "Tratto in fessura: II grado UIAA, non attrezzato", "Tenere sempre almeno un moschettone agganciato al cavo"],
       entry: "E-carabinerRule", minutes: 1,
     }),
+    // ③ is a sketch of the route with the summit on it. The other three plates carry what is cast into them, and
+    // this one used to carry a description of the drawing instead — narration wearing a plate's clothes, in the one
+    // overlay where every line is supposed to be something she can point at. It now says what a plate like this has
+    // stamped on it and nothing else; the line itself is on the plate, for her to look at.
     readable("plate-route", { yaw: 33, pitch: 7 }, "路线图", {                     // bronze plate under ① (918, 300)
-      kind: "plaque", title: "Schizzo",
-      lines: ["一条刻出来的线：钢缆、裂缝、出口", "线的尽头：Piz Selva 2941 m", "旁边刻着一个小小的十字架"],
+      kind: "plaque", title: "Schizzo dell'itinerario",
+      lines: ["Via ferrata Pössnecker", "Piz Selva 2941 m"],
       entry: "E-summit", minutes: 1,
     }),
     readable("plate-hut", { yaw: 38, pitch: 1.5 }, "玻璃下的告示", {               // the white sheet under glass (963, 347)
@@ -81,11 +86,20 @@ export default defineScene({
       interactable: { verbs: ["use"], label: "装备", reveal: 14, cost: { minutes: 0 } },
       visible: not(dressed),
     }),
-    // Two candidate marks: the red paint on the pale rock below the cable, and the crustose lichen on the slab above it.
-    mark("blaze-plaque", { yaw: 4, pitch: -33 }, true),                              // the orange-red paint (677, 645)
+    /* Two candidate marks: the red paint on the pale rock below the cable, and the crustose lichen on the slab
+       above it. The paint is the one place in this group where §0.4 is broken by the picture itself and not by the
+       scene: 03-plaque already has an orange-red streak burnt into the foreground rock (I measured it at 5×: a
+       diffuse blob about 95 × 90 px, densest between x 640–700 and y 595–660). The default 4 vh blaze was a 21 px
+       sticker in the middle of it, so "confirming it leaves a very faint trace" could not be read at all — the
+       painted streak stayed at full strength behind an entity faded to .35. Recentred on the dense core and grown
+       to 13 vh (67 px) the sprite and the streak read as one mark. The real fix is art: `requests` asks for the
+       streak to be painted out of 03-plaque so the paint is the sprite entirely, and this size drops back to 4. */
+    mark("blaze-plaque", { yaw: 3.7, pitch: -32 }, true,                             // the dense core of the painted streak (672, 634)
+      { sprite: { src: "sprites/blaze-red-white.webp", layer: "prop", sizeVh: 13 } }),
     mark("lichen-plaque", { yaw: 5.5, pitch: 13.5 }, false),                         // the lichened patch on the slab (687, 243); sprites/blaze-false.webp is orange-grey, so her line names no colour
-    // Where the cable goes over the edge, and the pass behind her. Looking is free (gaze); a 360 shot costs a minute, or three from the pack.
-    // (The minute of a shot is charged by `phone:shoot`; the two extra minutes for digging the camera out are charged in shoot().)
+    // Where the cable goes over the edge, and the pass behind her. Looking is free (gaze); a 360 shot costs a
+    // minute, or three from the pack. All of that is charged inside shoot(): the minute, the camera's 1%, and the
+    // two extra minutes for digging it out. Nothing here goes through the phone (see shoot()).
     { id: "cable-up", transform: { ...CABLE_TOP, distance: 14 }, interactable: { verbs: ["photograph"], label: "往上的钢缆", reveal: 14, cost: { minutes: 0 } }, gaze: { radius: 12, dwell: 900 } },
     { id: "pass-view", transform: PASS, interactable: { verbs: ["photograph"], label: "山口草甸", reveal: 14, cost: { minutes: 0 } }, gaze: { radius: 12, dwell: 900 } },
     // Up onto the wall: one minute of the five §3.1 gives this leg — the other four are the dressing above it.
@@ -215,11 +229,20 @@ export default defineScene({
       ctx.sfx("breath", -0.5, 0.5); ctx.kick("turn", 0.4, { yaw: -1, pitch: 0 });
       ctx.say("山口已经在下面了。", { tag: "plaque-back" });
     });
-    // A 360 shot: one minute with the camera on the strap, three if it has to come out of the pack (v4 §7).
+    /* A 360 shot: one minute with the camera on the strap, three if it has to come out of the pack (v4 §7).
+       It is the 360 camera that takes it, so it is the 360 camera that pays: one percent of its own battery and
+       the minute, and the picture goes into the album by hand. It used to go out through `phone:shoot`, which is
+       the phone raising itself — a second percent off the phone for a photograph the phone did not take. The phone
+       battery is spent on the phone's own shutter, and one of those (the letter at `mailbox`) is an invariant. */
     const shoot = (id: EntityId) => {
       if (!inv().hands.includes("camera360")) { ctx.spend({ minutes: 2 }, "从包里翻出相机"); ctx.sfx("zip", 0, 0.6); glance(-6, 0.5); }
-      ctx.spend({ camera: 1 }, "全景相机");
-      ctx.world.dispatch({ type: "phone:shoot" });                                    // the shot itself: one minute, and it lands in the album
+      const st = ctx.world.state;
+      phoneDispatch(ctx.world, { type: "capture_photo", photo: {
+        asset: "pano/03-plaque.webp", title: "Pössnecker 飞拉达 · 起点", place: "Pössnecker 飞拉达 · 起点",
+        position: { x: st.camera.aimX, y: st.camera.aimY }, zoom: st.camera.zoom, day: 1,
+      } });
+      ctx.spend({ camera: 1, minutes: 1 }, "全景相机");
+      ctx.sfx("shutter");
       ctx.kick("glance", 0.35, { yaw: 0, pitch: id === "cable-up" ? 3 : -1 });
       ctx.bump("plaque.shots", 1);
     };

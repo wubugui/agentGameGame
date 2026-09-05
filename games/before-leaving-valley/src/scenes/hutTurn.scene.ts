@@ -27,8 +27,12 @@ const OBJ_RETREAT = "紧急下撤：找 656 · Plan de Roces · Val Lasties";
 const OBJ_HUT = "先走一条路去山屋，可以充电、吃饭";   // v4 §5.2 obj-hut, in her own wording
 
 /* Things painted in 09d-hutturn, with the pixel they were read from. */
-/* distance 16 keeps the house out of PanoStage's scale clamp, so sizeVh is its real height on screen: 6.5 vh
-   ≈ 47 px at 720p, against hutView's 2.2 vh. Twenty-two minutes of walking is a thing you see, not a line. */
+/* distance 16 keeps the house out of PanoStage's scale clamp, so sizeVh is its real height on screen.
+   Row-scanned off the alpha: hut-near.webp is 809×725 with its painted walls 465 px wide, so at 4 vh the walls
+   measure 465 × 4/725 = 2.57 vh against the 1.40 vh they measure at the lip — 1.83× nearer to the eye. Twenty-two
+   minutes of a two-and-a-half-hour leg is about 15% of the way, so a strictly distance-consistent step would be
+   1.15×: 1.83× is a deliberate painterly exaggeration, big enough that the walk is visible and small enough that
+   the house is still on the far rim (the 6.5 vh this used to carry read as 2.95×, i.e. most of the way there). */
 const HUT: Transform = { yaw: -31, pitch: 2.6, distance: 16 };        // the green shoulder on the far rim, above the layered cliffs (376, 338)
 const VALLEY_FLOOR: Transform = { yaw: -33, pitch: -16, distance: 20 }; // the green valley floor under the far grey wall (358, 497)
 const TERRACES: Transform = { yaw: 24, pitch: -14.5, distance: 16 };  // the layered pale cliff face stepping down, spruce in its shade below (845, 484)
@@ -36,10 +40,11 @@ const FAR_ROAD: Transform = { yaw: 30.5, pitch: -5.6, distance: 26 }; // the pal
 const MASSIF: Transform = { yaw: 52.7, pitch: 23.3, distance: 40 };   // the big tan wall holding the last direct light (1090, 160)
 const CLOUDS: Transform = { yaw: 6.4, pitch: 21, distance: 30 };      // the cloud band coming down over the skyline (695, 180)
 const CAIRN_T: Transform = { yaw: -16.1, pitch: -18.9, distance: 9 }; // the stacked flat stones on the table rock (503, 522)
-/* The added stone rests ON the painted top stone: that stone's upper edge is at y 458 (pitch −11.6), and a 2.2 vh
-   sprite is 11 px tall, so an anchor at −11.3 (y 456) drops its lower edge a few pixels into the stone under it
-   instead of leaving it floating above the stack. */
-const CAIRN_TOP: Transform = { yaw: -16.1, pitch: -11.3 };            // on top of the painted top stone of the stack (503, 456)
+/* The added stone rests ON the painted top stone. Column-scanned on 09d-hutturn at x 486–520: the top stone's
+   pale body starts at y 462 and its shadow line is at y 470, so its upper edge is y 462 = pitch −11.9. A 2.2 vh
+   sprite is 11.3 px tall on the 84°/720 px grid, so anchoring at the edge itself puts the new stone's lower half
+   down into the stone under it instead of leaving it floating above the stack. */
+const CAIRN_TOP: Transform = { yaw: -16.1, pitch: -11.9 };            // on top of the painted top stone of the stack (503, 462)
 const MAP_STONE: Transform = { yaw: 2.3, pitch: -32, distance: 9 };   // the broad flat slab right of the cairn; the rock face here starts at −28.5 (660, 634)
 const BLAZE_ROCK: Transform = { yaw: -31, pitch: -29 };               // the raised pale block left of the cairn (350, 609)
 const LICHEN_ROCK: Transform = { yaw: 20, pitch: -35 };               // a paler patch on the slab by her right boot (811, 660)
@@ -73,7 +78,7 @@ export default defineScene({
     // The house, nearer by twenty-two minutes and still on the other side: near enough now for the aerial on the
     // roof, and at 17:00 for the one lit window — the sprite changes itself, nobody announces either of them.
     { id: "hut", transform: HUT,
-      sprite: { src: "sprites/hut-near.webp", layer: "prop", sizeVh: 6.5, swap: [{ when: after(HUT_LIT), src: "sprites/hut-near-lit.webp" }] },
+      sprite: { src: "sprites/hut-near.webp", layer: "prop", sizeVh: 4, swap: [{ when: after(HUT_LIT), src: "sprites/hut-near-lit.webp" }] },
       interactable: { verbs: ["inspect", "photograph"], label: "对面岩壁上的房子", reveal: 12, cost: { minutes: 1 } },
       gaze: { radius: 12, dwell: 900 } },
     // The thing this walk bought her: the whole valley, open all the way down. It arrives when her eyes rest on it.
@@ -86,9 +91,12 @@ export default defineScene({
     lookAt("massif", MASSIF, "还照着太阳的大墙", 1),
     { id: "clouds", transform: CLOUDS, gaze: { radius: 14, dwell: 1200 } },
     // Somebody else's cairn. Two minutes to hold a flat stone on the top of it until it sits — for nothing at all.
+    // The stack stays on the picture afterwards and the point goes grey (`enabled`, not `visible`): until
+    // sprites/cairn-stone.webp exists the added stone has nothing to draw, and a stack that silently loses its
+    // hotspot with nothing in its place is worse than a dead point on the stones she just built up (ART request).
     { id: "cairn", transform: CAIRN_T, className: "hold-hotspot",
-      interactable: { verbs: ["hold"], label: "往石堆上加一块石头", reveal: 13, cost: { minutes: 2, fatigue: 0.01 } },
-      hold: { ms: 600, scaleWith: ["fatigue"] }, visible: not(flag(CAIRN)) },
+      interactable: { verbs: ["hold"], label: "往石堆上加一块石头", reveal: 13, cost: { minutes: 2, fatigue: 0.01 }, requires: not(flag(CAIRN)) },
+      hold: { ms: 600, scaleWith: ["fatigue"] }, enabled: not(flag(CAIRN)) },
     prop("cairn-cap", CAIRN_TOP, "sprites/cairn-stone.webp", 2.2, { visible: flag(CAIRN) }),
     // Two candidates on the rim: the bar on the raised block, and a pale patch on the slab by her right boot.
     mark("blaze-turn-a", BLAZE_ROCK, true),
@@ -97,8 +105,13 @@ export default defineScene({
     prop("paper-map", MAP_STONE, "sprites/map-folded.webp", 11, {
       interactable: { verbs: ["use"], label: "在平石上摊开地图", reveal: 12, cost: { minutes: 0 }, requires: has("paperMap") },
     }),
-    // The rock carries on past the break, and so does the way to the hut. Nine minutes to stand in it and turn round.
-    wrongWay("rim-on", RIM_ON, "左边接下去的岩台", RIM_MINUTES, "路还在往前。"),
+    // The rock carries on past the break, and so does the way to the hut. Nine minutes to stand in it and turn
+    // round — and it is NOT `once`: what this ledge is, is that it goes on being nine minutes long and then nine
+    // more, and the map's 往山屋走 button walks it for her. A button that silently did nothing the second time
+    // would be a dead control; insisting has to keep costing what insisting costs.
+    wrongWay("rim-on", RIM_ON, "左边接下去的岩台", RIM_MINUTES, "路还在往前。", {
+      interactable: { verbs: ["inspect"], label: "左边接下去的岩台", reveal: 18, cost: { minutes: RIM_MINUTES } },
+    }),
     // The only way out, and it is always open (A4 / D6).
     backArrow("back", BACK_SLOPE, "hutView", "顺草坡回头", BACK_MINUTES),
   ],
@@ -199,17 +212,18 @@ export default defineScene({
     });
 
     /* --- The map carries the same two buttons out here that it carries at the lip (PaperMap draws them for both
-           nodes), so out here they have to be worth pressing. They are: on this rock the two words are not a
-           decision to be filed, they are two directions to start walking in, and pressing one starts the walk.
-           紧急下撤 folds the map and turns her round — the twenty-three minutes back along the rim IS the retreat,
-           and the decision still lands at the lip, where she has to see the house across the valley to make it
-           (v4 §7; hutView clears hutView.choice when she comes back over the grass). 往山屋走 sends her on along
-           the ledge, which does not break and does not end. Neither one says anything out loud. --- */
+           nodes), so out here they have to be worth pressing. They are, but only as far as the pencil: this rock
+           has ONE way off it, the grass ramp behind her (v4 §8: 回头箭头 · 唯一出口), and neither button may be a
+           second one. 紧急下撤 folds the map and writes the margin; the twenty-three minutes back along the rim
+           are still hers to spend on the arrow, and the decision itself still lands at the lip, where she has to
+           see the house across the valley to make it (hutView clears hutView.choice when she comes back over the
+           grass). 往山屋走 sends her on along the ledge, which does not break and does not end. Neither one says
+           anything out loud. --- */
     ctx.onAction("map:choose:retreat", () => {
       ctx.setFlag(DECIDED, "retreat"); ctx.close();
       ctx.sfx("tick", 0, 0.8); ctx.kick("turn", 0.7, { yaw: 6, pitch: -2 });
       write(OBJ_RETREAT);
-      ctx.travel("hutView", { minutes: BACK_MINUTES });
+      glanceAt(BACK_SLOPE, 0.5);
     });
     ctx.onAction("map:choose:hut", () => {
       ctx.setFlag(DECIDED, "hut"); ctx.close();

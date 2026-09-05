@@ -12,7 +12,7 @@
 
    Every coordinate below was read off the 150°×84° grid of 22-bench (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84,
    W×H = 1280×720); the pixel it came from is noted beside it. */
-import { flag } from "../engine/condition";
+import { flag, not } from "../engine/condition";
 import type { EntityDef } from "../engine/entity";
 import { defineScene, type WalkStep } from "../engine/scene";
 import { LETTER_LINES_ZH } from "../data/letter";
@@ -35,8 +35,12 @@ const BUS = "bench.busHere";
 const ZH_COUNT = LETTER_LINES_ZH.filter((line) => line.length > 0).length;
 
 /* Things painted in 22-bench, with the pixel each was read from. */
-const BENCH: Transform = { yaw: -33, pitch: -24, distance: 6 };        // the lower backrest plank of the wooden bench (358, 566)
-const NOTE_AT: Transform = { yaw: -24, pitch: -29, distance: 8 };      // the seat plank just right of the backrest post (435, 609)
+/* Both of these were measured in the running 1280×720 view, not on the plate: a perspective camera puts a point
+   at (yaw, pitch) on screen row 360·(1 − tan(pitch)/(cos(yaw)·tan 30°)), so anything past about −26° at these
+   yaws has its label clipped by the bottom edge and anything past −29° is gone altogether. The bench's own label
+   was being cut in half; the couple's slip of paper came out of the pack with ten pixels of it in frame. */
+const BENCH: Transform = { yaw: -33, pitch: -21, distance: 6 };        // the upper backrest plank of the wooden bench (358, 540)
+const NOTE_AT: Transform = { yaw: -16, pitch: -26.8, distance: 8 };    // the seat plank right of the backrest post (503, 590)
 /* The 472, pulled in beside the stop. Its wheels have to be ON the tarmac, and where a thing lands is the
    perspective camera's answer, not the plate's: screen row = 360·(1 − tan(pitch)/(cos(yaw)·tan 30°)) at 1280×720.
    At 18vh the coach is 130 px tall, so its centre lands on row 575 and its wheels come down along row 640 —
@@ -70,6 +74,11 @@ const lookEntity = (entry: Look): EntityDef => {
     id: entry.id, transform: entry.at,
     interactable: { verbs: ["inspect"], label: entry.label, reveal, cost: { minutes: 0 } },
     gaze: { radius: reveal, dwell: entry.id === "far-slope" ? 1400 : 900 },
+    /* Once the 472 is standing on it there is no road to look at: the coach covers the tarmac from screen x 584
+       to 816 and this node sits at 684, so 「公路」was a hotspot underneath a bus, and its line — 路是空的。 —
+       could still be the one the last sentence landed on with a bus parked on it. The bus never comes before the
+       last line (busArrives needs TRANSLATED), so nothing the letter can land on is taken away. */
+    ...(entry.id === "road" ? { visible: not(flag(BUS)) } : {}),
   };
 };
 

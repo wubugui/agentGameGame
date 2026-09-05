@@ -1,12 +1,28 @@
 /* The first cable, 10:30: five anchors up a zigzag gully. At each one the two carabiners change segments one at a
    time (never both off), then she hauls the cable (fast, hard on the hands) or climbs the rock beside it (slow, free).
-   Coordinates read off the 150°×84° grid of 04-cable (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84, W×H = 1280×720). */
+   Coordinates read off the 150°×84° grid of 04-cable (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84, W×H = 1280×720).
+
+   THREE THINGS A READER SHOULD NOT HAVE TO REDERIVE:
+   1. FIVE anchors, not four. v4 §8 gives this node 5 anchors; v4 §7 prices the whole cable at "省 16 分钟 /
+      fatigue +0.24", which is four decisions of 4 minutes and 0.06. The two specs disagree and this file follows
+      §8, so hauling the whole wall is 5 × (10 − 6) = 20 minutes saved and 5 × 0.06 = +0.30 fatigue (+0.18 gloved).
+      Those numbers are §7 arithmetic applied to §8 count — nothing here was invented.
+   2. NO penalty for leaving without a confirmed mark. §3.5 charges that on 草甸 / 碎石路·顶段 / 高原 / 夜森林 and
+      nowhere else, and it would make no sense here: the line up this gully is a cable bolted to the rock and there
+      is no second line to take. Confirming a mark on this wall is confirmation and nothing more; a false one still
+      costs its minute to the JournalSystem, which is the price of being unsure, not of being wrong.
+   3. The cap. sprites/item-cap.webp is not drawn, so while ART_LANDED is false the gust never takes it: a
+      snatch at a cap the painting cannot show would be an E-key button pointing at bare limestone, which is what
+      §12 A1 forbids. The whole beat — the gust, the cap on the rock, the grab — comes back with the picture. */
 import { entityIs, flag, not, worn } from "../engine/condition";
 import type { EntityDef } from "../engine/entity";
 import { defineScene, type WalkStep } from "../engine/scene";
 import type { EntityId, Transform } from "../engine/types";
 import type { World } from "../engine/world";
 import { blaze, goArrow, offset } from "./_shared";
+
+/** Flip to true in the same commit as sprites/item-cap.webp. */
+const ART_LANDED: boolean = false;
 
 /* A mark that stays on its rock after she has read it (v4 §3.5 / §3.8 memory ③): the paint keeps a very faint
    highlight until she leaves the node, and can no longer be pressed. `enabled: false` is what fades it
@@ -28,10 +44,23 @@ const TOTAL = 5;
 const HAUL: Transform[] = [{ yaw: 26, pitch: -24.5 }, { yaw: 10, pitch: -16 }, { yaw: 3, pitch: -11 }, { yaw: 2, pitch: -7.5 }, { yaw: -1, pitch: -4.5 }];
 /* The pale natural rock beside each segment: the gully-floor slab, the ledge above the pins, between the rungs. */
 const ROCK: Transform[] = [{ yaw: 9, pitch: -22 }, { yaw: 14, pitch: -13 }, { yaw: -2, pitch: -10 }, { yaw: 8, pitch: -5 }, { yaw: -7, pitch: -3 }];
-const LIP: Transform = { yaw: 2, pitch: 5 };              // where the cable disappears over the top of the gully (655, 317)
+/* Where the cable goes over the top of the gully. pitch 5 was (655, 317) — at that column the sky wedge between
+   the two walls has not closed yet, so the arrow sat in air with only its ring touching rock. The topmost strand
+   is pinned at (673, 328) and the rock lip under it runs through y ≈ 330, so pitch 3.5 puts the arrow on the lip
+   itself, right where the cable turns over it. */
+const LIP: Transform = { yaw: 2, pitch: 3.5 };            // (655, 330)
 const RING: Transform = { yaw: 53, pitch: -29 };           // the big ring anchor at the right where the long cable ends (1092, 609)
-/* The thick cable running back down out of the picture: its painted core at x 538 spans y 683–694, so pitch −38 is its middle. */
+/* The thick cable running back down out of the picture: its painted core at x 538 spans y 683–694, so pitch −38 is
+   its middle. This point is the foot of SEGMENTS[0] and nothing else — it decides where the two carabiners ride on
+   the lowest length of cable, so it does not move. */
 const NEAR_CABLE: Transform = { yaw: -12, pitch: -38, distance: 14 };
+/* The same painted cable, further up it. `view-down` used to sit on NEAR_CABLE, and −38 is below the lowest gaze a
+   climbing body can reach (GAIT.climb lifts the whole view by 3°, so the floor measures about −34.2): it was
+   reachable only because GazeSystem has a 7° hard floor under its inside test, with 1.7° to spare and the pointer
+   pinned to the bottom of the screen. The cable rises to the right — traced on a 5× crop its core runs through
+   (560, 672), (640, 634) and (680, 618) — so following it up to (678, 617) keeps the hotspot on the painted cable
+   and puts four degrees of room under it. */
+const VIEW_DOWN: Transform = { yaw: 4.5, pitch: -30, distance: 14 };  // (678, 617)
 const CLIMBERS: Transform = { yaw: 12, pitch: 11, distance: 16 };       // the lit face of the right wall, just under its skyline (d 16: sizeVh is the height on screen)
 /** Things done in one movement, to a thing rather than a place: an E-key action. Below the painting so it never projects. */
 const OFFSCREEN: Transform = { yaw: 0, pitch: -88 };
@@ -121,7 +150,7 @@ export default defineScene({
     // From the third anchor: the cable she came up on runs back down out of the picture (v4 §6: 一分钟，一张照片).
     // One hotspot on the painted cable, not two — a hotspot only ever fires verbs[0] (see requests.engine), and the
     // second one was labelled with a verb instead of a thing.
-    { id: "view-down", transform: NEAR_CABLE,
+    { id: "view-down", transform: VIEW_DOWN,
       interactable: { verbs: ["photograph"], label: "往下的钢缆", reveal: 12, cost: { minutes: 0 } },
       visible: flag(STEP, { gte: 2 }) },
     // Two dots high on the right wall: the only two people she will meet all day, an hour ahead of her.
@@ -131,17 +160,18 @@ export default defineScene({
     mark("blaze-cable", { yaw: -24, pitch: -13 }, true),
     mark("rust-cable", { yaw: 41, pitch: -12 }, false),
     mark("lichen-cable", { yaw: -22, pitch: -32 }, false),
-    // The cap, when a gust takes it (v4 §8: 风大时抓帽子): snagged on the rock beside her until the next gust.
-    // sprites/item-cap.webp is not drawn yet, so the cap on the rock is a prop with no ring — a snatch at something
-    // the painting does not show yet would be a circle round bare limestone. The grab is the E-key story action
-    // instead, which is where the engine puts things done in one movement; once the picture lands it can go back
-    // onto the rock as a hold hotspot.
-    { id: "cap-loose", transform: (w) => offset(near(anchorAt(stepOf(w))), -11, -7),
-      sprite: { src: "sprites/item-cap.webp", layer: "prop", sizeVh: 7 },
-      visible: flag(CAP, { eq: true }) },
-    { id: "cap-grab", transform: OFFSCREEN, tags: ["action"],
-      interactable: { verbs: ["take"], label: "抓住帽子", reveal: 0, cost: { minutes: 1 } },
-      visible: flag(CAP, { eq: true }) },
+    // The cap, when a gust takes it (v4 §8: 风大时抓帽子): snagged on the rock beside her until the next gust, and
+    // an E-key action to snatch it back, which is where the engine puts things done in one movement. Both halves
+    // wait for sprites/item-cap.webp together (see the header): a button reading 抓住帽子 over a piece of rock with
+    // no cap on it is a promise the painting cannot keep.
+    ...(ART_LANDED ? [
+      { id: "cap-loose", transform: (w: World) => offset(near(anchorAt(stepOf(w))), -11, -7),
+        sprite: { src: "sprites/item-cap.webp", layer: "prop" as const, sizeVh: 7 },
+        visible: flag(CAP, { eq: true }) },
+      { id: "cap-grab", transform: OFFSCREEN, tags: ["action"],
+        interactable: { verbs: ["take" as const], label: "抓住帽子", reveal: 0, cost: { minutes: 1 } },
+        visible: flag(CAP, { eq: true }) },
+    ] : []),
     // The big ring where the long cable ends, off to the right. A hand on it, and the cable answers.
     { id: "anchor-ring", transform: RING, interactable: { verbs: ["inspect"], label: "锚环", reveal: 13, cost: { minutes: 0 } } },
     goArrow("go", LIP, { to: "crack", minutes: 40, label: "往上", kind: "walk" }),
@@ -164,7 +194,7 @@ export default defineScene({
       ctx.setFlag(CAP, false); ctx.lose("cap", how);
       ctx.sfx("cloth", -0.5, 0.8); ctx.kick("turn", 0.8); ctx.fx("gust", 0.8);
     };
-    ctx.on("camera:impulse", ({ kind, strength }) => {
+    if (ART_LANDED) ctx.on("camera:impulse", ({ kind, strength }) => {
       if (kind !== "turn") return;
       const s = strength ?? 0;
       if (ctx.flag(CAP, false)) { if (s >= 0.9) capGone("被风吹走"); return; }
@@ -230,8 +260,11 @@ export default defineScene({
     ctx.onRelease("rock-holds", slipBack);
 
     /* Looking. Down the cable from the third anchor: she leans out, looks, and takes it — a minute for the lean and
-       the phone's own minute for the shutter. The line stays on what 04-cable actually paints down there: the thick
-       cable running out of the bottom of the picture, and nothing under it. */
+       the phone's own minute for the shutter (v4 §6 gives this one minute and one photograph; the lean is the
+       minute, the shutter is the phone's). The line stays on what 04-cable actually paints down there: the thick
+       cable running out of the bottom of the picture, and nothing under it — §6 asks for the whole meadow and the
+       gravel road down there and the painting does not have them, so what is delivered here is a look down, not a
+       view over the meadow (see `requests` for the art that would make it §6's line). */
     ctx.onInteract("view-down", () => {
       ctx.spend({ minutes: 1 }, "往下看");
       ctx.kick("glance", 0.6, { yaw: -2, pitch: -8 }); ctx.sfx("breath", -0.4, 0.6);
@@ -268,9 +301,7 @@ export default defineScene({
       if (stills % 3 === 0) ctx.sfx("clink", 0.2, 0.3);
     });
 
-    /* Leaving: whatever the wind still holds of the cap goes. No penalty for leaving without a confirmed mark —
-       v4 §3.5 charges that on 草甸 / 碎石路·顶段 / 高原 / 夜森林, and not here: this段 goes up a cable that is
-       bolted to the rock, and there is no other line to take. */
+    /* Leaving: whatever the wind still holds of the cap goes. No minutes are charged for leaving unsure — header note 2. */
     ctx.on("travel:begin", ({ from }) => {
       if (from !== "cable") return;
       capGone("留在墙上");
@@ -281,7 +312,8 @@ export default defineScene({
     ...route("haul-cable", 2100),
   ],
   variants: {
-    // Every anchor on the rock: ten minutes each, nothing on the hands. Leaves without a mark (eight minutes on the way out).
+    // Every anchor on the rock: ten minutes each, nothing on the hands, and 50 minutes on the wall instead of 30.
+    // Leaves without confirming a mark, which on this wall costs nothing at all (see the header, note 2).
     rock: route("rock-holds", 2900),
     // Both locks off at the first anchor: the lurch, three minutes, then the whole cable.
     slip: [

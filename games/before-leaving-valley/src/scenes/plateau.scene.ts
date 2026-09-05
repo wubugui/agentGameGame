@@ -3,7 +3,7 @@
    skyline and a dark cloud bank coming over from the right. Nobody. Four marks on the stones (two are not paint),
    two ways across, the plateau's lip off to the right, and the twenty seconds the wind stops.
    Coordinates read off the 150°×84° grid of 09-plateau (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84). */
-import { has } from "../engine/condition";
+import { all, has } from "../engine/condition";
 import { defineScene } from "../engine/scene";
 import type { Transform, Verb } from "../engine/types";
 import { blaze, goArrow, lookAt, prop, windy, wrongWay } from "./_shared";
@@ -19,10 +19,20 @@ const STILL_GAP = 26000;            // a longer silence than this between waits 
 const STILL_MS = 19000;             // how long the wind stays down
 
 /* A candidate mark costs a minute (v4 §7 "认记号每次 −1 分钟"). The false ones are charged by JournalSystem
-   on blaze:confirm, so the scene must not charge them a second time — all four end up costing exactly 1. */
+   on blaze:confirm, so the scene must not charge them a second time — all four end up costing exactly 1.
+   Settling one never takes it off the karst: the factory's default `visible: not(entityIs(id,"read"))` deletes the
+   painted stripe and the lichen the moment she has looked at them, which is neither of the two things §3.5 asks for.
+   Overriding `visible` (an `all` of nothing is true) keeps all four on the stones until she walks off the plateau, and
+   `once` carries "settled": a second press comes back as `interact:refused`, which the script answers with her hand
+   going out and returning. Not `enabled` — PanoStage writes an inline opacity onto every hotspot with a reveal every
+   frame (PanoStage.tsx:427), so `.hotspot.is-disabled`'s .35 never reaches the screen and a disabled mark would be a
+   silent dead button. The grey of the two that are not paint and the faint highlight of the two that are hang off
+   these classes, as `filter` rather than opacity for that same reason; the rule is the integrator's, in the requests. */
 const mark = (id: string, t: Transform, real: boolean, sizeVh?: number) =>
   blaze(id, t, real, {
-    interactable: { verbs: ["inspect"] as Verb[], label: "石头上的记号", reveal: 12, cost: { minutes: real ? 1 : 0 } },
+    interactable: { verbs: ["inspect"] as Verb[], label: "石头上的记号", reveal: 12, cost: { minutes: real ? 1 : 0 }, once: true },
+    visible: all(),
+    className: real ? "blaze-found" : "blaze-ruled-out",
     ...(sizeVh
       ? { sprite: { src: real ? "sprites/blaze-red-white.webp" : "sprites/blaze-false.webp", layer: "prop" as const, sizeVh } }
       : {}),
@@ -62,7 +72,11 @@ export default defineScene({
     { id: "ledge-route", transform: { yaw: 67, pitch: -4, distance: 20 }, className: "go-hotspot", tags: ["exit"],
       exit: { to: "ledge", kind: "detour", label: "往右的低石台", minutes: 6 },
       interactable: { verbs: ["inspect"], label: "往右的低石台", reveal: 20 } },
-    // Two ways across, both always open (D6): along the stone rib is slow and sure; over the snow is faster and, tired, slides once.
+    /* Two ways across, both always open (D6): along the stone rib is slow and sure; over the snow is faster and, tired,
+       slides once. The two numbers are §7's own — "横切走岩脊（35 分，稳）还是抄雪斑（28 分，高疲劳时滑一次）" — so
+       they stay verbatim; a fastest legal line of one mark plus the snow is 29 minutes, four over the 25 in the §3.1
+       table. §7 is the node's spec and §3.1's row is the arithmetic, so the row is the thing that has to move: it is in
+       the requests, not silently repriced here (§0.1: 不发明数字). */
     goArrow("ridge-route", { yaw: 12, pitch: -10 }, { to: "hutView", minutes: 35, label: "沿岩脊横切", kind: "walk" }),
     goArrow("snow-route", { yaw: 25, pitch: -20 }, { to: "hutView", minutes: 28, label: "从雪斑上抄过去", kind: "run" }),
   ],
@@ -147,6 +161,18 @@ export default defineScene({
       ctx.after(600, () => { ctx.kick("settle", 0.6); ctx.sfx("step", -0.2); });
       ctx.say("石台走到头，下面是空的。不是这条。", { tag: "plateau-bench" });
     });
+    /* Pressed again — the bench she has already walked, a mark she has already settled: the thing is still out there
+       and still takes her hand, it just has nothing else to show her. The hand goes out, one dry knock, and comes back;
+       no second sentence, no minute (as meadow, search). */
+    ctx.on("interact:refused", ({ entity, reason }) => {
+      if (reason !== "gone") return;
+      const def = ctx.scene.entities.find((one) => one.id === entity);
+      if (!def?.interactable?.once) return;
+      const where = ctx.transformOf(entity);
+      ctx.hand(where, "grip");
+      glance({ yaw: 0, pitch: -4 }, 0.3);
+      ctx.sfx("tock", Math.max(-1, Math.min(1, where.yaw / 60)), 0.3);
+    });
 
     // --- Back from the lip: the plateau settles under her again. ---
     ctx.onEnter((from) => { if (from === "ledge") ctx.kick("settle", 0.5); });
@@ -182,6 +208,7 @@ export default defineScene({
     // The bench, the lichen and the survey mark first, then the stone rib.
     wrong: [
       { type: "interact", entity: "bench-west", verb: "inspect" }, { wait: 800 },
+      { type: "interact", entity: "bench-west", verb: "inspect" }, { wait: 400 },
       { type: "interact", entity: "lichen-plateau", verb: "inspect" }, { wait: 400 },
       { type: "interact", entity: "survey-plateau", verb: "inspect" }, { wait: 400 },
       { type: "interact", entity: "blaze-plateau-b", verb: "inspect" }, { wait: 400 },

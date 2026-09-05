@@ -11,8 +11,11 @@
 import { flag, not } from "../engine/condition";
 import type { EntityDef } from "../engine/entity";
 import { defineScene } from "../engine/scene";
-import type { EntityId, SfxName, Transform } from "../engine/types";
+import type { EntityId, ItemId, SfxName, Transform } from "../engine/types";
 import { backArrow, goArrow, prop, wrongWay } from "./_shared";
+
+/** What she is still wearing on the second morning (the same three `search` leaves her in). */
+const DAY_TWO_WORN: ItemId[] = ["backpack", "cap", "redJacket"];
 
 const TURNED = "searchPath.turned";        // how many of this stand's five places she has been through
 const FOUND_MOSS = "searchPath.moss";      // the scuffed moss on the bank
@@ -43,7 +46,10 @@ const SPOTS: Spot[] = [
 const MOSS_SCUFF: Transform = { yaw: -16, pitch: -14 };        // the green of the bank itself, just above the bare dirt (503, 480)
 const KNEE_PRINT: Transform = { yaw: 17, pitch: -21 };         // the damp brown dirt along the right edge of the sand (785, 540)
 const BROKEN_BRANCH: Transform = { yaw: 34, pitch: -22 };      // the bare ground at the foot of the creeping pine (930, 549)
-const PACK_DOWN: Transform = { yaw: -16, pitch: -33 };         // the pine needles left of the sand, clear of the long stone (493, 643)
+/* The pack has to be where the resting camera can see it: at −33° it landed on screen row ≈781, the whole bag
+   under the bottom edge. −22° puts it on row ≈638, out on the needle bank on the left, clear of the roots
+   (row 593), of the long stone (row 653) and of both ways out. */
+const PACK_DOWN: Transform = { yaw: -25, pitch: -22 };         // the pine needles left of the sand, below the roots (427, 549)
 const BIG_ROOT: Transform = { yaw: -35, pitch: -17 };          // the roots of the big pine coming out of the bank (345, 510)
 const SPIRES: Transform = { yaw: 0, pitch: 22, distance: 30 }; // the rock towers standing over the canopy (640, 161)
 const UP_PATH: Transform = { yaw: 5, pitch: -10 };             // the sand going on up over the rise (683, 446)
@@ -51,7 +57,10 @@ const UP_PATH: Transform = { yaw: 5, pitch: -10 };             // the sand going
    (yaw, pitch) on screen row 360·(1 − tan(pitch)/(cos(yaw)·tan 30°)), so −29° at these yaws left half the label
    under the bottom edge. They are also pulled apart — one down the middle of the sand, one out over the needles
    on the right — so the two arrows are not the same patch of ground with two different words on it. */
-const DOWN_PATH: Transform = { yaw: 0.5, pitch: -24.5 };       // the middle of the sand, going down out of the frame (644, 570)
+/* Sampled across that row on the plate: x 600–620 is the pale stone, 630–660 is brown needle dirt, and the sand
+   itself only starts at x≈665 (198/166/132). At yaw 0.5 the arrow that says 沿小路 stood on the needle bank at
+   the right tip of the long stone; yaw 4 is the sand it is named after. */
+const DOWN_PATH: Transform = { yaw: 4, pitch: -24.5 };         // the middle of the sand, going down out of the frame (674, 570)
 const HOME_PATH: Transform = { yaw: 24.5, pitch: -22.8 };      // where the sand's right edge runs into the pine needles (849, 555)
 
 const TO_SEARCH = 10;    // the ten minutes search charges to walk up here, paid again going back
@@ -78,10 +87,10 @@ export default defineScene({
       ...(spot.id === "pine-bush" ? { gaze: { radius: 13, dwell: 1000 } } : {}),
     })),
     /* What the bank gives up: a hand's width of moss rubbed off it, the wet brown dirt showing through. Hers,
-       and it stays where it is. The art is still to be drawn (`moss-torn`); until it exists the view hides it and
-       the beat still lands, because what announces it is the head turning and one tick, not a picture. */
+       and it stays where it is. The art for it is public/sprites/moss-scuff.webp, drawn for exactly this beat —
+       it was pointing at a `moss-torn` that was never made, which left the label bare and the drawn file orphaned. */
     { id: "moss-scuff", transform: MOSS_SCUFF,
-      sprite: { src: "sprites/moss-torn.webp", layer: "prop", sizeVh: 4 },
+      sprite: { src: "sprites/moss-scuff.webp", layer: "prop", sizeVh: 4 },
       interactable: { verbs: ["inspect"], label: "蹭掉的苔藓", reveal: 12, cost: { minutes: 1 }, once: true },
       visible: flag(FOUND_MOSS) },
     // What the sand gives up: one very shallow knee print in the mud along its edge.
@@ -96,12 +105,23 @@ export default defineScene({
       interactable: { verbs: ["inspect"], label: "断掉的树枝", reveal: 12, cost: { minutes: 1 }, once: true },
       visible: flag(FOUND_BRANCH) },
     // The pack comes off her back the first time she kneels down, and stays on the needles.
-    prop("pack-down", PACK_DOWN, "sprites/backpack-floor.webp", 14, { visible: flag(TURNED, { gte: 1 }) }),
-    // The roots of the big pine, out of the bank at hand height. Last night she came down past them holding on.
+    // 12vh: the same bag at the same size as the other two outdoor stands (a 0.45 m pack about three metres off).
+    prop("pack-down", PACK_DOWN, "sprites/backpack-floor.webp", 12, { visible: flag(TURNED, { gte: 1 }) }),
+    /* The roots of the big pine, out of the bank at hand height. Last night she came down past them holding on.
+       Two entities for the two states, the way hotel does laptop / laptop-shut: view/Hotspot.tsx sends a `hold`
+       node straight to hold:start, and InteractionSystem answers an unmet `requires` there with a bare tock, so a
+       single held-out root could never come back the way this file's other five once-hotspots do. Once she has
+       had hold of it, it is an `inspect` with `once`, and the second press goes down the shared refusal path:
+       the hand out to it and back, one dry knock, no text. `enabled` is gone with it — the disabled style is
+       dead anyway (PanoStage writes inline opacity every frame), so a guarded node just looked live and did
+       nothing. */
     { id: "big-root", transform: BIG_ROOT, className: "hold-hotspot",
-      interactable: { verbs: ["hold"], label: "露出来的树根", reveal: 13, cost: { minutes: 2 }, requires: not(flag("searchPath.root")) },
+      interactable: { verbs: ["hold"], label: "露出来的树根", reveal: 13, cost: { minutes: 2 } },
       hold: { ms: 750, scaleWith: ["fatigue"] },
-      enabled: not(flag("searchPath.root")) },
+      visible: not(flag("searchPath.root")) },
+    { id: "big-root-held", transform: BIG_ROOT, className: "search-hotspot",
+      interactable: { verbs: ["inspect"], label: "露出来的树根", reveal: 13, cost: { minutes: 0 }, once: true },
+      visible: flag("searchPath.root") },
     // The towers standing over the canopy. Yesterday she was on the far side of them.
     { id: "spires", transform: SPIRES,
       interactable: { verbs: ["inspect"], label: "树顶上的石塔", reveal: 13, cost: { minutes: 1 }, once: true },
@@ -169,6 +189,14 @@ export default defineScene({
     ctx.onEnter(() => {
       if (w.state.journal.objective) w.patch("journal", { objective: null });
       if (w.state.body.fatigue > 0 || w.state.body.fear > 0) w.patch("body", { fatigue: 0, fear: 0, breath: "calm" });
+      /* Same reason, same fix as `search`: the ferrata kit came off in the hotel room last night and the light
+         went back in the pack, so a warped save must not stand here in a helmet and a lanyard. */
+      const worn = w.state.inventory.worn.filter((item) => DAY_TWO_WORN.includes(item));
+      const hands = w.state.inventory.hands.filter((item) => item !== "fillLight");
+      if (worn.length !== w.state.inventory.worn.length || hands.length !== w.state.inventory.hands.length) {
+        w.patch("inventory", { worn, hands });
+      }
+      if (w.state.power.lampMode) w.patch("power", { lampMode: null });
     });
 
     const glanceAt = (target: Transform, strength = 0.5) => {
@@ -257,6 +285,13 @@ export default defineScene({
     ctx.onRelease("big-root", () => {
       ctx.kick("settle", 0.3);
       ctx.sfx("cloth", -0.4, 0.45);
+    });
+    // The root once she has had hold of it: a palm on the bark, dry this morning, and nothing to say about it.
+    ctx.onInteract("big-root-held", () => {
+      ctx.hand(BIG_ROOT, "grip");
+      ctx.kick("glance", 0.35, { yaw: 0, pitch: -3 });
+      ctx.sfx("cloth", -0.4, 0.4);
+      ctx.after(460, () => ctx.sfx("breath", -0.4, 0.35));
     });
 
     /* The towers over the canopy: a minute of looking, a breath, and nothing else. */

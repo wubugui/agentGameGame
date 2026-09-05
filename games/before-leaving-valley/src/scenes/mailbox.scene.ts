@@ -10,6 +10,7 @@
    y 0.35..0.56 of that rectangle. The pass lies 180 m below to the left. */
 import { LETTER_LINES_IT } from "../data/letter";
 import { all, entityIs, flag, not, worn } from "../engine/condition";
+import type { EntityDef } from "../engine/entity";
 import { defineScene, type WalkStep } from "../engine/scene";
 import type { Transform } from "../engine/types";
 import type { World } from "../engine/world";
@@ -52,6 +53,20 @@ const LETTER_PHOTO = {
 const handsFree = flag(CLIPPED);
 const onLetterLeaf = all(flag(OPENED), flag(PAGE, { eq: LETTER_LEAF }));
 
+/* §3.5: settling a mark never deletes it. The `blaze` factory's default is `visible: not(entityIs(id,"read"))` — the
+   paint and the rock it is on leave the wall the moment she has looked at them. Overriding `visible` (an `all` of
+   nothing is true) keeps both marks where they are for as long as she is on this ledge, and `once` is what says they
+   are settled: the second press comes back as `interact:refused` and the script answers it with her hand going out and
+   returning. Not `enabled` — PanoStage writes an inline opacity onto every hotspot with a reveal every frame
+   (PanoStage.tsx:427), so `.hotspot.is-disabled` never reaches the screen and a disabled mark is a silent dead button.
+   The grey of the ruled-out one and the faint highlight of the paint hang off these classes, as `filter` rather than
+   opacity for the same reason; that rule is the integrator's and is in the requests. */
+const settled = (real: boolean): Partial<EntityDef> => ({
+  visible: all(),
+  className: real ? "blaze-found" : "blaze-ruled-out",
+  interactable: { verbs: ["inspect"], label: "石头上的记号", reveal: 12, cost: { minutes: 0 }, once: true },
+});
+
 const takeLetterPhoto = (world: World) => {
   if (world.state.phone.photos.some((photo) => photo.kind === "letter")) return;
   phoneDispatch(world, { type: "capture_photo", photo: LETTER_PHOTO });
@@ -92,8 +107,12 @@ export default defineScene({
     // The Memo pad inside is painted into the open box: three rain-soaked leaves. Landing on the fourth turns one leaf
     // up against the lid — the only leaf with writing on it, and the only one this sprite ever shows.
     { id: "memo-pad", transform: PAD, sprite: { src: "sprites/memo-page.webp", layer: "prop", sizeVh: 6 }, visible: onLetterLeaf },
+    /* Turning the leaves is free. §4's rejected list says the three rain-soaked pages are scenery — "可翻，但不设时间
+       成本、不设内容" — and ClockSystem rounds every spend, so half a minute a turn was a whole minute a turn driving
+       the clock (§12 B10). The four minutes §6 gives this pad are on the page itself; the only thing a turn still costs
+       is the forty seconds of pulling one glove off, once. */
     { id: "memo-flip", transform: PAD_EDGE,
-      interactable: { verbs: ["use"], label: "便签本", reveal: 12, cost: { minutes: 0.5 }, requires: handsFree },
+      interactable: { verbs: ["use"], label: "便签本", reveal: 12, cost: { minutes: 0 }, requires: handsFree },
       visible: flag(OPENED) },
     readable("letter-page", PAGE_AT, "这一页", { kind: "note", title: "Memo · 28/07/2025", lines: LETTER_LINES_IT, entry: "E-memo", minutes: 4 },
       { visible: onLetterLeaf, interactable: { verbs: ["read"], label: "这一页", reveal: 12, cost: { minutes: 0 }, requires: handsFree } }),
@@ -107,10 +126,13 @@ export default defineScene({
     lookAt("houses", { yaw: 12, pitch: -15.5, distance: 16 }, "公路边的房子", 1),
     { id: "far-peak", transform: { yaw: -36, pitch: 24, distance: 30 }, gaze: { radius: 12, dwell: 1000 } },
     // Two candidate marks: red paint on the wall above the cable, and a rust streak on the pale rock at her feet.
-    blaze("blaze-mailbox", { yaw: 41, pitch: -8 }, true),
-    blaze("rust-mailbox", { yaw: 15, pitch: -31.5 }, false),
-    // On: up the cable itself, the stretch between the box and the hanger. Back: down the cable to the crack, always open.
-    goArrow("go", CABLE_UP, { to: "exit", minutes: 15, label: "往上", kind: "walk" }),
+    blaze("blaze-mailbox", { yaw: 41, pitch: -8 }, true, settled(true)),
+    blaze("rust-mailbox", { yaw: 15, pitch: -31.5 }, false, settled(false)),
+    /* On: up the cable itself, the stretch between the box and the hanger. Back: down the cable to the crack, always open.
+       §3.1 gives this node 25 minutes to the next one and puts the top of the ferrata at 13:25. The fastest legal line
+       through the box now costs 8 of those (anchor 1, lid 1, one glove 1, the page 4, the photograph 1) with the leaves
+       free, so the climb between the box and the hanger carries the other 17. */
+    goArrow("go", CABLE_UP, { to: "exit", minutes: 17, label: "往上", kind: "walk" }),
     backArrow("back", CABLE_FOOT, "crack", "回头", 15),
   ],
   seed: (w) => {
@@ -189,6 +211,19 @@ export default defineScene({
     ctx.on("blaze:confirm", ({ entity, real }) => {
       if (entity === "blaze-mailbox" && real) { ctx.kick("glance", 0.4, { yaw: 2, pitch: 2 }); return; }
       if (entity === "rust-mailbox") { ctx.kick("glance", 0.4, { yaw: 0, pitch: -4 }); ctx.say("锈。不是漆。", { tag: "mailbox-rust" }); }
+    });
+
+    /* Pressed a second time — a mark she has already settled, the page corner her hand already came back from: the
+       thing is still on the wall and still takes her hand, it just has nothing new in it. The hand goes out, one dry
+       knock, and comes back; no text, no minute, never a dead button (as meadow, search). */
+    ctx.on("interact:refused", ({ entity, reason }) => {
+      if (reason !== "gone") return;
+      const def = ctx.scene.entities.find((one) => one.id === entity);
+      if (!def?.interactable?.once) return;
+      const where = ctx.transformOf(entity);
+      ctx.hand(where, "grip");
+      ctx.kick("glance", 0.3, { yaw: 0, pitch: -4 });
+      ctx.sfx("tock", Math.max(-1, Math.min(1, where.yaw / 60)), 0.3);
     });
 
     // Standing still on the ledge: the second breath brings a car up from the pass road; the fourth, a gust.

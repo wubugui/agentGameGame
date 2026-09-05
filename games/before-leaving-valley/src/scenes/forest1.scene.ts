@@ -5,7 +5,11 @@
    back down; growling takes the hand. On a trunk between the boulders there is a 656 blaze, and beside the two
    trunks on the left there is a gap that looks like a way through — from in there the road cannot be heard.
    Every coordinate was read off the 150°×84° grid of 14-forest-1 (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84);
-   the pixel it came from (1280×720) is noted beside it. */
+   the pixel it came from (1280×720) is noted beside it.
+   Sprites: none of the four this scene names exists yet (root-arch-night, rock-step-night, blaze-656 /
+   blaze-656-dim, blaze-arrow-old-night, blaze-lichen-night are all new files — there is no daylit
+   `blaze-arrow-old.webp` in public/sprites to derive from), so today every hold and every mark is an empty ring.
+   That is the state the scene is written for; the briefs are in the report's `sprites`. */
 import type { Ambience } from "../soundscape";
 import type { Condition } from "../engine/condition";
 import { all, entityIs, flag, not } from "../engine/condition";
@@ -34,23 +38,31 @@ const ROCKS: Transform[] = [
   { yaw: -32, pitch: -16, distance: 10 },    // the big mossy boulder left of the trail (367, 497)
 ];
 const DEADFALL: Transform = { yaw: 34.5, pitch: -7, distance: 11 };   // the thin fallen log lying across the right bank (934, 420)
-/* The slender spruce between the two boulders. Measured on the plain plate: at y = 326 the bark runs x 628→641,
-   so the mark sits on its centre line (635) and the sprite is cut to 2.8 vh = 1.85° ≈ 16 px wide, inside the bark. */
+/* The slender spruce between the two boulders. Measured on the plain plate at y = 326: the bark runs x 626→644, i.e.
+   about 18 plate px ≈ 2.1° ≈ 25 screen px on a 720-high viewport (12 px per degree). MARK_VH below is a screen height
+   in vh, not a width: 3 vh = 21.6 px tall. The art has to be taller than it is wide (see the sprite brief: no wider
+   than 14 screen px) or the paint hangs off the sides of the trunk. */
+const MARK_VH = 3;                                                    // all three candidate marks, identical on screen (v4 §3.5)
 const TRUNK_MARK: Transform = { yaw: -0.6, pitch: 4, distance: 13 };  // the trunk between the two boulders (635, 326)
 const BOULDER_MARK: Transform = { yaw: 14, pitch: 3.5, distance: 14 };// the lit face of the big leaning boulder (760, 330)
 const LEFT_TRUNK: Transform = { yaw: -39.5, pitch: -6.4, distance: 12 }; // the near trunk of the left pair (303, 415)
 const TREE_GAP: Transform = { yaw: -47.5, pitch: -14.5, distance: 14 }; // the dark between the two left trunks (235, 484)
 const CANOPY_SKY: Transform = { yaw: -20, pitch: 33, distance: 40 };  // the last blue between the crowns (469, 77)
 const TRAIL_ON: Transform = { yaw: -20, pitch: -16.3, distance: 12 }; // where the trail runs out past the white boulder (469, 500)
-const OFFSCREEN: Transform = { yaw: 0, pitch: -88 };                  // story actions: E-key prompts, never drawn on the painting
 
-const HOLDING_LAMP: Condition = { kind: "held", item: "fillLight" };
+/* What the beam is worth. `revealRadius` = max(11, base × (0.55 + 0.45·light) × (1 − fatigue·0.35) × lampFactor);
+   at night light = 0 and she arrives here at fatigue ≥ 0.9, so a hold only clears the 11° floor on wide
+   (1.15) if base ≥ 11 / (0.55 × 0.65 × 1.15) = 26.8. At 34: wide ≈ 14.0°, narrow (0.5) lands on the floor at 11°.
+   That is the whole point of the bite — wide sees the two or three things at once, narrow sees one. */
+const HOLD_REVEAL = 34;
 const onTrail = flag(STEP, { lt: TOTAL });
 const handsFree = all(onTrail, not(flag(BITING)));      // during the bite change the hand goes out and comes back
 const atStep = (n: number): Condition => n === 0 ? flag(STEP, { lt: 1 }) : all(flag(STEP, { gte: n }), flag(STEP, { lt: n + 1 }));
 const stepOf = (w: World) => Math.max(0, Math.min(TOTAL - 1, w.flag<number>(STEP, 0)));
 
-/* Fast on the hands, slow and safe, or fastest of all and the only one that can move. */
+/* Fast on the hands, slow and safe, or fastest of all and the only one that can move. The minutes below are the wide
+   beam's: everything is lit and nothing is bright, so each hold takes a beat of looking. Narrow gives that minute back
+   (v4 §3.4: 窄光……瞬间显形) and takes it out of her heart instead (fear ×1.4). Neither bite dominates. */
 const COST: Record<"root" | "rock" | "log", Cost> = {
   root: { minutes: 5, fatigue: 0.06, fear: 0.16 },
   rock: { minutes: 8, fatigue: 0.02, fear: 0.16 },
@@ -78,32 +90,38 @@ export default defineScene({
     // The root at this pull: fast, all hands. Its place changes with every step; that is why it is a sprite.
     { id: "hold-root", transform: (w) => ROOTS[stepOf(w)], className: "hold-hotspot",
       sprite: { src: "sprites/root-arch-night.webp", layer: "prop", sizeVh: 9 },
-      interactable: { verbs: ["hold"], label: "树根", reveal: 14, requires: handsFree },
+      interactable: { verbs: ["hold"], label: "树根", reveal: HOLD_REVEAL, requires: handsFree },
       hold: { ms: 850, scaleWith: ["fear", "fatigue", "lamp"] }, visible: onTrail },
     // The stone at this pull: three minutes more, and it costs the hands almost nothing.
     { id: "hold-rock", transform: (w) => ROCKS[stepOf(w)], className: "foot-hotspot",
       sprite: { src: "sprites/rock-step-night.webp", layer: "prop", sizeVh: 9 },
-      interactable: { verbs: ["hold"], label: "石头", reveal: 14, requires: handsFree },
+      interactable: { verbs: ["hold"], label: "石头", reveal: HOLD_REVEAL, requires: handsFree },
       hold: { ms: 1150, scaleWith: ["fear", "fatigue", "lamp"] }, visible: onTrail },
     // The one log, on the right bank, at the second pull only. The quickest way past — until the arms are gone.
     { id: "deadfall", transform: DEADFALL, className: "climb-hotspot",
-      interactable: { verbs: ["hold"], label: "倒木", reveal: 14, requires: all(atStep(1), not(flag(ROLLED)), not(flag(BITING))) },
+      interactable: { verbs: ["hold"], label: "倒木", reveal: HOLD_REVEAL, requires: all(atStep(1), not(flag(ROLLED)), not(flag(BITING))) },
       hold: { ms: 700, scaleWith: ["fear", "fatigue", "lamp"] }, visible: all(atStep(1), not(flag(ROLLED))) },
     // Three candidate marks, all labelled the same: 656 on the trunk between the boulders, lichen on the leaning
     // boulder, and another route's old arrow on the near trunk of the left pair — right beside the gap.
-    // The real one stays on the bark after it is confirmed — dimmed, and no longer worth a second minute (v4 §3.5).
+    // The real one stays on the bark after it is confirmed (v4 §3.5), dimmed — a second file, not a CSS class (there is no
+    // stylesheet behind `blaze-dim`) — and the hotspot goes `disabled`: .is-disabled, and `Hotspot.act()` returns
+    // before dispatching, so a second press gets no hand and no tock instead of refusing in silence forever.
     blaze("blaze-656", TRUNK_MARK, true, {
-      sprite: { src: "sprites/blaze-656.webp", layer: "prop", sizeVh: 2.8,
-        swap: [{ when: entityIs("blaze-656", "read"), src: "sprites/blaze-656.webp", className: "blaze-dim" }] },
-      interactable: { verbs: ["inspect"], label: "树干上的记号", reveal: 12, cost: { minutes: 1 }, requires: not(entityIs("blaze-656", "read")) },
+      sprite: { src: "sprites/blaze-656.webp", layer: "prop", sizeVh: MARK_VH,
+        swap: [{ when: entityIs("blaze-656", "read"), src: "sprites/blaze-656-dim.webp" }] },
+      interactable: { verbs: ["inspect"], label: "树干上的记号", reveal: 12, cost: { minutes: 1 } },
+      enabled: not(entityIs("blaze-656", "read")),
       visible: undefined,   // drops _shared.blaze's "gone once read": this mark is the trace that the segment was checked
     }),
+    // The lichen on the boulder is night art of a patch of lichen — not `blaze-false.webp`, which is a whole daylit
+    // cobble and, being the only mark in the scene with a file that exists, made the decoy the brightest thing on a
+    // black plate. Until the night file is drawn all three marks are the same empty ring, which is what §3.5 wants.
     blaze("moss-mark", BOULDER_MARK, false, {
-      sprite: { src: "sprites/blaze-false.webp", layer: "prop", sizeVh: 4 },
+      sprite: { src: "sprites/blaze-lichen-night.webp", layer: "prop", sizeVh: MARK_VH },
       interactable: { verbs: ["inspect"], label: "石头上的记号", reveal: 12, cost: { minutes: 1 } },
     }),
     blaze("old-arrow", LEFT_TRUNK, false, {
-      sprite: { src: "sprites/blaze-arrow-old-night.webp", layer: "prop", sizeVh: 4 },
+      sprite: { src: "sprites/blaze-arrow-old-night.webp", layer: "prop", sizeVh: MARK_VH },
       interactable: { verbs: ["inspect"], label: "树干上的记号", reveal: 12, cost: { minutes: 1 } },
     }),
     // The gap between the two trunks on the left. Twenty-five minutes in and back out; in there the road is gone.
@@ -111,11 +129,11 @@ export default defineScene({
     wrongWay("tree-gap", TREE_GAP, "左边两棵树之间的缝", 25, "那里听不见公路。", { visible: not(flag(GAP)) }),
     // The last blue between the crowns. Nothing to click: she looks up, and for a moment the wood has a top.
     { id: "canopy", transform: CANOPY_SKY, gaze: { radius: 13, dwell: 1000 } },
-    // Wide (everything, dimly) or narrow (one thing, and nothing else). It costs the hands a beat, and half a
-    // clock minute — which ClockSystem rounds up to a whole one until the sub-minute accumulator lands (engine request).
-    { id: "lamp-bite", transform: OFFSCREEN, tags: ["action"],
-      interactable: { verbs: ["use"], label: "换一种咬法", reveal: 24, cost: { minutes: 0.5 }, requires: not(flag(BITING)) },
-      visible: HOLDING_LAMP },
+    /* 换咬法 has no entity here. It lives on the lamp in the pack (PackCloth's 宽光 / 窄光), where nothing on screen
+       points at it — the same place forestEdge and forest2 leave it. It used to be a `tags:["action"]` button, but
+       `Actions.tsx` renders the engine's own 喊一声 into the same pinned `.story-action` slot in forest1 and forest2
+       (hud.css:19 / pano.css:127), so the two labels sat on top of each other and E only ever reached the first.
+       The scene still charges the bite: see `ctx.on("lamp:mode")` below. */
     goArrow("go", TRAIL_ON, { to: "forest2", minutes: 30, label: "白石头左边的小路", kind: "walk" }),
   ],
   seed: (w) => {
@@ -128,6 +146,8 @@ export default defineScene({
   script: (ctx) => {
     const w = ctx.world;
     const step = () => w.flag<number>(STEP, 0);
+    const narrow = () => w.state.power.lampMode === "narrow";
+    const fearUp = (base: number) => base * (narrow() ? 1.4 : 1);   // narrow: everything around the one lit thing is black
     /* The scene's own ambience layer: last light takes the wind down, the wrong gap takes the road away. */
     let amb: Partial<Ambience> = {};
     const setAmb = (next: Partial<Ambience>) => { amb = { ...amb, ...next }; w.emit("ambience", { overrides: amb }); };
@@ -144,13 +164,14 @@ export default defineScene({
       if (style === "log" && w.state.body.fatigue >= 0.55 && w.rt.rng() < 0.34) {
         ctx.setFlag(ROLLED, true);
         w.emit("body:slip", { entity: "deadfall", severity: 1 });
-        ctx.spend({ minutes: 4, fear: 0.12 }, "倒木滚了");
+        ctx.spend({ minutes: 4, fear: fearUp(0.12) }, "倒木滚了");
         ctx.sfx("slide", 0.55, 1.1); ctx.sfx("thud", 0.5, 0.8);
         ctx.kick("slip", 1.3, { yaw: 5, pitch: -11 });
         ctx.say("木头在动。", { tag: "forest1-roll", priority: 1 });
         return;
       }
-      ctx.spend(COST[style], `forest1:${style}`);
+      const base = COST[style];
+      ctx.spend({ ...base, minutes: Math.max(1, (base.minutes ?? 0) - (narrow() ? 1 : 0)), fear: fearUp(base.fear ?? 0) }, `forest1:${style}`);
       const next = here + 1;
       ctx.setFlag(STEP, next);
       ctx.setFlag(`forest1.style.${here}`, style);
@@ -175,7 +196,7 @@ export default defineScene({
       // bite. CameraBodySystem charges every hold:release +0.08 fear from the engine side, so give that one back
       // here until the engine can tell a chosen release from a lost one (engine request).
       if (w.rt.growling || ctx.flag(BITING, false)) { ctx.spend({ fear: -0.08 }, "自己松的手"); return; }
-      ctx.spend({ fear: 0.08 }, "手松了");
+      ctx.spend({ fear: fearUp(0.08) }, "手松了");
       w.emit("body:rest", { seconds: 5 });
       ctx.kick("slip", 0.8, { yaw: 0, pitch: -8 });
       ctx.sfx("slide", 0, 0.7); ctx.sfx("breath", 0, 0.9);
@@ -212,18 +233,23 @@ export default defineScene({
       ctx.fx("gust", 0.4); ctx.sfx("cloth", 0, 0.35);
     });
 
-    /* Changing the bite: wide for everything at once and dim, narrow for one thing and nothing else.
-       The lamp is out of her teeth while she does it, so for that beat the hands cannot take a hold (v4 §3.4). */
-    ctx.onInteract("lamp-bite", () => {
-      const mode = w.state.power.lampMode === "narrow" ? "wide" : "narrow";
-      w.dispatch({ type: "lamp:mode", mode });
+    /* Changing the bite: wide for everything at once and dim, narrow for one thing and nothing else. It happens on the
+       cloth in the pack; what happens here is the price. The lamp is out of her teeth while she does it, so for that
+       beat the hands cannot take a hold, and half a clock minute goes (v4 §3.4 — ClockSystem rounds it up to a whole
+       one until the sub-minute accumulator lands; engine request). PowerSystem writes `lampMode` on this same event,
+       so `last` is what it was before this one. */
+    let last = w.state.power.lampMode;
+    ctx.on("lamp:mode", ({ mode }) => {
+      if (mode === last) return;                        // pressing 宽光 while already wide is not a bite
+      last = mode;
       ctx.setFlag(BITING, true);
       if (w.rt.hold) w.dispatch({ type: "hold:end" });
+      ctx.spend({ minutes: 0.5 }, "换一种咬法");
       ctx.fx("flashlight", mode === "narrow" ? 1 : 0.6);
       ctx.sfx("cloth", 0, 0.5); ctx.kick("glance", 0.35, { yaw: 0, pitch: -3 });
       ctx.after(900, () => { ctx.setFlag(BITING, false); ctx.sfx("cloth", 0, 0.3); });
     });
-    ctx.onEnter(() => ctx.setFlag(BITING, false));
+    ctx.onEnter(() => { ctx.setFlag(BITING, false); last = w.state.power.lampMode; });
 
     /* A shout comes back off the trunks twice. UISystem owns the shout itself; the wood owns the echo. */
     ctx.on("fx", ({ name }) => {
@@ -241,7 +267,7 @@ export default defineScene({
     ctx.onWait(() => {
       if (w.state.ui.travel || step() >= TOTAL) return;
       waits += 1;
-      ctx.spend({ fear: 0.05 }, "光束停住了");
+      ctx.spend({ fear: fearUp(0.05) }, "光束停住了");
       if (waits < 2 || ctx.flag(HEARD, false)) return;
       ctx.setFlag(HEARD, true);
       pulseAmb({ engine: 0.34 }, 1000);
@@ -291,14 +317,15 @@ export default defineScene({
       ...pull("hold-rock", 3300), ...pull("hold-rock", 3400), ...pull("hold-rock", 3500), ...pull("hold-rock", 3600),
       { type: "travel", entity: "go" },
     ],
-    // Everything the dark offers: both false marks, the real one, a shout, the narrow bite, mixed holds.
+    // Everything the dark offers: both false marks, the real one, a shout, the narrow bite (a minute a hold cheaper,
+    // and every hold's fear ×1.4), mixed holds.
     thorough: [
       { type: "interact", entity: "moss-mark", verb: "inspect" }, { wait: 320 },
       { type: "interact", entity: "old-arrow", verb: "inspect" }, { wait: 320 },
       { type: "interact", entity: "blaze-656", verb: "inspect" }, { wait: 320 },
       { type: "shout" }, { wait: 600 },
       ...pull("hold-rock", 3300),
-      { type: "interact", entity: "lamp-bite", verb: "use" }, { wait: 1200 },
+      { type: "lamp:mode", mode: "narrow" }, { wait: 1200 },
       ...pull("deadfall", 2800),
       { type: "shout" }, { wait: 600 },
       ...pull("hold-root", 3000), ...pull("hold-rock", 3400),

@@ -11,6 +11,9 @@ import type { EntityId, Transform } from "../engine/types";
 import type { World } from "../engine/world";
 import { blaze, goArrow, lookAt, wrongWay } from "./_shared";
 
+/** Flip to true in the same commit as sprites/cloud-shadow.webp and the .cloud-shadow-sprite class. */
+const ART_LANDED: boolean = false;
+
 const BELL_MINUTE = 10 * 60;                                   // the chapel bell strikes the hour
 const CLOUD_FROM = 10 * 60, CLOUD_TO = 10 * 60 + 12;           // v4 §8: the cloud shadow crosses the wall 10:00–10:12
 
@@ -24,7 +27,11 @@ const WALL_ROUTE: Transform = { yaw: -15, pitch: 9, distance: 24 };  // the dark
 const SASSOLUNGO: Transform = { yaw: 48, pitch: 6, distance: 40 };   // the main tower of the jagged wall across the road (1050, 309)
 const HUT: Transform = { yaw: 46.5, pitch: -14, distance: 18 };      // the wooden house on the road (1037, 480)
 const TRACK_BEND: Transform = { yaw: 24.4, pitch: -24.7 };           // on the dirt itself, where the track swings right toward the chapel and the road (848, 572; the dirt runs 832–856 on that row)
-const FAR_TRACK: Transform = { yaw: -66, pitch: -8 };                // the faint pale track up the rise at the far-left end of the grass (77, 429)
+/* The faint pale track up the rise at the far-left end of the grass. It was at yaw -66 (x 77), 3 degrees short of
+   the 68.9 the camera can actually turn to - the only exit in the scene, pinned to the edge of the reachable world.
+   Traced on a brightened 7x crop, the same track runs down-right through (95, 425) and (112, 434) before it fades
+   into the scree foot near x 135, so yaw -62 is the same painted line with 7 degrees of margin instead of 3. */
+const FAR_TRACK: Transform = { yaw: -62, pitch: -8.7 };              // (111, 435)
 
 /* A mark that stays on its stone after she has read it (v4 §3.5 / §3.8 memory ③): the paint keeps a very faint
    highlight on the painting until she leaves the node, and can no longer be pressed.
@@ -34,6 +41,11 @@ const mark = (id: EntityId, transform: Transform, real: boolean): EntityDef => b
   visible: undefined,
   enabled: not(entityIs(id, "read")),
 });
+
+/* _shared.lookAt hands out verbs ["inspect", "photograph"], but view/Hotspot.tsx only ever dispatches verbs[0] -
+   the second verb is a door with no handle. Photographing anything here is the phone's own business (P). */
+const look = (id: EntityId, transform: Transform, label: string, minutes = 1): EntityDef =>
+  lookAt(id, transform, label, minutes, { interactable: { verbs: ["inspect"], label, reveal: 12, cost: { minutes } } });
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 /* The cloud shadow lies on the left half of the wall and drifts right across it as the minutes pass. */
@@ -58,22 +70,28 @@ export default defineScene({
     mark("lichen-meadow", FLAT_STONE, false),
     mark("rust-meadow", FLOWER_STONES, false),
     // Things to look at (v4 §6: a minute each). None of them says anything she could read for herself.
-    lookAt("chapel", CHAPEL, "白色小教堂", 1),
-    lookAt("wall", WALL_ROUTE, "石墙上的路线", 1),
-    lookAt("sassolungo", SASSOLUNGO, "对面的锯齿石墙", 1),
-    lookAt("hut", HUT, "公路边的木屋", 1),
-    // The cloud shadow: a sprite that exists only in its window and moves with the clock; resting the gaze on it
-    // fires the beat. sprites/cloud-shadow.webp and the class .cloud-shadow-sprite (multiply, no drop shadow) are
-    // not drawn yet, so this entity is a prop with no ring and nothing to point at — and until the picture lands
-    // the beat has a second, painted way in: looking at the wall itself inside the window (see the script).
-    { id: "cloud-shadow", transform: cloudAt,
-      sprite: { src: "sprites/cloud-shadow.webp", layer: "back", sizeVh: 14, className: "cloud-shadow-sprite" },
-      gaze: { radius: 14, dwell: 1200 }, visible: all(after(CLOUD_FROM), before(CLOUD_TO)) },
+    look("chapel", CHAPEL, "白色小教堂"),
+    look("wall", WALL_ROUTE, "石墙上的路线"),
+    look("sassolungo", SASSOLUNGO, "对面的锯齿石墙"),
+    look("hut", HUT, "公路边的木屋"),
+    /* The cloud shadow crossing the Sella wall between ten and twelve past (v4 §8: the one thing there is to
+       discover here). sprites/cloud-shadow.webp and the class .cloud-shadow-sprite (multiply, no drop shadow) are
+       not drawn, and a gaze entity over a picture that fails to load is a patch of sky that answers when you rest
+       your eyes on it — so while ART_LANDED is false the beat has one way in only, and it is a painted one:
+       looking at the wall itself while the shadow is on it (see the script). Nothing on screen changes shape that
+       the player cannot see change. */
+    ...(ART_LANDED ? [{ id: "cloud-shadow", transform: cloudAt,
+      sprite: { src: "sprites/cloud-shadow.webp", layer: "back" as const, sizeVh: 14, className: "cloud-shadow-sprite" },
+      gaze: { radius: 14, dwell: 1200 }, visible: all(after(CLOUD_FROM), before(CLOUD_TO)) }] : []),
     // The wrong track: the obvious one, bending right to the chapel and the road. Ten minutes there and back; never
-    // a dead end. Once walked it stays on the painting and fades (`.hotspot.is-disabled`); pressing it again gets
-    // the hand back and a tock, the way v4 §3 promises for anything she will not do twice.
+    // a dead end. Pressing it a second time gets the hand out and back and a tock — and that is `requires`, not
+    // `enabled`: an entity with `enabled: false` is faded, but view/Hotspot.tsx swallows the press before it ever
+    // reaches the engine, so the hand and the tock never happened and the handler that drew them was dead code.
+    // `once` would refuse it earlier still, with no hand at all, so it is gone too. InteractionSystem now performs
+    // the whole refusal itself, exactly as §3 describes it, and it costs nothing (`requires` is checked before the
+    // cost is spent).
     wrongWay("chapel-track", TRACK_BEND, "往右去教堂的土路", 10, "土路到教堂门口就没了。", {
-      enabled: not(flag("meadow.wrong")),
+      interactable: { verbs: ["inspect"], label: "往右去教堂的土路", reveal: 18, cost: { minutes: 10 }, requires: not(flag("meadow.wrong")) },
     }),
     // The way on: the faint track at the far-left end of the grass, climbing the rise under the wall. Never locked (D6).
     goArrow("go", FAR_TRACK, { to: "approach", minutes: 20, label: "草地尽头的土路", kind: "walk" }),
@@ -102,7 +120,7 @@ export default defineScene({
     // Everything the meadow offers: the wall, the chapel (and a photo of it), Sassolungo, the hut, both false marks, the real one.
     thorough: [
       { type: "interact", entity: "wall", verb: "inspect" },
-      { type: "interact", entity: "chapel", verb: "photograph" },
+      { type: "interact", entity: "chapel", verb: "inspect" },
       { type: "interact", entity: "sassolungo", verb: "inspect" },
       { type: "interact", entity: "hut", verb: "inspect" },
       { type: "interact", entity: "lichen-meadow", verb: "inspect" },
@@ -120,28 +138,22 @@ export default defineScene({
       const here = w.rt.gaze;
       ctx.kick("glance", strength, { yaw: Math.max(-6, Math.min(6, (target.yaw - here.yaw) * 0.15)), pitch: Math.max(-4, Math.min(4, (target.pitch - here.pitch) * 0.15)) });
     };
-    // A phone shot of what she is looking at: the phone's business (shutter, a minute, 1%); the scene only turns her head.
-    const shoot = (target: Transform) => { w.dispatch({ type: "phone:shoot" }); glanceAt(target, 0.35); };
     ctx.on("phone:photo", ({ scene }) => { if (scene === "meadow") ctx.bump("meadow.photos", 1); });
 
     // Looking. A glance of the camera, a breath, and a minute off the clock; only the wall and Sassolungo get a half-line.
-    ctx.onInteract("chapel", (verb) => {
-      if (verb === "photograph") return shoot(CHAPEL);
+    ctx.onInteract("chapel", () => {
       glanceAt(CHAPEL, 0.6); ctx.sfx("breath", 0.3, 0.4); ctx.setFlag("meadow.chapel", true);
     });
-    ctx.onInteract("wall", (verb) => {
-      if (verb === "photograph") return shoot(WALL_ROUTE);
+    ctx.onInteract("wall", () => {
       glanceAt(WALL_ROUTE, 0.7); ctx.sfx("breath", -0.2, 0.7); ctx.setFlag("meadow.wall", true);
       ctx.say("墙上有一条线。那就是路。", { tag: "meadow-wall" });
       cloudCrosses();                                    // between ten and twelve past, the wall goes dark under her eyes
     });
-    ctx.onInteract("sassolungo", (verb) => {
-      if (verb === "photograph") return shoot(SASSOLUNGO);
+    ctx.onInteract("sassolungo", () => {
       glanceAt(SASSOLUNGO, 0.7); ctx.sfx("exhale", 0.5, 0.6); ctx.setFlag("meadow.sassolungo", true);
       ctx.say("对面那面墙，锯齿一样。", { tag: "meadow-sasso" });
     });
-    ctx.onInteract("hut", (verb) => {
-      if (verb === "photograph") return shoot(HUT);
+    ctx.onInteract("hut", () => {
       glanceAt(HUT, 0.5); ctx.sfx("breath", 0.6, 0.35); ctx.setFlag("meadow.hut", true);
     });
 
@@ -183,12 +195,6 @@ export default defineScene({
       ctx.after(600, () => { ctx.kick("settle", 0.6); ctx.sfx("step", 0.2); });
       ctx.say("土路到教堂门口就没了。", { tag: "meadow-wrong" });
     });
-    // Pressed a second time: she has already been down there. The hand goes out and comes back, no text (v4 §3).
-    ctx.on("interact:refused", ({ entity }) => {
-      if (entity !== "chapel-track") return;
-      ctx.hand(TRACK_BEND); ctx.kick("glance", 0.4, { yaw: 0, pitch: -3 }); ctx.sfx("tock", 0.4, 0.35);
-    });
-
     // Standing still: the third breath brings a gust through the grass, once.
     let stills = 0;
     ctx.onWait(() => {

@@ -27,11 +27,16 @@ const CRICKETS_HUSH = 20 * 60 + 40;
 const LAMP_LINE = "特别特别幸运，我带了一盏拍视频用的补光灯。";
 
 // Things painted in 13-forest-edge, with the pixel they were read from.
-/* 13-forest-edge has no bare trunk anywhere in it — brightened 2-3x and read at 4-6x, the wood is drawn as a wall
-   of boughs from the canopy down to the grass — so the mark cannot be put on a painted trunk. It is put where a
-   trunk would stand instead: a 10 vh sprite whose foot rests on the forest floor at y 604, just above the grass
-   line. The sprite has to carry its own bark (it is specced that way in the ART request). */
-const TRUNK: Transform = { yaw: 27, pitch: -25.5 };                     // the wood edge right of the clearing, sprite foot on the forest floor (870, 579)
+/* The mark goes on a trunk the painting actually draws. The wall of boughs on the right of the clearing has no
+   bare trunk in it — brightened 2-3x and read at 4-6x it is boughs from the canopy down to the grass, and the
+   anchor that used to sit there (yaw 27 / pitch -25.5) was on undifferentiated undergrowth, which red line 5
+   forbids and which mattered: missing this mark costs twenty minutes and +0.1 of the heart.
+   13-forest-edge does draw one trunk in the open: the dwarf pine over the low rock. Brightened 2x and read at 9x,
+   its reddish stem runs from (700, 540) down to (683, 615) on the 1280x720 grid and is 14-16 px wide; at y 576 it
+   spans x 686-702. The mark goes there, and the sprite is the bare red-white-red bar with 656 on it at 2.8 vh
+   (14.4 px tall, 16 px wide - it lands inside the stem) - the SAME asset and the same size forest1 uses on its
+   own painted trunk, so one file serves both and neither scene needs a bar welded to a painted trunk. */
+const TRUNK: Transform = { yaw: 6.2, pitch: -25.2 };                    // the dwarf pine's reddish stem, right of the trail (693, 576)
 const LEFT_BOULDER: Transform = { yaw: -23, pitch: -24 };               // the white boulder left of the trail (706, 905)
 const LOW_ROCK: Transform = { yaw: 11, pitch: -30 };                    // the small grey rock under the dwarf pine's roots (1180, 993)
 const RIGHT_BOULDER: Transform = { yaw: -1.5, pitch: -21.5 };          // the middle of that boulder's sloping top, so the map lies on stone (1003, 871)
@@ -40,7 +45,11 @@ const FOREST_DARK: Transform = { yaw: -13, pitch: -12, distance: 16 };  // the d
 const SASSO: Transform = { yaw: 32, pitch: 22, distance: 40 };          // the lit face of the grey wall over the treeline (1461, 274)
 const GRASS_RIB: Transform = { yaw: 44, pitch: -31, distance: 12 };     // the open grass running up to the right of the boulders (1625, 1001)
 const IN_HAND: Transform = { yaw: 0, pitch: -36, distance: 8 };         // where her hand goes: low, in front of her, half out of frame
-const LAMP_HAND: Transform = { yaw: 16, pitch: -34, distance: 8 };      // the lamp once it is out: held low and to the right, clear of the trail
+/* The lamp in her hand, low and to the right, clear of the trail. Pitch -28, not -34: the viewport's pitch limit
+   resolves to about 10.4 deg and the frame only reaches -40 when the player deliberately looks at their own feet,
+   so at -34 the thing she is holding was off the bottom of the screen the whole scene. -28 sits it on the lower
+   edge of the resting frame, which is where a hand carrying a light actually is. */
+const LAMP_HAND: Transform = { yaw: 16, pitch: -28, distance: 8 };      // the lamp once it is out: held low and to the right, clear of the trail
 const OFFSCREEN: Transform = { yaw: 0, pitch: -88 };                    // story actions: E-key prompts, never drawn on the painting
 
 const HOLDING_LAMP: Condition = { kind: "held", item: "fillLight" };
@@ -64,7 +73,7 @@ export default defineScene({
     // All three stay where they are once she has settled them and go grey (v4 §3.5) — in the dark, a mark she has
     // read is the one thing she can still steer by, and deleting it off the trunk is the opposite of that.
     blaze("blaze-656", TRUNK, true, {
-      sprite: { src: "sprites/blaze-656.webp", layer: "prop", sizeVh: 10 },
+      sprite: { src: "sprites/blaze-656.webp", layer: "prop", sizeVh: 2.8 },
       interactable: { verbs: ["inspect"], label: "树干上的记号", reveal: 12, cost: { minutes: 1 } },
       visible: undefined, enabled: not(entityIs("blaze-656", "read")),
     }),
@@ -78,7 +87,9 @@ export default defineScene({
     { id: "crickets-hush", transform: FOREST_DARK, trigger: { source: { on: "minute", at: CRICKETS_HUSH }, once: true, tag: "crickets-hush" } },
     // The map on the boulder top: the 656 line goes straight into the green (v4 §5.2 obj-forest). One minute, and the dark under it.
     prop("paper-map", RIGHT_BOULDER, "sprites/map-folded.webp", 6.5, {
-      interactable: { verbs: ["use"], label: "摊开地图", reveal: 12, cost: { minutes: 0.7, fear: 0.05 }, requires: has("paperMap") },
+      // A whole minute: ClockSystem rounds cost minutes and drops anything that rounds to zero, so this is
+      // written as the number the clock actually takes (v4 §6 charges the map and the wall a minute each).
+      interactable: { verbs: ["use"], label: "摊开地图", reveal: 12, cost: { minutes: 1, fear: 0.05 }, requires: has("paperMap") },
     }),
     // The last direct light of the day, on the wall over the treeline. A minute, or 1% of what is left of the phone.
     // At 21:05 it goes, and so does this: there is no light on the wall left to look at (v4 §6).
@@ -98,9 +109,10 @@ export default defineScene({
       interactable: { verbs: ["use"], label: "从包里摸出补光灯", reveal: 24, requires: has("fillLight") },
       visible: all(flag(CALL_DONE), not(HOLDING_LAMP)) },
     // Only for someone who has the lamp and stood still long enough to feel the cold come down. (The bite — wide or
-    // narrow, v4 §3.4 — lives on the lamp in the pack, where nothing on screen points at it.)
+    // narrow, v4 §3.4 — lives on the lamp in the pack, where nothing on screen points at it.) A minute, because a
+    // minute is what the clock can take: it rounds and drops anything under half of one.
     { id: "zip-jacket", transform: OFFSCREEN, tags: ["action"],
-      interactable: { verbs: ["use"], label: "拉上冲锋衣拉链", reveal: 24, cost: { minutes: 0.5 }, requires: has("redJacket"), once: true },
+      interactable: { verbs: ["use"], label: "拉上冲锋衣拉链", reveal: 24, cost: { minutes: 1 }, requires: has("redJacket"), once: true },
       visible: all(HOLDING_LAMP, flag(COLD), not(flag(ZIPPED))) },
     goArrow("go", TRAIL_IN, { to: "forest1", minutes: 30, label: "钻进林子", kind: "walk" }),
   ],

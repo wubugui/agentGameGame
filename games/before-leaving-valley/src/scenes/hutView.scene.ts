@@ -9,7 +9,7 @@ import { after, before, entityIs, flag, has, not } from "../engine/condition";
 import type { EntityDef } from "../engine/entity";
 import { defineScene } from "../engine/scene";
 import type { EntityId, Transform } from "../engine/types";
-import { goArrow, lookAt, offset, prop, windy, wrongWay } from "./_shared";
+import { goArrow, lookAt, prop, windy, wrongWay } from "./_shared";
 
 const CHOICE = "hutView.choice";
 const SPREAD = "hutView.mapSpread";
@@ -43,17 +43,17 @@ const TRAIL: Transform = { yaw: 54, pitch: -24 };                     // the dir
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
-/* A candidate mark. Three of them, all labelled the same, indistinguishable until she is close (v4 §3.5).
-   Two are painted into 09b-hut and carry no sprite of their own; the third is a lichened stone on the pavement.
-   A painted one can simply stop being a hotspot once she has settled it. The one that owns a stone must not:
-   §3.5 asks for the point to go grey and stop answering, not for the stone to disappear while she is looking at it. */
 /* The house on the far rim, in two states. It is NOT one entity with a sprite swap: hut-far.webp and
-   hut-far-lit.webp are two different paintings of two different houses (676×419 with the walls filling 45% of the
-   frame, against 756×655 with the walls filling 54%), and a swap entry cannot carry its own sizeVh — so the one
-   frame where the window comes on would also change the size of the building. Measured off the alpha profile of
-   both files: at 2.2 vh the dark house is 0.99 vh tall and 1.60 vh wide; 1.9 vh puts the lit house at 1.02 × 1.61.
-   The walls match; the frames do not, and the walls are what the player sees across a valley. The 0.2° of pitch
-   is the same correction: the lit house sits lower inside its own frame. (The re-export is an ART request.) */
+   hut-far-lit.webp are two different paintings of two different houses, and a swap entry cannot carry its own
+   sizeVh — so the one frame where the window comes on would also change the size of the building.
+   Row-scanned off the alpha of both files: hut-far is 716×459 with its walls 292 px wide and the house 209 px
+   tall; hut-far-lit is 775×675 with its walls 393 px wide and the house 314 px tall. Only the sizeVh (the height
+   of the whole file, rocks included) is under the scene's control, so the two are matched on the ONE measurement
+   the player can see across a valley — the width of the painted walls: 292 × 2.2/459 = 1.400 vh for the dark
+   house, 393 × 2.4/675 = 1.398 vh for the lit one. The lit house is still 11% taller and a different silhouette
+   (a narrow cabin against a wide gabled cottage): that cannot be fixed here and is an ART request (re-export the
+   lit house as the same building in the same frame). With the widths matched, both house bases land within a
+   quarter pixel of the anchor, so the lit one takes no pitch correction. */
 const house = (id: EntityId, transform: Transform, src: string, sizeVh: number, when: EntityDef["visible"]): EntityDef => ({
   id, transform, visible: when,
   sprite: { src, layer: "prop", sizeVh },
@@ -61,12 +61,16 @@ const house = (id: EntityId, transform: Transform, src: string, sizeVh: number, 
   gaze: { radius: 12, dwell: 900 },
 });
 
+/* A candidate mark. Three of them, all labelled the same, indistinguishable until she is close (v4 §3.5).
+   Two are painted into 09b-hut and carry no sprite of their own; the third is a lichened stone on the pavement.
+   All three behave alike once she has settled them: the point stays where it is and goes grey (`enabled`), which
+   is what §3.5 asks for — a settled real mark keeps a faint highlight until she leaves the node and a settled
+   false one stops answering. None of them is deleted out of the frame while her hand is still on it. */
 const mark = (id: EntityId, transform: Transform, real: boolean, sprite?: string): EntityDef => ({
   id, transform, blaze: { real }, className: "blaze-hotspot",
   interactable: { verbs: ["inspect"], label: "石头上的记号", reveal: 12, cost: { minutes: 0 } },
-  ...(sprite
-    ? { sprite: { src: sprite, layer: "prop" as const, sizeVh: 3.5 }, enabled: not(entityIs(id, "read")) }
-    : { visible: not(entityIs(id, "read")) }),
+  enabled: not(entityIs(id, "read")),
+  ...(sprite ? { sprite: { src: sprite, layer: "prop" as const, sizeVh: 3.5 } } : {}),
 });
 
 export default defineScene({
@@ -81,10 +85,10 @@ export default defineScene({
   fallback: "高原到这里就断了。",
   exitWhen: flag(CHOICE, { eq: "retreat" }),
   entities: [
-    // The one dark thing on the far rim. At 17:00 the dark one stops being drawn and the lit one starts: the house
-    // does not move and does not change size, one window simply comes on. Nobody announces it.
+    // The one dark thing on the far rim. At 17:00 the dark one stops being drawn and the lit one starts: the walls
+    // stay the same width and stand in the same place, and one window comes on. Nobody announces it.
     house("hut", HUT, "sprites/hut-far.webp", 2.2, before(HUT_LIT)),
-    house("hut-lit", offset(HUT, 0, -0.2), "sprites/hut-far-lit.webp", 1.9, after(HUT_LIT)),
+    house("hut-lit", HUT, "sprites/hut-far-lit.webp", 2.4, after(HUT_LIT)),
     // Things to look at across the gap. None of them tells her anything she could not see.
     lookAt("far-wall", FAR_WALL, "对面的岩壁", 1),
     lookAt("mesa", MESA, "对面的台状山", 1),
@@ -183,7 +187,9 @@ export default defineScene({
     // --- The map on the table rock. Stones on the corners because the wind is up here; then it is paper's business. ---
     ctx.onInteract("paper-map", () => {
       ctx.bump(SPREAD, 1);
-      if (windy(w)) ctx.spend({ minutes: 0.5 }, "用石头压住地图角");
+      // ClockSystem rounds and drops anything that rounds to zero, so this is written as the whole minute the
+      // clock actually takes: up here the paper will not lie still and a stone goes on each corner (v4 §3.7).
+      if (windy(w)) ctx.spend({ minutes: 1 }, "用石头压住地图角");
       ctx.hand(MAP_STONE); glanceAt(MAP_STONE, 0.45);
       w.dispatch({ type: "item:use", item: "paperMap" });
       if (ctx.flag<number>(SPREAD, 0) === 1) ctx.say("我赶紧把地图啪地摊开。", { tag: "hut-map" });
@@ -240,13 +246,19 @@ export default defineScene({
       ctx.fx("gust", 0.55); ctx.sfx("breath", -0.5, 0.5); ctx.kick("settle", 0.25);
     });
 
-    // --- Back from the way to the hut: the same lip, the sun a notch lower, and the decision open again. ---
+    // --- Back from the way to the hut: the same lip, forty-five minutes gone, and the decision open again.
+    //     The body carries the walk — a heavier settle, the wind a tone lower, one long gust up out of the valley.
+    //     The line about the sun is only said if the sun has actually moved: lightOf() is clamped to 1 from before
+    //     16:00 until 18:45, so between those hours nothing in the frame changes and she must not claim it does
+    //     (the longer light tail is a DESIGN request; when it lands this line starts arriving on its own). ---
     ctx.onEnter((from) => {
       if (from !== "hutTurn") return;
       ctx.setFlag("hutView.turned", true);
       ctx.setFlag(CHOICE, null);
-      ctx.kick("settle", 0.5); ctx.sfx("breath", 0, 0.5);
-      ctx.say("太阳低了一格。", { tag: "hut-back" });
+      w.emit("ambience", { overrides: { wind: 0.8, windTone: 1180 } });
+      ctx.kick("settle", 0.8); ctx.sfx("exhale", -0.3, 0.6);
+      ctx.after(420, () => { ctx.fx("gust", 0.7); ctx.sfx("breath", -0.5, 0.5); });
+      if (ctx.light() < 1) ctx.say("太阳低了一格。", { tag: "hut-back" });
     });
 
     // --- Leaving down the track without a confirmed mark: fifteen minutes of looking for the line (v4 §3.5). ---

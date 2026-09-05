@@ -5,7 +5,7 @@
    倒木（最快，最费手，累了它会动）。走完第三个把手，口袋里滑出去一样东西。
    坐标读自 15-forest-2 的 150°×84° 网格（yaw = (x/W − .5)·150，pitch = (.5 − y/H)·84，W×H = 1280×720）。 */
 import type { Ambience } from "../soundscape";
-import { all, flag, not } from "../engine/condition";
+import { all, entityIs, flag, not } from "../engine/condition";
 import type { Condition } from "../engine/condition";
 import { defineScene, type WalkStep } from "../engine/scene";
 import type { EntityDef } from "../engine/entity";
@@ -18,6 +18,7 @@ const TESTED = "forest2.logTested";
 const ROAD = "forest2.roadSeen";
 const LOOKED = "forest2.lookedDown";
 const WRONG = "forest2.wrong";
+const BITING = "forest2.biting";   // 灯从嘴里拿下来的那一拍：手上不了把手（v4 §3.4）
 const TOTAL = 4;
 const PHONE_STEP = 3;              // 走完第三个把手（v4 §7）
 const ROLL_FATIGUE = 0.5;          // 倒木在这之上会动
@@ -26,8 +27,13 @@ const PHONE_LOST_AT = 21 * 60 + 50;
 /* 公路就在下面，比 forest1（0.12）近一段：引擎声一直在，压在左下角。玩家是先听见，才转过头去（v4 §3.8）。 */
 const ROAD_ENGINE = 0.18;
 const ROAD_NEAR = 0.32;            // 视线真正落到那片光上时，它涨一档再落回来
-/* 补光灯的光圈直接乘进这个基数：宽光 22×0.55×1.15 ≈ 13.9°，窄光落回 11° 下限（v4 §3.4）。 */
-const HOLD_REVEAL = 22;
+/* 补光灯的光圈直接乘进这个基数。revealRadius = max(11, base × (0.55 + 0.45·light) × (1 − fatigue·0.35) × 光圈)；
+   夜里 light = 0，而到这一场时 fatigue 已经是 1，所以宽光（×1.15）要清过 11° 下限得 base ≥ 11 / (0.55 × 0.65 × 1.15)
+   = 26.8——22 在纸上够，在这一场真正被玩到的疲劳下不够（页面里实测两种咬法都是 11.0）。34：宽光 ≈ 14.0°，
+   窄光（×0.5）落回 11°。这才是咬法的全部意义（v4 §3.4）。 */
+const HOLD_REVEAL = 34;
+/* 两处记号在屏幕上一样高（3 vh = 21.6 px），和 forest1 的三处一样：凑近之前分不出真假（v4 §3.5）。 */
+const MARK_VH = 3;
 
 type Kind = "root" | "rock" | "log";
 type Hold = { id: string; step: number; kind: Kind; label: string; t: Transform; sprite?: string; sizeVh?: number };
@@ -45,7 +51,10 @@ const HOLDS: Hold[] = [
 ];
 
 /* 比 forest1（log 4/.08、root 5/.06、rock 8/.02）每一格都更贵——这一段更陡。三种代价互不支配：
-   倒木最快最费手，树根居中，石头最慢最省手。 */
+   倒木最快最费手，树根居中，石头最慢最省手。这里的分钟是宽光的分钟（什么都照到、什么都不亮，每个把手多看一眼）；
+   窄光把那一分钟还回来（v4 §3.4「窄光……瞬间显形」），换成心跳 ×1.4。两种咬法互不支配。
+   代价全部由 advance() 结算，interactable.cost 留空：InteractionSystem 在 hold:complete 之前先扣 def.interactable.cost，
+   倒木滚掉的那一次会连滚的 4 分钟一起扣两遍（forest1 就是把代价放在脚本里避开这一点的）。 */
 const COST: Record<Kind, { minutes: number; fatigue: number }> = {
   root: { minutes: 6, fatigue: 0.06 },
   rock: { minutes: 9, fatigue: 0.03 },
@@ -63,7 +72,8 @@ const liveAt = (h: Hold): Condition => (h.kind === "log" ? all(atStep(h.step), n
 const holdEntity = (h: Hold): EntityDef => ({
   id: h.id, transform: h.t, className: "hold-hotspot",
   ...(h.sprite ? { sprite: { src: h.sprite, layer: "prop" as const, sizeVh: h.sizeVh } } : {}),
-  interactable: { verbs: ["hold"], label: h.label, reveal: HOLD_REVEAL, cost: COST[h.kind], requires: liveAt(h) },
+  // 换咬法的那一拍手是空的：热点还在画里（visible 不变），但手伸出去又收回来。
+  interactable: { verbs: ["hold"], label: h.label, reveal: HOLD_REVEAL, requires: all(liveAt(h), not(flag(BITING))) },
   hold: { ms: Math.round(BASE_MS[h.step] * MS_SCALE[h.kind]), scaleWith: ["fear", "fatigue", "lamp"] },
   visible: liveAt(h),
 });
@@ -93,14 +103,19 @@ export default defineScene({
     // 树缝里，下面山谷的一小片光。
     { id: "valley-lights", transform: LIGHTS, gaze: { radius: 13, dwell: 900 },
       interactable: { verbs: ["inspect", "photograph"], label: "下面的灯", reveal: 12, cost: { minutes: 0 } } },
-    // 两处候选记号，都刷/长在树皮上：一处是小路右边那棵细树干上的红-白-红，一处是近处大树干上的旧树脂疤。
+    // 两处候选记号，都刷/长在树皮上：一处是小路右边那棵细树干上的红-白-红，一处是山谷灯左边那棵中景细树干上的旧树脂疤。
     // 两张精灵都是树皮上的一块记号（没有石头），同一轮廓、同一尺寸——凑近之前完全分不出来（v4 §3.5）。
+    // 认过的那一处和 forest1 一样留在树皮上：换一张压暗的图，热点变 disabled（.is-disabled，Hotspot.act() 直接返回），
+    // 而不是留一个永远默默拒绝的按钮。两场相邻的场景对同一样东西的行为必须一致。
     blaze("blaze-f2", { yaw: 11, pitch: 6, distance: 9 }, true, {
-      sprite: { src: "sprites/blaze-656.webp", layer: "prop", sizeVh: 4 },
+      sprite: { src: "sprites/blaze-656.webp", layer: "prop", sizeVh: MARK_VH,
+        swap: [{ when: entityIs("blaze-f2", "read"), src: "sprites/blaze-656-dim.webp" }] },
       interactable: { verbs: ["inspect"], label: "树干上的记号", reveal: 12, cost: { minutes: 1 } },
+      enabled: not(entityIs("blaze-f2", "read")),
+      visible: undefined,
     }),
     blaze("moss-f2", { yaw: -33, pitch: -12, distance: 8 }, false, {
-      sprite: { src: "sprites/blaze-false-bark.webp", layer: "prop", sizeVh: 4 },
+      sprite: { src: "sprites/blaze-false-bark.webp", layer: "prop", sizeVh: MARK_VH },
       interactable: { verbs: ["inspect"], label: "树干上的记号", reveal: 12, cost: { minutes: 1 } },
     }),
     // 灯就在那几棵杉树后面，直着下去看起来近得多。八分钟，下面是一道下不去的坎。走过一次它就从画里退出去。
@@ -153,7 +168,8 @@ export default defineScene({
       ctx.hand(h.t, "grip", true);
       ctx.sfx(h.kind === "rock" ? "grip" : "step", pan(h.t), h.kind === "log" ? 1 : 0.8);
       ctx.kick(h.kind === "log" ? "step" : "pull", h.kind === "rock" ? 0.8 : 1.1);
-      ctx.spend({ fear: fearUp(0.16) }, "又一个把手");
+      const base = COST[h.kind];
+      ctx.spend({ minutes: Math.max(1, base.minutes - (narrow() ? 1 : 0)), fatigue: base.fatigue, fear: fearUp(0.16) }, "又一个把手");
       // 第三个把手走完：口袋里滑出去一样东西。没有音效提示，没有文字，只有一次极轻的布料声。
       if (next === PHONE_STEP && w.state.inventory.items.includes("phone")) {
         ctx.lose("phone", "在森林里从口袋滑出去");
@@ -164,6 +180,9 @@ export default defineScene({
     // 松手：五秒，手抖一下，重新来。永远不会掉下去。
     const release = (h: Hold) => (progress: number) => {
       if (progress < 0.12) return;
+      // 自己松的手不算丢了把手：低吼要用嘴，按住的手必须松开（v4 §3.3，InteractionSystem 的 hold:start 也这么拦）。
+      // CameraBodySystem 对每一次 hold:release 都记 +0.08 心跳，在引擎能分辨"松掉的"和"主动放的"之前，这里把它退回去。
+      if (w.rt.growling || ctx.flag(BITING, false)) { ctx.spend({ fear: -0.08 }, "自己松的手"); return; }
       ctx.spend({ minutes: 0.1, fear: fearUp(0.08) }, "手松了");
       ctx.sfx("slide", pan(h.t), 0.6); ctx.kick("slip", 0.7, { yaw: 0, pitch: -6 });
       ctx.say("手松了。再来。", { tag: "f2-slip", priority: 1 });
@@ -227,7 +246,10 @@ export default defineScene({
       ctx.say("下不去。绕回来。", { tag: "f2-wrong" });
     });
 
-    // --- 站着不动：腿在回，心跳在涨（光束停在一个地方超过八秒，v4 §3.3）。旁边什么都没有。 ---
+    /* --- 站着不动：腿在回，心跳在涨（光束停在一个地方超过八秒，v4 §3.3）。旁边什么都没有。
+       DORMANT：和 forest1 一样，body "crawl" 让 GAIT 每帧把上报的视线晃约 0.13°，world.tick 的 rt.gazeMoved 阈值是
+       0.05°，rt.stillFor 永远到不了 4 秒，input:wait 在这一场不会被派发。分支照旧接着，等引擎那条请求落地就活。
+       thorough 变体里那一步 { type: "wait" } 已经删掉——只有无头驱动能发它，玩家发不出来。 --- */
     ctx.onWait(() => {
       ctx.spend({ fear: fearUp(0.05) }, "光束停在一个地方");
       ctx.sfx("heartbeat", 0, 0.35 + w.state.body.fear * 0.5);
@@ -242,10 +264,18 @@ export default defineScene({
     });
 
     // --- 换咬法：光圈缩紧或摊开，脚下的一切跟着变。 ---
+    let lastMode = w.state.power.lampMode;
     ctx.on("lamp:mode", ({ mode }) => {
+      if (mode === lastMode) return;                  // 已经是宽光的时候再按一下宽光，不算换咬法
+      lastMode = mode;
+      ctx.setFlag(BITING, true);
+      if (w.rt.hold) w.dispatch({ type: "hold:end" });
+      ctx.spend({ minutes: 0.5 }, "换一种咬法");   // v4 §3.4：切换咬法花 20 秒且期间不能攀爬
       ctx.sfx("tock", 0, 0.5); ctx.kick("settle", 0.4);
       ctx.fx("flashlight", mode === "narrow" ? 1 : 0.6);
+      ctx.after(900, () => { ctx.setFlag(BITING, false); ctx.sfx("cloth", 0, 0.3); });
     });
+    ctx.onEnter(() => { ctx.setFlag(BITING, false); lastMode = w.state.power.lampMode; });
 
     // --- 离开：没有确认过记号的话，这一段黑林子里要多找二十分钟（v4 §3.5）。 ---
     ctx.on("travel:begin", ({ from, to }) => {
@@ -258,11 +288,14 @@ export default defineScene({
     });
   },
   /* 最快的合法路线。倒木是这一场最便宜的抓手（5 分），但十小时之后它会自己动一下——除非先花一分钟用手压过它
-     （advance 里的 TESTED 分支）。1+5+5+6+6 = 23 分，比全走树根的 24 分快，也不再靠运气。 */
+     （advance 里的 TESTED 分支）。1+5+5+6+6 = 23 分，比全走树根的 24 分快，也不再靠运气。
+     压过木头之后倒木就不会滚了，但回放里第一步万一没落到（先压再抓这一对必须成立），第 0 格还留了一手树根：
+     倒木要是抓住了，这一手会因为 atStep(0) 不成立被直接拒掉（一声 tock，不出手，不走钟）。 */
   walkthrough: [
     { type: "interact", entity: "log-test", verb: "inspect" }, { wait: 400 },
     { type: "interact", entity: "blaze-f2", verb: "inspect" }, { wait: 400 },
     ...grab("f2-log", 2400),
+    ...grab("f2-root-a", 3400),
     ...grab("f2-stump", 2600),
     ...grab("f2-root-c", 3300),
     ...grab("f2-root-d", 3500),
@@ -272,7 +305,8 @@ export default defineScene({
     // 一处记号都不认：出林子的时候多二十分钟。
     blind: [
       { type: "interact", entity: "log-test", verb: "inspect" }, { wait: 400 },
-      ...grab("f2-log", 2400), ...grab("f2-stump", 2600), ...grab("f2-root-c", 3300), ...grab("f2-root-d", 3500),
+      ...grab("f2-log", 2400), ...grab("f2-root-a", 3400), ...grab("f2-stump", 2600),
+      ...grab("f2-root-c", 3300), ...grab("f2-root-d", 3500),
       { type: "travel", entity: "go" },
     ],
     // 朝灯的方向下了一段，认错了一处旧疤，然后老老实实走石头。
@@ -283,14 +317,14 @@ export default defineScene({
       ...grab("f2-root-a", 3200), ...grab("f2-bank", 3700), ...grab("f2-rock-c", 4000), ...grab("f2-rock-d", 4400),
       { type: "travel", entity: "go" },
     ],
-    // 这片林子给的全部：压一压木头、看一眼下面的灯、拍一张、记号、慢的那条线。
+    // 这片林子给的全部：压一压木头、换成窄光（每格少一分钟，每格心跳 ×1.4）、看一眼下面的灯、拍一张、记号、慢的那条线。
     thorough: [
       { type: "interact", entity: "log-test", verb: "inspect" }, { wait: 400 },
+      { type: "lamp:mode", mode: "narrow" }, { wait: 400 },
       { type: "interact", entity: "valley-lights", verb: "inspect" }, { wait: 400 },
       { type: "interact", entity: "valley-lights", verb: "photograph" }, { wait: 400 },
       { type: "interact", entity: "blaze-f2", verb: "inspect" }, { wait: 400 },
       ...grab("f2-root-a", 3000),
-      { type: "wait" }, { wait: 600 },
       ...grab("f2-bank", 3700), ...grab("f2-rock-c", 4000), ...grab("f2-root-d", 3500),
       { type: "travel", entity: "go" },
     ],

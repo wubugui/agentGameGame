@@ -6,6 +6,7 @@ import { all, any, flag, has, not } from "../engine/condition";
 import { defineScene } from "../engine/scene";
 import { prop } from "./_shared";
 import type { Transform } from "../engine/types";
+import type { World } from "../engine/world";
 
 const STANCE = "hairpin.stance";        // "center" | "rail" | "shadow"
 const SIGNAL = "hairpin.signal";        // "wave" | "shout" | "lamp" — the last thing she did with her body
@@ -17,26 +18,28 @@ const PHASE = "hairpin.phase";          // "arrive" | "one" | "gap" | "two" | "s
 const STOP = "hairpin.stopAt";          // "front" | "near" | "far"
 
 /* Painted places. Read off the grid: x = yaw·8.5333 + 640, y = 360 − pitch·8.5714. */
-const BEND: Transform = { yaw: 2, pitch: -24 };                    // asphalt inside the crook, under the yellow line (657, 566)
+const BEND: Transform = { yaw: 5, pitch: -26 };                    // asphalt inside the crook, clear of the lit gravel apron (683, 583)
 const RAIL: Transform = { yaw: 38, pitch: -24 };                   // the asphalt at the foot of the guardrail posts (964, 566)
 const SHADOW: Transform = { yaw: -52, pitch: -13 };                // the mossy verge in the trees' shadow, road edge (196, 471)
 const BRANCH: Transform = { yaw: -40, pitch: -10 };                // the dead branches lying on the gravel apron (300, 447)
 const PLATE: Transform = { yaw: -11.7, pitch: -14.2 };             // the small blue plate under the chevron board (540, 482)
 const VILLAGE: Transform = { yaw: 37, pitch: -8.4, distance: 40 }; // the lit church and the houses on the valley floor (958, 432)
 const SKY: Transform = { yaw: 10, pitch: 29, distance: 60 };       // the milky way over the pass (730, 110)
-const FAR_ROAD: Transform = { yaw: 7, pitch: -10.5, distance: 16 };// where the road comes round the far bend (700, 450)
+const FAR_ROAD: Transform = { yaw: 8.5, pitch: -11.3, distance: 16 };// on the tarmac of the far bend, not the grass inside it (712, 457)
 const STOPPED: Transform = { yaw: 12, pitch: -18, distance: 9 };   // a car halted on the crook, wheels on (742, 581)
 const DOOR: Transform = { yaw: 10, pitch: -15, distance: 9 };      // its near window, once it is standing there
 /* The two places it can be standing when she is left behind. Both distances stay under 16.7, where PanoStage's
    `Math.max(0.6, 10/distance)` clamp is still inactive and the sprite's on-screen height is exactly its sizeVh —
-   past that the clamp stops the shrinking and the far pair renders bigger than the near one. */
+   past that the clamp stops the shrinking and the far pair renders bigger than the near one. One entity carries both:
+   `transform` takes a function, so the prop and the hold are each a single entity that moves with `hairpin.stopAt`
+   (the two-entity version cost the same two entities and left the far pair invisible, see the prop below). */
 const TAIL_NEAR: Transform = { yaw: 22, pitch: -26, distance: 12 };  // the bend's asphalt, a dozen paces on (828, 583)
 const TAIL_FAR: Transform = { yaw: 30, pitch: -22.7, distance: 16 }; // the road at the far side of the curve (896, 555)
+const tailAt = (w: World): Transform => (w.flag<string>(STOP, "far") === "near" ? TAIL_NEAR : TAIL_FAR);
 const OFFSCREEN: Transform = { yaw: 0, pitch: -88 };               // story actions: E-key prompts, never drawn on the painting
 
 const carComing = any(flag(PHASE, { eq: "one" }), flag(PHASE, { eq: "two" }));
 const beforeSecondStop = not(flag(CARS, { gte: 2 }));
-const leftAt = (where: string) => all(flag(LEFT), flag(STOP, { eq: where }));
 /* "wave" is also what an unset flag means, so a fresh arrival always has exactly one button on screen. */
 const nextIs = (kind: "wave" | "shout" | "lamp") =>
   kind === "wave" ? not(any(flag(NEXT, { eq: "shout" }), flag(NEXT, { eq: "lamp" }))) : flag(NEXT, { eq: kind });
@@ -82,24 +85,35 @@ export default defineScene({
        opacity (GazeSystem writes the live radius onto the node, floored at 11°, so even `reveal: 0` fades) — and a
        car coming up the valley at her is not something to be found by sweeping the beam. The hotspot on the same
        point stays reveal-gated: to take the beat she has to turn and look at it. */
-    prop("headlight-beam", FAR_ROAD, "sprites/car-passing.webp", 5, { visible: carComing }),
+    // 1.5 vh ≈ 11 px on a 720-high viewport. On a 5.6× crop of the plate that far bend's road band is ~11 plate px
+    // (1.3°) and its guardrail posts ~5 plate px apart, which puts it 180 m or more away: a whole car body there is
+    // about 8 px. `car-passing.webp` is a whole car body drawn at 5 vh — twice the height of the road it stood on,
+    // which read as a small car parked on the hillside. What is coming up the valley at that range is light, so this
+    // anchor takes a new file: two headlight points with bloom (brief in the report), and nothing until it is drawn.
+    prop("headlight-beam", FAR_ROAD, "sprites/headlights-far.webp", 1.5, { visible: carComing }),
     { id: "headlights", transform: FAR_ROAD,
       interactable: { verbs: ["inspect"], label: "上来的车灯", reveal: 22 },
       gaze: { radius: 14, dwell: 600 },
       visible: carComing },
-    /* Left behind: two red points on the road and thirty seconds of running. Two states, because the on-screen
-       height is the sizeVh and nothing else — 十几步外 has to be the bigger of the two. A wide reveal (18° of live
-       radius on ten-hour legs) so the red carries from where the braking turned her head, not only from on top of it. */
-    { id: "tail-near", transform: TAIL_NEAR, className: "hold-hotspot",
-      sprite: { src: "sprites/taillights-far.webp", layer: "prop", sizeVh: 9 },
+    /* Left behind: two red points on the road and thirty seconds of running. The red itself is a prop of its own —
+       a `sprite` inside a `Hotspot` inherits that button's reveal opacity, and the anchor is 40-odd degrees off the
+       resting gaze, so as one entity the two points rendered at opacity 0.000 (and `pointerEvents:"none"`) until she
+       happened to look straight at them. They are the whole content of this beat and the only way out of the state,
+       so they are painted, not found. The hold sits on the same moving point with a wide reveal (18° of live radius
+       on ten-hour legs), so the button arrives as soon as the braking has turned her head that way. */
+    /* 5 vh ≈ 36 px: two tail lamps with their bloom, not a car's back end (0.2 m of lamp at 40 m is a few pixels;
+       what carries at night is the glow). One entity means one on-screen height, so the difference between 十几步
+       and 四十米 is carried by the art — the near file has the heavier bloom and a hint of the rear panel — and by
+       everything else about the two states: the anchor sits further along the road and higher in the frame, and
+       `runAfter` charges three minutes instead of one. */
+    { id: "taillights", transform: tailAt,
+      sprite: { src: "sprites/taillights-far.webp", layer: "prop", sizeVh: 5,
+        swap: [{ when: flag(STOP, { eq: "near" }), src: "sprites/taillights-near.webp" }] },
+      visible: flag(LEFT) },
+    { id: "tail", transform: tailAt, className: "hold-hotspot",
       interactable: { verbs: ["hold"], label: "那两点红色", reveal: 45 },
       hold: { ms: 2600, scaleWith: ["fatigue"] },
-      visible: leftAt("near") },
-    { id: "tail-far", transform: TAIL_FAR, className: "hold-hotspot",
-      sprite: { src: "sprites/taillights-far.webp", layer: "prop", sizeVh: 3 },
-      interactable: { verbs: ["hold"], label: "那两点红色", reveal: 45 },
-      hold: { ms: 2600, scaleWith: ["fatigue"] },
-      visible: leftAt("far") },
+      visible: flag(LEFT) },
     { id: "stopped-car", transform: STOPPED,
       sprite: { src: "sprites/car-stopped.webp", layer: "figure", sizeVh: 26 },
       visible: flag(STOP, { eq: "front" }) },
@@ -261,7 +275,8 @@ export default defineScene({
       ctx.kick("settle", 0.6);
       ctx.sfx("breath", 0, 0.85);
     };
-    for (const id of ["tail-near", "tail-far"]) { ctx.onHold(id, runAfter); ctx.onRelease(id, caughtBreath); }
+    ctx.onHold("tail", runAfter);
+    ctx.onRelease("tail", caughtBreath);
 
     /* Everything else on this bend is optional and silent. */
     ctx.onInteract("bus-plate", () => {
@@ -318,7 +333,7 @@ export default defineScene({
       { type: "interact", entity: "headlights", verb: "inspect" }, { wait: 900 },
       { type: "wait" }, { wait: 500 },
       { type: "interact", entity: "headlights", verb: "inspect" }, { wait: 900 },
-      { type: "hold:start", entity: "tail-far" }, { wait: 7000 }, { type: "hold:end" }, { wait: 500 },
+      { type: "hold:start", entity: "tail" }, { wait: 7000 }, { type: "hold:end" }, { wait: 500 },
       { type: "travel", entity: "go" },
     ],
     /* Everything the bend has: the branches, the plate, the valley, the sky, both other places to stand, and all

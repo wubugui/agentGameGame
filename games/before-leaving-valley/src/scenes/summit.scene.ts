@@ -1,37 +1,28 @@
-/* Piz Selva, 2,941 m, 15:15. The wooden cross with its plate, Sassolungo under its cloud, the cloud lying over the
-   valley on the left, the grey slope on the right where the plateau begins. The 360 selfie she had to take is the one
-   thing that cannot be skipped; everything else — the cross, the plate, the photos, the messages, the helicopter that
-   crosses once, the flat stone — costs four to eight minutes each (§6/§7), and the game says nothing about the sum.
+/* Piz Selva, 2,941 m, 15:15. The wooden cross, Sassolungo under its cloud, the cloud lying over the valley on the
+   left, the grey slope on the right where the plateau begins. The 360 selfie she had to take is the one thing that
+   cannot be skipped; everything else — the cross, the photos, the messages, the helicopter that crosses once, the flat
+   stone — costs four to eight minutes each (§6/§7), and the game says nothing about the sum.
    This is the node whose whole thesis is that the minutes spent being happy are paid back in the forest at night, so
    every look here is priced like a look, not like a click.
    Coordinates read off the 150°×84° grid of 08-summit (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84). */
-import { all, any, entityIs, flag, not } from "../engine/condition";
+import { any, entityIs, flag, not } from "../engine/condition";
 import { defineScene } from "../engine/scene";
 import type { Transform } from "../engine/types";
-import { backArrow, goArrow, lookAt, readable } from "./_shared";
+import { backArrow, goArrow, lookAt } from "./_shared";
 
 const SELFIE = "summit.selfie";          // required downstream (policy §6)
 const CAM_UP = "summit.cameraUp";
 const HELI_NEAR = "summit.heliNear";     // the rotor is somewhere off to the left, hovering
-const HELI = "summit.helicopter";        // it crossed overhead (found with the eyes)
-const HELI_GONE = "summit.heliGone";     // she watched it go (or walked off the top)
+const HELI = "summit.helicopter";        // it crossed overhead
+const HELI_GONE = "summit.heliGone";     // and it is gone again
 const SAT = "summit.sat";
-const CAP_LOOSE = "summit.capLoose";
 const WAY = "summit.sawWay";
 
-/* The cross: post above the crossbar (433, 280), the rope binding at the crossing (435, 360), the post below it (437, 446). */
+/* The cross: post above the crossbar (433, 280), the rope binding at the crossing (435, 360). */
 const POST_UP: Transform = { yaw: -24.3, pitch: 9, distance: 9 };
 const CROSSING: Transform = { yaw: -23.5, pitch: -0.5, distance: 9 };
-const PLATE: Transform = { yaw: -23.8, pitch: -10, distance: 9 };
 const RIBBON: Transform = { yaw: -47.5, pitch: -5.5, distance: 9 };          // the wrapped tape on the left arm's tip (235, 405)
 const SIT_STONE: Transform = { yaw: -6, pitch: -27, distance: 8 };           // the pale flat block right of the cross's foot (587, 595)
-const CAP_LANDS: Transform = { yaw: 33, pitch: -22, distance: 9 };           // the boulders right of the cross's field (922, 549)
-/* The helicopter. It idles off to the LEFT, over the valley, and crosses to the right — the direction the rotor cue
-   itself sweeps (soundscape.helicopter pans −1 → +1 and ignores pan/strength). Both sprites sit inside PanoStage's
-   1:1 band (distance ≤ 16.7, where scale = max(.6, 10/d) exactly cancels the wrapper's d/10 height), so `sizeVh` is
-   literally the height on screen and the machine's distance is carried by that height alone. */
-const HELI_FAR: Transform = { yaw: -53, pitch: 27, distance: 12 };           // the blue pocket between the left cloud bank and the wisps above it (185, 130)
-const HELI_OVER: Transform = { yaw: -30, pitch: 33, distance: 12 };          // the cloud top she can already see while looking at the far one (384, 77); the crossing carries it right
 
 export default defineScene({
   id: "summit",
@@ -46,11 +37,14 @@ export default defineScene({
   fallback: "眼前是 Sassolungo 和云海。",
   exitWhen: flag(SELFIE),
   entities: [
-    // --- The cross. The post to put a hand on, the plate under the crossbar to read, the crossing to raise the camera at. ---
+    /* --- The cross. The post to put a hand on, the crossing to raise the camera at.
+       §6 also gives this node the PIZ SELVA / 2941 m plate; 08-summit does not paint one — between the crossbar and the
+       next rope binding the post is bare wood (checked at 4×) — and `summit-cross-plate.webp` has not been drawn. A
+       readable hanging on nothing is a hotspot that is not on the thing the painting paints (§0.5), so the plate is not
+       in this scene today: the art is a P0 request with its placement, and the entity comes back with it. Nothing is
+       lost downstream — `E-summit` is the route plate's entry at plaque, and it is written there. --- */
     { id: "cross", transform: POST_UP,
       interactable: { verbs: ["inspect"], label: "木十字架", reveal: 12, cost: { minutes: 4 } } },
-    readable("plate", PLATE, "铭牌", { kind: "plaque", title: "PIZ SELVA", lines: ["PIZ SELVA", "2941 m"], entry: "E-summit", minutes: 4 },
-      { sprite: { src: "sprites/summit-cross-plate.webp", layer: "prop", sizeVh: 4.5 } }),
     { id: "selfie", transform: CROSSING, className: "hold-hotspot",
       interactable: { verbs: ["hold"], label: "举起相机", reveal: 13, cost: { minutes: 4, camera: 3 }, requires: any({ kind: "held", item: "camera360" }, flag(CAM_UP)) },
       hold: { ms: 1200, scaleWith: ["fatigue"] },
@@ -69,31 +63,17 @@ export default defineScene({
     { id: "plateau-way", transform: { yaw: 46, pitch: -4, distance: 18 },
       interactable: { verbs: ["inspect"], label: "右边的石坡", reveal: 13, cost: { minutes: 4 } } },
 
-    /* --- The helicopter: heard first, off to the left over the valley, hovering. It only crosses once she has found it
-       with her eyes, and it only leaves once she has actually had the crossing in her eyes (or walked off the summit). --- */
-    { id: "heli-far", transform: HELI_FAR,
-      sprite: { src: "sprites/helicopter.webp", layer: "figure", sizeVh: 2.6 },
-      gaze: { radius: 14, dwell: 600 },
-      visible: all(flag(HELI_NEAR), not(flag(HELI))) },
-    /* `heli-passing` is a CSS class the integrator still has to add (it is in the requests): a four-to-six second
-       translate across the sky and a fade. Until it lands the sprite simply sits where it entered — no rule of that
-       name exists in any stylesheet today, and an unknown class does nothing. */
-    { id: "heli-over", transform: HELI_OVER,
-      sprite: { src: "sprites/helicopter-passing.webp", layer: "figure", sizeVh: 8, className: "heli-passing" },
-      gaze: { radius: 14, dwell: 900 },
-      visible: all(flag(HELI), not(flag(HELI_GONE))) },
+    /* --- The helicopter is not an entity today. `helicopter.webp` / `helicopter-passing.webp` have not been drawn, and
+       hanging the one thing §6 calls a discoverable on an invisible point in an empty sky means the only way to find it
+       is to rest the pointer on a pixel with nothing on it. Until the art lands it is what it was in the valley all
+       afternoon: a rotor somewhere off to the left, and then, if she is standing still, the whole machine going over —
+       sound, a head thrown back, and the gust of it (see the script's onWait). Both sprites, and the `heli-passing`
+       crossing rule, are in the requests; the gaze targets come back with them. --- */
 
     // --- The flat stone in front of the cross: the only seat on the summit. ---
     { id: "sit-stone", transform: SIT_STONE,
       interactable: { verbs: ["use"], label: "平石", reveal: 12, cost: { minutes: 6 }, once: true },
       visible: not(entityIs("sit-stone", "used")) },
-
-    // --- The cap, when a gust takes it: it lands on the rocks to the right. Grab it against the wind, or the next gust has it. ---
-    { id: "cap", transform: CAP_LANDS, className: "hold-hotspot",
-      sprite: { src: "sprites/item-cap.webp", layer: "prop", sizeVh: 5 },
-      interactable: { verbs: ["hold"], label: "帽子", reveal: 14, cost: { minutes: 0 } },
-      hold: { ms: 400, scaleWith: ["fatigue"] },
-      visible: flag(CAP_LOOSE) },
 
     /* --- The way on: the sandy track between the rocks on the right (14 min + the pack and the selfie = the 20 of the
        base plan). The way back: down the boulders on the left. The summit stands 110 min above the top of the ferrata
@@ -113,18 +93,30 @@ export default defineScene({
     const shoot = () => w.dispatch({ type: "phone:shoot" });
     const closeSelfie = () => { if (w.state.ui.overlay === "selfie") ctx.close(); };
 
-    /* The rotor: somewhere off to the left over the valley, idling, until she turns and finds it. It comes on her first
-       breath here or on her selfie. The idling machine only ever gets a low thump panned that way — the full
-       pass-overhead cue (soundscape.helicopter, 7 s, −1 → +1, deaf to pan and strength) belongs to the crossing alone,
-       which happens once. A thump every eight seconds would be a helicopter crossing three times before it crosses. */
-    let rotorAt = -999;
-    const rotor = (strength: number) => { rotorAt = ctx.minute(); ctx.sfx("thud", -0.65, strength); };
+    /* The rotor: somewhere off to the left over the valley, idling. It comes on her first breath here or on her selfie.
+       The idling machine only ever gets a low thump panned that way — the full pass-overhead cue (soundscape.helicopter,
+       7 s, −1 → +1, deaf to pan and strength) belongs to the crossing alone, which happens once. */
+    const rotor = (strength: number) => ctx.sfx("thud", -0.65, strength);
     const heliCome = () => {
       if (ctx.flag(HELI_NEAR, false)) return;
       ctx.setFlag(HELI_NEAR, true);
       rotor(0.5);
     };
-    const heliGone = () => { if (ctx.flag(HELI, false) && !ctx.flag(HELI_GONE, false)) ctx.setFlag(HELI_GONE, true); };
+    /* And then it comes over: four minutes of standing with her head back, from the left to the right, the way the cue
+       itself sweeps. With no machine painted in that sky this is sound, neck and wind — nothing to click, nothing on a
+       timer, and nothing she is made to look at. It happens once, to a player who is standing still (§6: 直升机只飞一次). */
+    const heliCross = () => {
+      if (ctx.flag(HELI, false)) return;
+      ctx.setFlag(HELI, true);
+      ctx.spend({ minutes: 4 }, "看直升机飞过");
+      ctx.sfx("helicopter", 0, 1);
+      ctx.kick("turn", 0.9, { yaw: 0, pitch: 8 });
+      ctx.fx("gust", 0.8);
+      ctx.say("头顶飞过一架直升机。", { tag: "summit-heli", priority: 1 });
+      // The crossing is the whole of it: it comes from the left, it goes out to the right, and that is the last of it
+      // today. (When the two sprites land, HELI_GONE goes back to being the moment she watches it leave the frame.)
+      ctx.setFlag(HELI_GONE, true);
+    };
 
     /* Raising the camera from the pack is what frees the hold at the crossing; stowing it takes that back. */
     ctx.on("item:use", ({ item }) => {
@@ -151,13 +143,12 @@ export default defineScene({
     ctx.on("phone:open", closeSelfie);
     ctx.on("camera:impulse", ({ kind }) => { if (kind === "turn") closeSelfie(); });
 
-    /* The cross: a hand on the post, the day's height in her own words. The plate: a hand, a dip of the head, the notebook. */
+    /* The cross: a hand on the post, the day's height in her own words. */
     ctx.onInteract("cross", () => {
       ctx.hand(POST_UP, "grip", false); ctx.sfx("cloth", -0.3, 0.6); ctx.kick("glance", 0.5, { yaw: -2, pitch: 8 });
       w.emit("body:rest", { seconds: 2 });
       ctx.say("相当于一屁股一屁股把自己抬升了一千六百米。", { tag: "summit-cross" });
     });
-    ctx.onInteract("plate", () => { ctx.hand(PLATE, "grip", false); ctx.kick("glance", 0.4, { yaw: 0, pitch: -4 }); });
     ctx.onGaze("ribbon", () => { ctx.sfx("cloth", -0.6, 0.7); ctx.kick("glance", 0.3, { yaw: -3, pitch: 0 }); ctx.fx("gust", 0.3); });
 
     /* Looking. A phone photo where she clicks the mountain or the cloud; a glance and a breath where she only looks. */
@@ -183,33 +174,25 @@ export default defineScene({
       ctx.say("高原在那边。", { tag: "summit-way" });   // the plan is on the memo page; she does not read it back to him
     });
 
-    /* The helicopter crosses once she has found it: four minutes of standing with her head back. It enters the frame
-       and then waits for her — nothing on a timer, and nothing takes it away for looking at it. */
-    ctx.onGaze("heli-far", () => {
-      if (ctx.flag(HELI, false)) return;
-      ctx.setFlag(HELI, true);
-      ctx.spend({ minutes: 4 }, "看直升机飞过");
-      ctx.sfx("helicopter", 0, 1); ctx.kick("turn", 0.9, { yaw: 0, pitch: 8 }); ctx.fx("gust", 0.8);
-      ctx.say("头顶飞过一架直升机。", { tag: "summit-heli", priority: 1 });
-    });
-    /* And it is gone when she has watched it go, not when she turns her head. (Walking off the summit also ends it.) */
-    ctx.onGaze("heli-over", () => {
-      if (ctx.flag(HELI_GONE, false)) return;
-      heliGone();
-      ctx.kick("glance", 0.35, { yaw: 5, pitch: 2 }); ctx.fx("gust", 0.4); ctx.sfx("exhale", 0.2, 0.5);
-    });
-
     /* Sitting: a longer breath, and every wait after it rests a little more. Standing still is also what brings the rotor. */
     ctx.onInteract("sit-stone", () => {
       ctx.setFlag(SAT, true);
       w.emit("body:rest", { seconds: 5 }); w.emit("body:fatigue", { delta: -0.1, reason: "坐下" });
       ctx.kick("settle", 1.2, { yaw: 0, pitch: -3 }); ctx.sfx("exhale"); ctx.sfx("cloth", 0.2, 0.5);
     });
+    /* Standing still: the first breath brings the rotor up out of the valley on the left, the next one is it still out
+       there, and the one after that is the machine itself going over. Three breaths is about twenty seconds of a player
+       doing nothing at all on a summit — she is not made to wait, and a player who never stops moving never hears more
+       than the first thump. */
+    let breaths = 0;
     ctx.onWait(() => {
+      breaths += 1;
       const first = !ctx.flag(HELI_NEAR, false);
       heliCome();
-      // Still idling out there — a thump every few minutes, never the crossing, and never on the breath that started it.
-      if (!first && ctx.flag(HELI_NEAR, false) && !ctx.flag(HELI, false) && ctx.minute() - rotorAt >= 3) rotor(0.3);
+      if (!first && !ctx.flag(HELI, false)) {
+        if (breaths >= 3) heliCross();
+        else rotor(0.3);
+      }
       if (ctx.flag(SAT, false)) w.emit("body:fatigue", { delta: -0.02, reason: "坐着" });
     });
 
@@ -220,31 +203,9 @@ export default defineScene({
       ctx.sfx("tick", 0, 0.6); ctx.kick("glance", 0.3, { yaw: 0, pitch: -5 });
     });
 
-    /* A strong gust can take the cap. It lands on the rocks to the right; grabbing it is a short hold; the next strong gust has it. */
-    ctx.on("camera:impulse", ({ kind, strength }) => {
-      if (kind !== "turn") return;
-      const s = strength ?? 0;
-      if (ctx.flag(CAP_LOOSE, false)) {
-        if (s >= 1.2 && !w.rt.hold) { ctx.setFlag(CAP_LOOSE, false); ctx.lose("cap", "被风吹下山顶"); ctx.sfx("cloth", 0.6, 0.8); ctx.fx("gust", 0.9); }
-        return;
-      }
-      if (s < 1.25 || !w.state.inventory.worn.includes("cap") || w.rt.rng() > 0.15) return;
-      ctx.setFlag(CAP_LOOSE, true);
-      w.dispatch({ type: "pack:stow", item: "cap" });
-      ctx.kick("turn", 1.1, { yaw: 30, pitch: -20 }); ctx.fx("gust", 1);
-      ctx.say("帽子。", { tag: "summit-cap", priority: 1 });
-    });
-    ctx.onHold("cap", () => {
-      ctx.setFlag(CAP_LOOSE, false);
-      w.dispatch({ type: "pack:equip", item: "cap" });
-      ctx.hand(CAP_LANDS, "grip", false); ctx.kick("settle", 0.6); ctx.sfx("cloth", 0.3, 0.6);
-    });
-    ctx.onRelease("cap", () => { ctx.kick("glance", 0.3, { yaw: 2, pitch: -2 }); ctx.sfx("slide", 0.4, 0.4); });
-    ctx.on("travel:begin", ({ from }) => {
-      if (from !== "summit") return;
-      heliGone();
-      if (ctx.flag(CAP_LOOSE, false)) { ctx.setFlag(CAP_LOOSE, false); ctx.lose("cap", "留在了山顶的石头上"); }
-    });
+    /* A gust taking her cap onto the rocks to the right was a hold on `item-cap.webp`, which has not been drawn (cable
+       is waiting on the same file). Grabbing a hat that is not in the picture is worse than not losing it, so the whole
+       branch is out until the sprite lands; it is in the requests with the placement it had. */
   },
   walkthrough: [
     { type: "pack:open" },
@@ -257,17 +218,18 @@ export default defineScene({
     { type: "travel", entity: "go" },
   ],
   variants: {
-    // Everything the summit offers: the cross, the plate, both photos, the valley, the way on, the stone, the rotor found, a message.
+    // Everything the summit offers: the cross, both photos, the valley, the way on, the stone, the helicopter, a message.
     full: [
       { type: "interact", entity: "cross", verb: "inspect" },
-      { type: "interact", entity: "plate", verb: "read" },
-      { type: "overlay:close" },
       { type: "interact", entity: "sassolungo", verb: "photograph" },
       { type: "interact", entity: "cloud-sea", verb: "photograph" },
       { type: "interact", entity: "valley", verb: "inspect" },
       { type: "interact", entity: "plateau-way", verb: "inspect" },
       { type: "interact", entity: "sit-stone", verb: "use" },
-      { type: "wait" },
+      // Three breaths on the stone: the rotor comes up out of the valley, it is still out there, and then it goes over.
+      { type: "wait" }, { wait: 400 },
+      { type: "wait" }, { wait: 400 },
+      { type: "wait" }, { wait: 900 },
       { type: "phone:open", tab: "messages" }, { type: "phone:send", contact: "mama", kind: "text", text: "到顶了" }, { wait: 2200 }, { type: "phone:close" },
       { type: "pack:open" },
       { type: "item:use", item: "camera360" },

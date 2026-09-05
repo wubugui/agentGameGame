@@ -43,7 +43,11 @@ const ARM_LASTIES: Transform = offset(BOARD_LASTIES, 0, -1.05);
 const CAIRN: Transform = { yaw: 22.3, pitch: -30.3 };            // the pale stones piled beside the post (830, 620)
 const CAIRN_TOP: Transform = { yaw: 22.3, pitch: -29.2 };        // the top stone of that stack (830, 610; same 9 px offset)
 const BOULDERS: Transform = { yaw: -55.1, pitch: -21.6 };        // the grey-blue angular blocks on the left (170, 545)
-const FLAT_ROCK: Transform = { yaw: -5.5, pitch: -30 };          // the flat pale stone left of the post (593, 617)
+/* There is no single flat slab in this foreground: 10-signpost draws a bar of pale rubble across the bottom of
+   the saddle, the biggest stones in it about 25 px on the 720 px grid. So the map is laid where the picture has
+   stone rather than gravel — the whole 11 vh sprite box (y 602–658) sits inside the painted rubble bar, left of
+   the post — and the label names the action, not a rock that is not drawn. */
+const FLAT_ROCK: Transform = { yaw: -5.5, pitch: -31.5 };        // the pale rubble bar in front of the post, left of it (593, 630)
 const TRACK_649: Transform = { yaw: -10.9, pitch: 9.9 };         // the pale track climbing the green shoulder (547, 275)
 const PASTURE: Transform = { yaw: -25.8, pitch: 18.7, distance: 22 };  // the green slope above the track (420, 200)
 const VAL_LASTIES: Transform = { yaw: 37.5, pitch: -14 };        // the stone tongue dropping into the valley (960, 480)
@@ -74,8 +78,14 @@ export default defineScene({
   exitWhen: undefined,
   entities: [
     // --- The four boards themselves: props, so the sign is one object on the picture at every gaze angle.
-    // Each sprite is scaled 8% taller than the board painted under it, which at these aspects puts it 10–19%
-    // wider as well, so no painted arrow tip shows past a sprite in any direction. ---
+    // Each sprite is scaled 8% taller than the board painted under it, which at these aspects puts it 4–11%
+    // wider as well. That is as much overhang as there is room for: the painted arms are only 4–5 px apart on the
+    // 720 px grid, and any more height stacks them on top of each other. It does NOT close the painted arms:
+    // a DOM anchor is projected as a point plus a uniform CSS scale while the painting is a true perspective
+    // texture, so the sprite slides off the painted board as soon as the player turns their head and the painted
+    // red arrow tips come out from under it (measured: 4% of the sign's painted red pixels still show at the
+    // resting gaze, 18% panned down-right). No sprite geometry closes that. The only fix is the repaint that
+    // §12 E1 / §11 already ask for — 10-signpost re-exported with post and cap only — and it is an ART request. ---
     prop("board-schiavaneis", BOARD_SCHIAVANEIS, "sprites/arm-schiavaneis.webp", 9.7),
     prop("board-selva", BOARD_SELVA, "sprites/arm-selva.webp", 9.3),
     prop("board-boe", BOARD_BOE, "sprites/arm-boe.webp", 11.8),
@@ -108,16 +118,19 @@ export default defineScene({
     // Both stay on the picture after she wipes them, greyed out: her attention, not a UI highlight (v4 §3.5).
     blaze("blaze-cairn", CAIRN_TOP, true, { visible: undefined, enabled: not(entityIs("blaze-cairn", "read")) }),
     blaze("lichen-boulder", BOULDERS, false, { visible: undefined, enabled: not(entityIs("lichen-boulder", "read")) }),
-    // --- The last direct sun on the grey wall. It is a plain prop, so it is on the picture whether or not she is
-    // looking at it: that is the whole point of v4 §7 — come back to this fork an hour later and the light is
-    // somewhere else on the wall and a different colour. Touching it is a separate hotspot below. ---
+    // --- The last direct sun on the grey wall: the one thing in this picture that is supposed to move, and the
+    // whole of v4 §7's promise for this node — come back an hour later and the light is somewhere else on the
+    // wall and a different colour. It is ONE entity: the split into a prop plus a hotspot cost a DOM node the
+    // scene does not have (§2 caps them at 16, and the four boards plus the four readings take half of that).
+    // Two things are missing under it and both are requests, not scene work: sprites/last-light-wall.webp and
+    // -low.webp do not exist, so nothing is drawn on the wall at any hour; and lightOf() is clamped to 1 until
+    // 18:45, so the hour the wrong arm costs comes back to a pixel-identical frame. Until the band is actually
+    // in the picture this look costs nothing and says nothing — she does not comment on what is not there. ---
     { id: "last-light", transform: lastLightAt,
       sprite: { src: "sprites/last-light-wall.webp", layer: "back", sizeVh: 5.4, className: "light-beam-sprite",
         swap: [{ when: after(18 * 60), src: "sprites/last-light-wall-low.webp" }] },
+      interactable: { verbs: ["inspect", "photograph"], label: "石墙上的那道光", reveal: 14, cost: { minutes: 0 } },
       gaze: { radius: 14, dwell: 900 },
-      visible: before(LIGHT_TO) },
-    { id: "last-light-look", transform: lastLightAt,
-      interactable: { verbs: ["inspect", "photograph"], label: "石墙上的那道光", reveal: 14, cost: { minutes: 1 } },
       visible: before(LIGHT_TO) },
     // --- The map on the flat stone, and the green shoulder the bells come from. ---
     prop("paper-map", FLAT_ROCK, "sprites/map-folded.webp", 11, {
@@ -163,8 +176,8 @@ export default defineScene({
       { type: "interact", entity: "paper-map", verb: "use" }, { wait: 400 }, { type: "overlay:close" },
       { type: "interact", entity: "lichen-boulder", verb: "inspect" }, { wait: 300 },
       { type: "interact", entity: "blaze-cairn", verb: "inspect" }, { wait: 300 },
-      { type: "interact", entity: "last-light-look", verb: "inspect" }, { wait: 300 },
-      { type: "interact", entity: "last-light-look", verb: "photograph" }, { wait: 300 },
+      { type: "interact", entity: "last-light", verb: "inspect" }, { wait: 300 },
+      { type: "interact", entity: "last-light", verb: "photograph" }, { wait: 300 },
       { type: "travel", entity: "go" },
     ],
     // Straight down without reading or confirming anything: twelve minutes of looking for the line on the way out.
@@ -208,18 +221,19 @@ export default defineScene({
       w.dispatch({ type: "item:use", item: "paperMap" });
     });
 
-    // --- The last direct sun on the wall. Her eyes find it first; touching it is a minute and a breath. ---
+    // --- The last direct sun on the wall. Her eyes find it first; her head turns to it and she breathes out.
+    //     No line: until sprites/last-light-wall.webp is in the picture there is no band on the wall for her to
+    //     say anything about, and §6 puts the information in the world, not in her mouth. ---
     ctx.onGaze("last-light", () => {
       if (ctx.flag("signpost.lightSeen", false)) return;
       ctx.setFlag("signpost.lightSeen", true);
       towardLight(); ctx.sfx("breath", -0.45, 0.45);
     });
-    ctx.onInteract("last-light-look", (verb) => {
+    ctx.onInteract("last-light", (verb) => {
       ctx.setFlag("signpost.light", true);
       if (verb === "photograph") { shoot(); towardLight(); return; }
       towardLight(); ctx.sfx("exhale", -0.45, 0.55);
       w.emit("body:rest", { seconds: 2 });
-      ctx.say("光快从墙上下去了。", { tag: "sp-light" });
     });
 
     // --- Standing still: the second breath brings the bells up from the green shoulder, off to the left. ---

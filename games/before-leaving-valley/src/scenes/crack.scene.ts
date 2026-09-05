@@ -6,7 +6,18 @@
    Coordinates read off the 150°×84° grid of 05-crack (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84).
    Entity budget: 15 of the 16 the contract allows. `wipe` is a story action but the view still projects it (it is
    parked below the painting, where PanoStage drops it) — the engine request to keep `tags:["action"]` out of
-   buildViews is in this scene's output, and until it lands the one free slot is the margin. */
+   buildViews is in this scene's output, and until it lands the one free slot is the margin.
+
+   NO PENALTY FOR LEAVING UNSURE. §3.5 charges minutes for walking off without a confirmed mark on 草甸 / 碎石路·
+   顶段 / 高原 / 夜森林 — four places where there is a wrong line to take. The crack is not one of them and never
+   was on that list; it is a chimney with one way up it, exactly like `cable`, which charges nothing. The eight
+   minutes that used to be charged here were an invention on top of §3.5 and sat straight on the fastest route.
+   The paint on the middle block is still worth pressing (the journal, the lesson, the stats); it is worth no
+   minutes, and the rust streak costs the minute that being unsure has always cost.
+
+   ART STILL TO LAND: sprites/crack-ledge.webp, hold-flake-cracked.webp, hold-groove-wet.webp. Nothing in this file
+   describes any of them as if it were on screen; the shelf is labelled by the part of the painting it is in, and a
+   used-up hold fades instead of changing its picture. */
 import { all, entityIs, flag, not } from "../engine/condition";
 import type { Condition } from "../engine/condition";
 import { defineScene, type WalkStep } from "../engine/scene";
@@ -34,7 +45,12 @@ const TOTAL = REAL.length;
 const PLACE: Record<string, Transform> = {
   "hold-step": { yaw: 10, pitch: -24, distance: 9 },   // foot: the seam under the middle block, left of the crack (725, 566)
   "hold-edge": { yaw: 22, pitch: -5, distance: 9 },    // hand: the crack's left lip, moss beside it (828, 403)
-  "hold-knob": { yaw: 6, pitch: -1, distance: 9 },     // foot: a nub on the lip of the upper block, where its seam runs into the crack (691, 369)
+  /* foot: the horizontal seam under the upper block, the one that runs in from the left edge of the picture and
+     dies into the crack near x 827. pitch −1 was (691, 369), which on a 4× crop is the middle of that block's bare
+     face — 55 px of blank stone between the seam above it (y ≈ 308) and this one, and 137 px clear of the crack.
+     pitch −7 is (691, 420), on the seam itself, and it is below hold-edge at −5, which is the order the climb
+     wants: the hand goes up, the foot comes up after it. */
+  "hold-knob": { yaw: 6, pitch: -7, distance: 9 },     // (691, 420)
   "hold-slot": { yaw: 24, pitch: 13, distance: 9 },    // hand: inside the crack, between the two moss tufts (845, 249)
   // Both false holds stand inside the same reach envelope as the real ones, one arm span either side of the crack.
   "hold-flake": { yaw: 14, pitch: 7, distance: 9 },    // a thin flake propped on the block edge just left of the crack (760, 300)
@@ -73,6 +89,12 @@ const falseHold = (h: typeof FALSE[number], sizeVh: number): EntityDef => ({
   hold: { ms: 500, scaleWith: ["fatigue"] },
   gaze: { radius: 13, dwell: 800 },
   visible: mid,
+  /* Used up — looked at long enough to see what is wrong with it, or grabbed and paid for — it fades to .35 the
+     way a confirmed mark does. Without this the seam stayed on the wall at full strength with its picture and its
+     label unchanged after her hand had already slid out of it: a hold that had silently stopped working. Fading is
+     `enabled`, and for a hold that is safe: view/Hotspot.tsx sends hold:start on pointer-down whatever the view
+     says, and InteractionSystem turns it back with the hand and the tock that `requires` owes her. */
+  enabled: not(entityIs(h.id, "read")),
 });
 
 const grab = (entity: string, wait: number): WalkStep[] => [{ type: "hold:start", entity }, { wait }, { type: "hold:end" }];
@@ -87,7 +109,9 @@ export default defineScene({
   ambience: { wind: 0.55, windTone: 900, birds: 0.2, crickets: 0, stream: 0, engine: 0, heater: 0 },
   weather: { motes: "dust", gusty: false, windPan: 0.3 },
   arriveAt: 12 * 60,
-  fallback: "从这里开始，没有钢缆了。",
+  // Not "从这里开始，没有钢缆了" any more: that is the second line cast into plate ② at `plaque` (Tratto in
+  // fessura: II grado UIAA, non attrezzato), and she does not read back what the player can read (§10.2.4).
+  fallback: "手要自己找地方了。",
   exitWhen: flag(STEP, { gte: TOTAL }),
   entities: [
     ...REAL.map(realHold),
@@ -99,10 +123,14 @@ export default defineScene({
       hold: { ms: 1500, scaleWith: ["fatigue"] }, visible: all(lastStep, not(flag(MISSED))) },
     // Deep inside the chimney: only a gaze that goes into the dark finds the shelf.
     { id: "crack-deep", transform: DEEP, gaze: { radius: 14, dwell: 900 }, visible: all(onWall, not(flag(LEDGE))) },
-    // sprites/crack-ledge.webp is still to be drawn (a pale shelf wedged across the dark chimney, one edge catching
-    // the light from the notch above); until it exists the shelf is the ring and its label, and nothing is hidden.
+    /* The one place on the whole wall to sit down (v4 §6). sprites/crack-ledge.webp — a pale shelf wedged across
+       the dark chimney, one edge catching the light from the notch above — is still to be drawn, and 05-crack
+       paints only the dark of the chimney there. So the label names the part of the painting the ring is in, not
+       a shape the picture has not got: 「裂缝深处」. What is in there she finds out by putting her weight on it,
+       and that is one line of hers, not a promise made by a caption. The label goes back to 「岩台」 with the
+       picture. */
     { id: "ledge", transform: SHELF, sprite: { src: "sprites/crack-ledge.webp", layer: "prop", sizeVh: 12 },
-      interactable: { verbs: ["use"], label: "岩台", reveal: 13, cost: { minutes: 1 } }, visible: all(onWall, flag(LEDGE), not(flag(SAT))) },
+      interactable: { verbs: ["use"], label: "裂缝深处", reveal: 13, cost: { minutes: 1 } }, visible: all(onWall, flag(LEDGE), not(flag(SAT))) },
     // Wet hands: a free wipe on the trousers (an E-key action; the transform sits below the painting so it never projects).
     { id: "wipe", transform: { yaw: 0, pitch: -88 }, tags: ["action"], interactable: { verbs: ["use"], label: "在裤子上蹭一下", reveal: 0, cost: { minutes: 0 } }, visible: flag(WET) },
     // The chimney below her, once she is up in it: the one photograph of the day taken straight down (v4 §8).
@@ -245,16 +273,15 @@ export default defineScene({
       if (from !== "slab") return;
       ctx.kick("land", 0.9); ctx.sfx("thud", 0.5, 0.7); w.emit("body:rest", { seconds: 3 });
     });
-    // Leaving: she stands if she was sitting; without the mark, the line out of the crack is found by feel (v4 §3.5).
-    ctx.on("travel:begin", ({ from, to }) => {
+    // Leaving: she stands if she was sitting. Nothing is charged for leaving unsure — see the header.
+    ctx.on("travel:begin", ({ from }) => {
       if (from !== "crack") return;
       stand();
-      if (to === "mailbox" && !ctx.flag("crack.certain", false)) { ctx.spend({ minutes: 8 }, "没认记号，找了一段路"); ctx.kick("turn", 0.5); ctx.say("走错了一小段。", { tag: "crack-lost", priority: 1 }); }
     });
   },
-  // Fastest legal line: the paint costs 0 minutes and saves the 8 that travel:begin charges for leaving unsure.
+  // Fastest legal line: four holds and out. 4 + 5 + 5 + 8 on the holds and 38 walking is the hour §3.1 gives this
+  // node. The paint is not in this line any more — it buys no minutes here (header) — it is in `thorough`.
   walkthrough: [
-    { type: "interact", entity: "blaze-crack", verb: "inspect" }, { wait: 300 },
     ...TO_THE_KNOB, ...grab("hold-slot", 3100), { type: "travel", entity: "go" },
   ],
   variants: {
@@ -265,8 +292,7 @@ export default defineScene({
     // The seam grabbed without looking: wet hands, the wipe, then the honest way up.
     // Replay this one WITHOUT ?reveal=1 (`crack&nosave=1`): reveal pins GazeSystem's radius at 999, so both false
     // holds are already "read" on the first frame and the grab is refused in silence. Unflagged it costs 2 minutes
-    // and 0.04 fatigue, and crack.wet is back to false after the wipe (measured: reaches mailbox at minute 790,
-    // i.e. 2 for the seep plus the 8 this variant pays for never confirming the mark).
+    // and 0.04 fatigue, the seam fades out of use behind her, and crack.wet is back to false after the wipe.
     fumble: [
       ...grab("hold-step", 2100), ...grab("hold-edge", 2600),
       ...grab("hold-groove", 1600), { wait: 400 },

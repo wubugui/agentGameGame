@@ -6,9 +6,23 @@
    Every coordinate below was read off the 150°×84° grid of 05b-slab (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84);
    the pixel it came from (1280×720) is noted beside it. */
 import { all, any, flag, worn } from "../engine/condition";
+import type { EntityDef } from "../engine/entity";
 import { defineScene, type WalkStep } from "../engine/scene";
 import type { Transform } from "../engine/types";
 import { backArrow, blaze, lookAt, wrongWay } from "./_shared";
+
+/* §3.5: settling a mark never deletes it. The factory's default is `visible: not(entityIs(id,"read"))` — the stone goes
+   off the painting the moment she has looked at it — so every blaze in this file overrides `visible` (an `all` of
+   nothing is true) and stops being an answer instead: `once` makes the second press an `interact:refused`, which the
+   script answers with the hand going out and coming back. `enabled` is deliberately NOT used for this: PanoStage writes
+   an inline opacity onto every hotspot with a reveal each frame (PanoStage.tsx:427), so `.hotspot.is-disabled`'s .35
+   never reaches the screen and a disabled mark would be a silent dead button. The class each mark carries is what the
+   grey and the faint highlight of §3.5 should hang off — as `filter`, not opacity, for the same reason. In the requests. */
+const settled = (real: boolean): Partial<EntityDef> => ({
+  visible: all(),
+  className: real ? "blaze-found" : "blaze-ruled-out",
+  interactable: { verbs: ["inspect"], label: "石头上的记号", reveal: 12, cost: { minutes: 0 }, once: true },
+});
 
 const SEEN = "slab.seenBox", LEANED = "slab.leaned", TOUCHED = "slab.touched";
 const HUM = "slab.hum", RIDGE = "slab.ridge", TRIED = "slab.triedClip";
@@ -18,8 +32,8 @@ const BOLT: Transform = { yaw: -28.5, pitch: -6, distance: 12 };      // the anc
 const BOX: Transform = { yaw: -28, pitch: -8.5, distance: 12 };       // bolted to the rib beside it, one box-height down (400, 431)
 const SEAM: Transform = { yaw: -12, pitch: -4 };                      // the near lip of the vertical cleft (527, 383)
 const FACE: Transform = { yaw: 26, pitch: -5 };                       // the middle of the polished panel (862, 403)
-const STREAK: Transform = { yaw: 13, pitch: 0 };                      // the dark seam running across the slab (711, 360)
-const OLD_PAINT: Transform = { yaw: 40, pitch: -19 };                 // the dark smudge low on the slab (981, 523)
+const LICHEN: Transform = { yaw: 13, pitch: 0 };                      // the pale streaked band across the middle of the slab (751, 360)
+const RUST: Transform = { yaw: 40, pitch: -19 };                      // the dark smear low on the slab (981, 523)
 const CHIMNEY: Transform = { yaw: 64, pitch: -10.5, distance: 12 };   // the deep cleft at the right edge (1186, 450)
 const FOOT: Transform = { yaw: 6, pitch: -35 };                       // the pale ledge lip under her boots (691, 660)
 const PASS: Transform = { yaw: -51.5, pitch: -2.5, distance: 18 };    // the green pass floor 200 m below (188, 381)
@@ -43,11 +57,13 @@ export default defineScene({
     // The far rib, across the cleft: the cable comes down through this bolt. A look, or a photograph of it.
     lookAt("route", BOLT, "对面的锚栓", 1, { interactable: { verbs: ["inspect", "photograph"], label: "对面的锚栓", reveal: 13, cost: { minutes: 1 } } }),
     /* Bolted to the rock beside it: a small dark box. One sprite in one state — the lid turning over in the light is
-       carried by the tick, the glance and her line, not by a second picture. (mailbox-far.webp is the box standing on a
-       boulder, painted three-quarters from above for a horizontal surface; on a vertical rib it reads as a lunchbox on a
-       floating stone, so this asks for its own face-on id instead.) */
+       carried by the tick, the glance and her line, not by a second picture. This is the same picture the box gets in
+       06-mailbox and in exit's look back down the cable, at 4 vh ≈ 29 px: at that height the pale stone baked into the
+       sprite is a few pixels of rock under the box, and it lands on the pale boulder the anchor is drilled into.
+       (A face-on recut without that stone — `mailbox-wall` — is in the art request; the id swaps when it exists. Until
+       then nothing here points at a picture that has not been painted: this node's one discoverable must stay drawn.) */
     { id: "box", transform: BOX,
-      sprite: { src: "sprites/mailbox-wall.webp", layer: "prop", sizeVh: 4 },
+      sprite: { src: "sprites/mailbox-far.webp", layer: "prop", sizeVh: 4 },
       gaze: { radius: 12, dwell: 900 } },
     // The near lip of the cleft. Lean out over it and the far wall opens up all the way down.
     { id: "seam", transform: SEAM, className: "hold-hotspot",
@@ -57,11 +73,12 @@ export default defineScene({
     { id: "face", transform: FACE, className: "hold-hotspot",
       interactable: { verbs: ["hold"], label: "打磨过的石板", reveal: 14, cost: { minutes: 1, fatigue: 0.02 } },
       hold: { ms: 800, scaleWith: ["fatigue"] } },
-    /* Two candidate marks, both of them not paint: a wet seam running down the upper slab, and old colour from another
-       line low on it. The factory's default false-blaze is a lichened pebble — a boulder silhouette glued to a polished
-       vertical panel, and not what she names — so each one carries the picture its word describes. */
-    blaze("streak-slab", STREAK, false, { sprite: { src: "sprites/blaze-streak-wet.webp", layer: "prop", sizeVh: 4 } }),
-    blaze("oldpaint-slab", OLD_PAINT, false, { sprite: { src: "sprites/blaze-arrow-old.webp", layer: "prop", sizeVh: 4 } }),
+    /* Two candidate marks, neither of them paint. Both carry the factory's false-blaze — the pale pebble with the
+       orange-grey lichen band, the one false mark that exists and draws — so what she names is what is on the screen:
+       lichen where it has crept along the streaked band, and the rust-orange of the same crust low on the panel.
+       Once confirmed each stays where it is (§3.5): the picture is never deleted, the hotspot simply stops taking her hand. */
+    blaze("lichen-slab", LICHEN, false, settled(false)),
+    blaze("rust-slab", RUST, false, settled(false)),
     // The deep cleft at the right edge. Three minutes of shuffling along the ledge to look into it.
     wrongWay("chimney", CHIMNEY, "右边的深缝", 3, "缝里过不去。"),
     // Her own ledge, and the two hundred metres of pass under it.
@@ -144,10 +161,10 @@ export default defineScene({
 
     /* Both marks are marks of something else. The minute and the tock come from the journal; the hand and the word are hers. */
     ctx.on("blaze:confirm", ({ entity }) => {
-      if (entity !== "streak-slab" && entity !== "oldpaint-slab") return;
+      if (entity !== "lichen-slab" && entity !== "rust-slab") return;
       ctx.hand(ctx.transformOf(entity));
       ctx.kick("glance", 0.5, { yaw: 0, pitch: -3 });
-      ctx.say(entity === "streak-slab" ? "水痕。不是漆。" : "旧箭头。不是这条。", { tag: "slab-false" });
+      ctx.say(entity === "lichen-slab" ? "地衣。不是漆。" : "锈。不是漆。", { tag: "slab-false" });
     });
 
     /* The cleft at the right edge: a shuffle along the ledge, cold air out of it, and a shuffle back. */
@@ -156,6 +173,18 @@ export default defineScene({
       ctx.sfx("step", 0.6, 0.7); ctx.kick("step", 0.7, { yaw: 4, pitch: 0 }); ctx.fx("dust", 0.3);
       ctx.after(560, () => { ctx.sfx("breath", 0.7, 0.5); ctx.kick("turn", 0.5, { yaw: -3, pitch: 0 }); });
       ctx.say("缝里过不去。", { tag: "slab-chimney" });
+    });
+    /* Pressed a second time — the cleft she has already shuffled over to, a mark she has already settled: the thing is
+       still on the wall and still takes her hand, it just has nothing new in it. The hand goes out, one dry knock, and
+       comes back. No text, no minute, never a dead button (as meadow, search). */
+    ctx.on("interact:refused", ({ entity, reason }) => {
+      if (reason !== "gone") return;
+      const def = ctx.scene.entities.find((one) => one.id === entity);
+      if (!def?.interactable?.once) return;
+      const where = ctx.transformOf(entity);
+      ctx.hand(where, "grip");
+      ctx.kick("glance", 0.3, { yaw: 0, pitch: -4 });
+      ctx.sfx("tock", Math.max(-1, Math.min(1, where.yaw / 60)), 0.3);
     });
 
     /* Her boots on half a metre of rock; the pass two hundred metres under it; the road; the ridge across the valley. */
@@ -223,9 +252,10 @@ export default defineScene({
       ...hold("seam", 2900), { wait: 500 },
       { type: "interact", entity: "route", verb: "photograph" }, { wait: 300 },
       ...hold("face", 2400), { wait: 400 },
-      { type: "interact", entity: "streak-slab", verb: "inspect" }, { wait: 300 },
-      { type: "interact", entity: "oldpaint-slab", verb: "inspect" }, { wait: 300 },
+      { type: "interact", entity: "lichen-slab", verb: "inspect" }, { wait: 300 },
+      { type: "interact", entity: "rust-slab", verb: "inspect" }, { wait: 300 },
       { type: "interact", entity: "chimney", verb: "inspect" }, { wait: 700 },
+      { type: "interact", entity: "chimney", verb: "inspect" }, { wait: 400 },
       { type: "interact", entity: "foot", verb: "inspect" }, { wait: 400 },
       { type: "interact", entity: "pass", verb: "photograph" }, { wait: 300 },
       { type: "interact", entity: "road", verb: "inspect" }, { wait: 300 },

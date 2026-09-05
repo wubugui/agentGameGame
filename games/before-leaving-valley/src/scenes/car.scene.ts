@@ -6,7 +6,7 @@
 
    Coordinates read off the 150°×84° grid of 17-car (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84, W×H = 1280×720);
    the pixel each one came from is noted beside it. */
-import { flag, not } from "../engine/condition";
+import { all, flag, not } from "../engine/condition";
 import { defineScene } from "../engine/scene";
 import type { EntityId, Transform } from "../engine/types";
 import { goArrow, prop } from "./_shared";
@@ -22,15 +22,28 @@ const ROAD_AHEAD: Transform = { yaw: -11, pitch: 8.4, distance: 16 };  // where 
 const WET_ROAD: Transform = { yaw: 2, pitch: -1, distance: 16 };       // the wet tarmac in front of the bonnet (657, 372)
 /* Sprites: the things that glow, move or are handed over. Everything on the centre stack has to stay above her own
    knees, which the engine keeps painted across the bottom of the screen for the whole ride (`hands-lap`, body "ride"). */
+/* 导航屏 and 出风口 are 14° apart on the same painted vent housing, one on each vane group, and the painting itself
+   shows no phone: `nav-phone.webp` is briefed as a phone in a vent clip (lit screen, the clip visible over the slats)
+   so the two hotspots read as different objects the moment the art lands. Until then the label names a thing the
+   picture does not yet show — permitted for a pending sprite, and flagged in the report. */
 const NAV: Transform = { yaw: 7, pitch: -11, distance: 6 };            // clamped on the right slats of the vent grille (700, 454)
 /* The gear lever this painting actually has is at the very bottom of the centre stack (642, 693) = pitch −38.9: below
-   the viewport and behind `hands-lap`. What the plate does show of the two of them is the wheel, so his hand is there. */
-const WHEEL: Transform = { yaw: -16.2, pitch: -11.7, distance: 6 };    // the top right of the steering-wheel rim (502, 460)
+   the viewport and behind `hands-lap`. What the plate does show of the two of them is the wheel, so their hands are
+   there — v4 §6/§7 name 他们搭在挡杆上的手, and what tells her they are a couple is two hands touching, not one hand
+   driving. The object had to move; the beat must not, so `hand-on-wheel.webp` is briefed as the passenger's hand
+   resting over the driver's on the rim. Anchor measured on the plate: at y = 470 the dark rim band runs x 484→515,
+   so (495, 470) is inside it — the old (502, 460) sat on the thin top-right of the rim, half off its outer edge. */
+const WHEEL: Transform = { yaw: -17, pitch: -12.8, distance: 6 };      // the right arc of the steering-wheel rim (495, 470)
 /* The bottle comes back over the right of the dash: an arm and a hand, and that is all of them the picture shows.
-   Neither of them is ever drawn from the back seat — the account gives them no lines and the game gives them no face. */
+   Neither of them is ever drawn from the back seat — the account gives them no lines and the game gives them no face.
+   `water-bottle.webp` is a daylight bottle in a bare hand with the forearm entering from the bottom right, i.e. from
+   her own lap rather than from the front seats, and rendered 216×114 px it was the brightest thing in a night
+   interior. This anchor takes a night-interior file instead (brief in the report): the forearm comes in from the
+   upper left, across the dash. */
 const WATER: Transform = { yaw: 31, pitch: -13, distance: 5 };         // an arm coming back over the right of the dash (905, 471)
 
-const LOOKED = "car.looked", LINES_SAID = "car.lines", WATER_TAKEN = "car.water";
+const LOOKED = "car.looked", LINES_SAID = "car.lines", WATER_TAKEN = "car.water", PHOTO = "car.photo";
+const OFFSCREEN: Transform = { yaw: 0, pitch: -88 };                   // story actions: E-key prompts, never drawn on the painting
 /* What she carries away of them. Nothing here is invented: it is the account's own list, one sentence at a time. */
 const CAR_LINES = [
   "女生是意大利人。",
@@ -92,7 +105,7 @@ export default defineScene({
       interactable: { verbs: ["inspect"], label: "后视镜", reveal: 12, cost: { minutes: 0 } },
       gaze: { radius: 10, dwell: 900 } },
     // The bottle, held back over the dash until she takes it. Holding is drinking (v4 §3.2: 车里接过那瓶水 −0.20).
-    prop("water-bottle", WATER, "sprites/water-bottle.webp", 30, { visible: not(flag(WATER_TAKEN)) }),
+    prop("water-bottle", WATER, "sprites/water-bottle-night.webp", 30, { visible: not(flag(WATER_TAKEN)) }),
     { id: "water", transform: WATER, className: "hold-hotspot",
       interactable: { verbs: ["hold"], label: "递过来的水", reveal: 15 },
       hold: { ms: 900, scaleWith: ["fatigue"] },
@@ -102,10 +115,18 @@ export default defineScene({
       interactable: { verbs: ["use"], label: "出风口", reveal: 12, cost: { minutes: 0 } } },
     // The way on is the road itself: it ends at the hotel door, where the numbers and the photograph happen.
     goArrow("go", WET_ROAD, { to: "search", minutes: 0, label: "回酒店的路", kind: "walk" }),
+    /* v4 §8 lists 在酒店门口交换联系方式合影 among this node's 可做的事. The two numbers are theirs and arrive either
+       way — the account is explicit that contacts were exchanged and a photograph was taken — but the shutter can be
+       hers: once the ride is able to end (she has rested her eyes on one thing) a single E press takes it. Never
+       pressed, it still happens at the door on `travel:begin`, quietly. This is the scene's only `action` entity and
+       `car` gets no 喊一声 button, so nothing else shares the pinned `.story-action` slot. */
+    { id: "photo-together", transform: OFFSCREEN, tags: ["action"],
+      interactable: { verbs: ["photograph"], label: "合个影", reveal: 0, cost: { minutes: 0 } },
+      visible: all(flag(LOOKED, { gte: 1 }), not(flag(PHOTO))) },
   ],
   seed: (w) => {
     w.setFlag(LOOKED, LOOKS.length); w.setFlag(LINES_SAID, CAR_LINES.length);
-    w.setFlag(WATER_TAKEN, true); w.setFlag("car.heater", true); w.setFlag("car.exchanged", true);
+    w.setFlag(WATER_TAKEN, true); w.setFlag("car.heater", true); w.setFlag("car.exchanged", true); w.setFlag(PHOTO, true);
     // What the ride leaves behind: a slip of paper with two numbers, and knowing whose numbers they are (v4 §4).
     w.patch("inventory", { items: Array.from(new Set([...w.state.inventory.items, "contactCard"])) as typeof w.state.inventory.items });
     w.patch("journal", { entries: Array.from(new Set([...w.state.journal.entries, "E-couple"])) });
@@ -137,6 +158,7 @@ export default defineScene({
       { type: "wait" }, { wait: 600 }, { type: "wait" }, { wait: 600 },
       { type: "interact", entity: "village", verb: "inspect" }, { wait: 6500 },
       { type: "interact", entity: "roadside-trees", verb: "inspect" }, { wait: 6500 },
+      { type: "interact", entity: "photo-together", verb: "photograph" }, { wait: 500 },
       { type: "travel", entity: "go" },
     ],
   },
@@ -233,13 +255,22 @@ export default defineScene({
 
     /* The hotel door (v4 §9: it happens here, it does not deserve a painting of its own). The car stops, they write
        two numbers down, a photograph is taken on their phone — hers is somewhere in the forest — and the night ends. */
+    const shutter = () => {
+      ctx.setFlag(PHOTO, true);
+      ctx.sfx("shutter", 0.25, 0.7);
+      ctx.kick("settle", 0.6);
+    };
+    // The photograph, when she asks for it: a press, a shutter, and the car keeps going. No line goes with it.
+    ctx.onInteract("photo-together", () => { if (!ctx.flag(PHOTO, false)) { shutter(); ctx.flash("一张合影。"); } });
     ctx.on("travel:begin", ({ from, to }) => {
       if (from !== "car" || to !== "search") return;
       ctx.kick("brake", 0.9); ctx.fx("brake", 0.6); ctx.sfx("doorOpen", -0.35, 0.6);
       ctx.setFlag("car.exchanged", true);
       ctx.give("contactCard");
-      ctx.sfx("shutter", 0.25, 0.7);
-      ctx.flash("两个号码。一张合影。");
+      // The numbers are theirs and arrive either way; the photograph too, if she never took it herself.
+      const already = ctx.flag(PHOTO, false);
+      if (!already) shutter();
+      ctx.flash(already ? "两个号码。" : "两个号码。一张合影。");
     });
     /* The night ends and the next morning starts — but only once the painting has changed. `travel:begin` runs 1.8 s
        before `enterScene`, and moving the clock there put 7月30日 08:40 in the top bar over a night interior, with the
