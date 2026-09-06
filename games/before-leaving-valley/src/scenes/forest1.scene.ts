@@ -6,10 +6,13 @@
    trunks on the left there is a gap that looks like a way through — from in there the road cannot be heard.
    Every coordinate was read off the 150°×84° grid of 14-forest-1 (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84);
    the pixel it came from (1280×720) is noted beside it.
-   Sprites: no night art exists yet, so every anchor here points at the daylight file that already draws the same
-   object — root-arch / rock-step for the two holds, blaze-red-white for the 656 and blaze-false for the two decoys
-   (the shared factory's own two files). They are the right things drawn in the wrong light, which is a note in
-   docs/ART_QUEUE.md, not a hole in the scene: everything is on the painting and everything answers today. */
+   Sprites: the night set is on disk now and every anchor here uses it — root-arch-night / rock-step-night for the two
+   holds, and for the three candidate marks the tall bark strips (blaze-656-dim, blaze-lichen-night,
+   blaze-arrow-old-night) that replace the daylight cobbles this scene used to hang on tree trunks. Two things come
+   right at once: a mark labelled 树干上的记号 draws bark instead of a boulder (§0.5), and all three read as the same
+   dark smear until she is on top of them, because none of them is a bright daylight file any more. The one that
+   turns legible is the one she has confirmed — blaze-656 swaps to the lit 656 strip on `read` (§3.5's trace, done
+   with the src, which reaches the DOM through Hotspot's <img>, and not with a class, which does not). */
 import type { Ambience } from "../soundscape";
 import type { Condition } from "../engine/condition";
 import { all, entityIs, flag, not } from "../engine/condition";
@@ -42,11 +45,12 @@ const ROCKS: Transform[] = [
   { yaw: -32, pitch: -16, distance: 10 },    // the big mossy boulder left of the trail (367, 497)
 ];
 const DEADFALL: Transform = { yaw: 34.5, pitch: -7, distance: 11 };   // the thin fallen log lying across the right bank (934, 420)
-/* The slender spruce between the two boulders. Measured on the plain plate at y = 326: the bark runs x 626→644, i.e.
-   about 18 plate px ≈ 2.1° ≈ 25 screen px on a 720-high viewport (12 px per degree). MARK_VH below is a screen height
-   in vh, not a width: 3 vh = 21.6 px tall. The art has to be taller than it is wide (see the sprite brief: no wider
-   than 14 screen px) or the paint hangs off the sides of the trunk. */
-const MARK_VH = 3;                                                    // all three candidate marks, identical on screen (v4 §3.5)
+/* The slender spruce between the two boulders. Measured on the plain plate at y = 326: the bark runs x 628→645, i.e.
+   17 plate px ≈ 2.0° ≈ 28 screen px wide (the plate is 8.53 px per degree; the screen 14.2 in yaw, 12 in pitch).
+   All three mark files are bark strips about 0.33 as wide as they are tall, so MARK_VH 8 draws them 58 px tall and
+   19 px across — narrower than the trunk they are painted on, with the paint band itself about 19 x 18 px.
+   All three carry the same MARK_VH: at that size, in that light, nothing but walking up to one tells them apart. */
+const MARK_VH = 8;                                                    // all three candidate marks, identical on screen (v4 §3.5)
 const TRUNK_MARK: Transform = { yaw: -0.6, pitch: 4, distance: 13 };  // the trunk between the two boulders (635, 326)
 const BOULDER_MARK: Transform = { yaw: 14, pitch: 3.5, distance: 14 };// the lit face of the big leaning boulder (760, 330)
 const LEFT_TRUNK: Transform = { yaw: -39.5, pitch: -6.4, distance: 12 }; // the near trunk of the left pair (303, 415)
@@ -91,12 +95,12 @@ export default defineScene({
   entities: [
     // The root at this pull: fast, all hands. Its place changes with every step; that is why it is a sprite.
     { id: "hold-root", transform: (w) => ROOTS[stepOf(w)], className: "hold-hotspot",
-      sprite: { src: "sprites/root-arch.webp", layer: "prop", sizeVh: 9 },
+      sprite: { src: "sprites/root-arch-night.webp", layer: "prop", sizeVh: 9 },
       interactable: { verbs: ["hold"], label: "树根", reveal: HOLD_REVEAL, requires: handsFree },
       hold: { ms: 850, scaleWith: ["fear", "fatigue", "lamp"] }, visible: onTrail },
     // The stone at this pull: three minutes more, and it costs the hands almost nothing.
     { id: "hold-rock", transform: (w) => ROCKS[stepOf(w)], className: "foot-hotspot",
-      sprite: { src: "sprites/rock-step.webp", layer: "prop", sizeVh: 9 },
+      sprite: { src: "sprites/rock-step-night.webp", layer: "prop", sizeVh: 9 },
       interactable: { verbs: ["hold"], label: "石头", reveal: HOLD_REVEAL, requires: handsFree },
       hold: { ms: 1150, scaleWith: ["fear", "fatigue", "lamp"] }, visible: onTrail },
     // The one log, on the right bank, at the second pull only. The quickest way past — until the arms are gone.
@@ -113,19 +117,20 @@ export default defineScene({
        docs/ART_QUEUE.md for the dimmed paint). The decoys carry no `cost`: JournalSystem already bills the one
        minute for reading a mark wrong, and §3.5 charges it exactly once. */
     blaze("blaze-656", TRUNK_MARK, true, {
-      sprite: { src: "sprites/blaze-red-white.webp", layer: "prop", sizeVh: MARK_VH },
+      sprite: { src: "sprites/blaze-656-dim.webp", layer: "prop", sizeVh: MARK_VH,
+        swap: [{ when: entityIs("blaze-656", "read"), src: "sprites/blaze-656.webp" }] },
       interactable: { verbs: ["inspect"], label: "树干上的记号", reveal: 12, cost: { minutes: 1 },
         requires: not(entityIs("blaze-656", "read")) },
       visible: undefined,   // drops _shared.blaze's "gone once read": this mark is the trace that the segment was checked
     }),
     blaze("moss-mark", BOULDER_MARK, false, {
-      sprite: { src: "sprites/blaze-false.webp", layer: "prop", sizeVh: MARK_VH },
+      sprite: { src: "sprites/blaze-lichen-night.webp", layer: "prop", sizeVh: MARK_VH },
       interactable: { verbs: ["inspect"], label: "石头上的记号", reveal: 12,
         requires: not(entityIs("moss-mark", "read")) },
       visible: undefined,
     }),
     blaze("old-arrow", LEFT_TRUNK, false, {
-      sprite: { src: "sprites/blaze-false.webp", layer: "prop", sizeVh: MARK_VH },
+      sprite: { src: "sprites/blaze-arrow-old-night.webp", layer: "prop", sizeVh: MARK_VH },
       interactable: { verbs: ["inspect"], label: "树干上的记号", reveal: 12,
         requires: not(entityIs("old-arrow", "read")) },
       visible: undefined,
@@ -167,6 +172,7 @@ export default defineScene({
     const advance = (style: "root" | "rock" | "log") => {
       const here = step();
       if (here >= TOTAL) return;
+      leaveGap();               // the first thing she does after the gap is what puts the road back under the trees
       if (style === "log" && w.state.body.fatigue >= 0.55 && w.rt.rng() < 0.34) {
         ctx.setFlag(ROLLED, true);
         w.emit("body:slip", { entity: "deadfall", severity: 1 });
@@ -205,7 +211,12 @@ export default defineScene({
         return;
       }
       if (progress < 0.15) return;
-      ctx.spend({ fear: fearUp(0.08) }, "手松了");
+      /* §3.3 prices 松手 at +0.08 and the ENGINE already charges exactly that: CameraBodySystem emits body:fear +0.08
+         on every hold:release past 5 %. Spending fearUp(0.08) here on top of it charged 0.16 wide and 0.192 narrow —
+         measured in the page, fear 0.5 -> 0.660. Only the narrow beam's surcharge belongs to the scene, so only the
+         difference is spent: nothing on wide, +0.032 on narrow. */
+      const extra = fearUp(0.08) - 0.08;
+      if (extra > 0.0001) ctx.spend({ fear: extra }, "手松了（窄光）");
       w.emit("body:rest", { seconds: 5 });
       ctx.kick("slip", 0.8, { yaw: 0, pitch: -8 });
       ctx.sfx("slide", 0, 0.7); ctx.sfx("breath", 0, 0.9);
@@ -225,12 +236,23 @@ export default defineScene({
     });
 
     /* The gap between the trunks. She goes in, and the one sound that was telling her where down is stops. */
+    /* §8 makes «那里听不见公路声，那个「听不见」就是信息» the whole content of this twenty-five-minute wrong turn, so
+       the road going away has to be somewhere she is STANDING, not a blip. Going in sets the ambience and leaves it
+       set: no timer brings it back. It comes back when she does something — the next hold, or walking out of the
+       node — which is also the moment her body turns round. */
+    let beforeGap: Partial<Ambience> | null = null;   // what the wood sounded like before she walked in there
+    const leaveGap = () => {
+      if (!beforeGap) return;
+      amb = beforeGap; beforeGap = null;               // restores 21:05's quieter wind too, if it had already come
+      w.emit("ambience", { overrides: amb });
+      ctx.kick("turn", 0.7); ctx.sfx("step", -0.25, 0.7);
+    };
     ctx.onInteract("tree-gap", () => {
       ctx.setFlag(GAP, true);
       ctx.spend({ fear: 0.12 }, "走错树缝");
       ctx.kick("step", 0.9); ctx.sfx("step", -0.6, 0.9); ctx.fx("dust", 0.25);
-      pulseAmb({ engine: 0, crickets: 0.12, wind: 0.1 }, 950);
-      ctx.after(980, () => { ctx.kick("turn", 0.7); ctx.sfx("step", -0.25, 0.7); });
+      beforeGap = amb;
+      setAmb({ engine: 0, crickets: 0.12, wind: 0.1 });
     });
 
     /* Looking up. The wood has a top, and for a breath the dark has an edge. */
@@ -293,7 +315,9 @@ export default defineScene({
 
     /* Leaving without a confirmed mark: twenty minutes of looking for the trail in the dark (v4 §3.5). */
     ctx.on("travel:begin", ({ from, to }) => {
-      if (from !== "forest1" || to !== "forest2" || ctx.flag(CERTAIN, false)) return;
+      if (from !== "forest1") return;
+      leaveGap();
+      if (to !== "forest2" || ctx.flag(CERTAIN, false)) return;
       ctx.spend({ minutes: 20, fear: 0.1 }, "没认记号，找了一段路");
       ctx.kick("turn", 0.5);
       // §3.5's own line for leaving without a confirmed mark: priority 2, or the adrenaline gate eats it.

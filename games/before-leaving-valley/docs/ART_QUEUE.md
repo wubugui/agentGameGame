@@ -45,7 +45,7 @@
 
 ## forest1 / forest2 / hairpin / car（第 1 轮）
 
-- blaze-656 | forest1 blaze-656、forest2 blaze-f2 | 树皮上的红-白-红 656 漆记，竖长条，不宽于 14 屏幕像素，画在细云杉树干上 | night（补光灯冷白光圈里） | 3 | f1 −0.6/4/13，f2 11/6/9 | 由 blaze-red-white.webp 衍生：去掉石头本体，只留刷在树皮上的漆。今天两场都先用 blaze-red-white.webp 顶着（是同一道漆，画在石头上）
+- blaze-656 | forest1 blaze-656、forest2 blaze-f2 | 树皮上的红-白-红 656 漆记，竖长条，不宽于 14 屏幕像素，画在细云杉树干上 | night（补光灯冷白光圈里） | 3 | f1 −0.6/4/13，f2 11/6/9 | 由 blaze-red-white.webp 衍生：去掉石头本体，只留刷在树皮上的漆。今天两场都先用 blaze-red-white.webp 顶着（是同一道漆，画在石头上）（art-7 裁决：第 48 行与第 89 行的矛盾按"一个文件、带一条窄树皮"统一——blaze-656.webp 是刷在一条窄云杉树皮上的红-白-红 656，forest1/forest2/forestEdge 三处共用，不再拆 bare 版；forest1/forest2 的 sprite src 已从 blaze-red-white.webp 切到它）（art-7 裁决：第 48 行与第 89 行的矛盾按“一个文件、带一条窄树皮”统一：blaze-656.webp 是刷在一条窄云杉树皮上的红-白-红 656，forest1/forest2/forestEdge 三处共用，不再拆 bare 版；forest1/forest2 的 sprite src 已从 blaze-red-white.webp 切到它）
 - blaze-656-dim | forest1 blaze-656、forest2 blaze-f2（认过之后） | 同一道漆被确认之后压暗的版本，只剩一道极淡的高光（v4 §3.5「留一道极淡的高光」） | night | 3 | 同 blaze-656 | 由 blaze-656 衍生。没有它时认过的记号仍留在画上，靠 requires 给手+tock，不发生变化
 - blaze-lichen-night | forest1 moss-mark | 大倾斜巨石亮面上的一块橙灰色地衣，轮廓与 656 同大同形，凑近才分得出 | night | 3 | 14/3.5/14 | 由 blaze-false.webp 衍生（去掉整块鹅卵石，只留地衣）。今天用 blaze-false.webp 顶着
 - blaze-arrow-old-night | forest1 old-arrow | 另一条路线留下的旧箭头，褪色的红漆，刷在左边那对树干近处那一根的树皮上 | night | 3 | −39.5/−6.4/12 | 新画，可由 blaze-false.webp 改。今天用 blaze-false.webp 顶着
@@ -86,7 +86,7 @@
 - deer-shadows | deer | §6 的第二张脸：十几只鹿只剩轮廓剪影，与 deer-herd 同构同位 | dusk（light < 0.3） | 18 | yaw 9.5 / pitch −24 / distance 14 | 由 sprites/deer-herd.webp 压暗去细节衍生；场景暂未引用（引用缺失文件会把鹿群整个从画面删掉），落地后 deer.scene.ts 加 swap
 - deer-shadows-alert | deer | 同上，头全部抬起来朝向镜头 | dusk | 18 | 同上 | 由 deer-shadows 衍生；同上，落地后加 swap
 - deer-eyeshine | deer | §6 的第三张脸：几乎全黑，只剩光束边缘的两点反光 | night（light = 0） | 18 | 同上 | 由 deer-shadows 衍生；同上，落地后加 swap
-- blaze-656 | forestEdge | 树干上的红白红漆条，白漆上手写 656，不带树皮、不带石头（forest1 也用同一张） | night（灯光下） | 2.8 | yaw 6.2 / pitch −25.2 / distance 10 | 由 sprites/blaze-red-white.webp 去掉石头衍生；本轮已改用 blaze-red-white 顶上，与 forest1 一致
+- blaze-656 | forestEdge | 树干上的红白红漆条，白漆上手写 656，不带树皮、不带石头（forest1 也用同一张） | night（灯光下） | 2.8 | yaw 6.2 / pitch −25.2 / distance 10 | 由 sprites/blaze-red-white.webp 去掉石头衍生；本轮已改用 blaze-red-white 顶上，与 forest1 一致（art-7 裁决：改为与第 48 行一致——同一张 blaze-656.webp，带一条窄树皮载体，与 blaze-arrow-old-night / blaze-false-bark 的剪影语言统一；"不带树皮"作废，"不带石头"仍然有效）（art-7 裁决：改为与第 48 行一致——同一张 blaze-656.webp，带一条窄树皮载体，与 blaze-arrow-old-night / blaze-false-bark 的剪影语言统一；“不带树皮”作废，“不带石头”仍然有效）
 
 
 ## 第 3 轮美术审查打回（art-3 批次；按 fixPrompt 重做，做完安装到原路径）
@@ -250,3 +250,17 @@
 ## 补充（集成者，2026-09-06）
 
 - hands-lap-car | car（HandsLayer 在车里贴的那双手） | 第一人称看向自己膝盖：两只空手搭在膝上（手机已经掉在森林里，绝不能有手机），露指手套已脱、手背有擦伤的灰，一条斜过来的安全带，座椅是浅灰绒面；只有手与膝盖，不见脸与躯干 | 车内夜·仪表台暖橙光 + 窗外冷蓝 | 38（贴在屏幕下缘） | 固定叠层，不投影 | 由 hands-lap.webp 衍生但去掉手机
+
+
+## mailbox / forest1 / forest2 / car / hutView / deer（第 2 轮 · 关卡作者复核）
+
+这六场**一张不缺**：每一个 `sprites/...` 引用在 public/sprites 里都有文件，没有一个空圆环，也没有任何实体、可读物、
+E 键动作或节拍是被"等图"关掉的。上一轮队列里为这六场写的图全部落地并已接进场景：mailbox-wall / mailbox-wall-open、
+blaze-streak-wet、blaze-656 / blaze-656-dim、blaze-lichen-night、blaze-arrow-old-night、blaze-false-bark、
+root-arch-night(-f2) / rock-step-night(-f2)、hand-on-wheel、water-bottle-night、couple-driver、couple-passenger、
+deer-herd / deer-shadows / deer-shadows-alert / deer-eyeshine、deer-fawn、grass-pressed、hut-far / hut-far-lit。
+下面三条不是缺图，是**已落地的图上量出来、仍然压着一行 §6/§8 的偏差**；格式同上。
+
+- hut-far-lit（重打光） | hutView hut-house（17:00 那一拍） | 同一栋房子、同一机位、同一 611x401 画布，只要一扇窗亮起来 | **day（16:00–17:00 仍是满光）** | 4（房子 28.8 px 高、44 px 宽） | −34 / 2.1 / 16 | 由 hut-far.webp 重打光。实测：轮廓 alpha 完全重合（IoU 1.000），但整张比 hut-far 暗 27%（平均亮度 90 对 123）——在 lightOf()=1 的 16:00 换上去，是"整座房子暗下来"叠在"一扇窗亮起来"上。请把整体明度对回 hut-far，只让那扇窗变暖。另：窗的暖色像素只占画面 x 0.465..0.519 / y 0.741..0.825，这个尺寸下只有 2.4 x 2.4 px；希望在窗外墙面上加一小圈暖色晕开（半径约窗宽的 2 倍），那一拍才能在眼角被看见
+- couple-passenger（压暗） | car couple-passenger | 副驾的意大利女生，从后座看她越过肩膀回头 | night interior（仪表盘下方暖光 + 右侧窗冷蓝） | 67 | 58 / −2.8 / 9 | 图已落地、姿态与画法都对，唯一的问题是明度：燕麦色针织衫与脸是整帧最亮的一块，比仪表台还亮，夜车里抢视线。目标 V 0.28–0.32、S ≤ 0.22（队列上一轮已写过这条，重出时请一并压暗）
+- deer-fawn（可选，尺寸校准用） | deer fawn | 一头小鹿，正面，比成年鹿矮三分之一 | dusk | 4.2（成年鹿在 deer-herd 里是 5.78 vh，小鹿画面高 4.08 vh = 71%） | 11 / −26.2 / 11 | 图已落地。队列早先那一行写的屏高 5 是按"成年鹿 80 px"算的，而同一场里成年鹿实测 42 px；这一行只是把尺寸列改成量出来的数，图本身不用重画

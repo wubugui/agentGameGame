@@ -24,9 +24,11 @@ const OBJ_TIME = "把从这里到公路的每一段时间加起来";
 const OBJ_RETREAT = "紧急下撤：找 656 · Plan de Roces · Val Lasties";
 
 // Things painted in 09b-hut, with the pixel they were read from.
-/* distance 16 keeps the sprite out of PanoStage's scale clamp (max(0.6, 10/d)), so sizeVh really is the height
-   on screen: 2.2 vh ≈ 16 px at 720p — a house across a whole valley, read against the wall behind it. */
-const HUT: Transform = { yaw: -34, pitch: 1.2, distance: 16 };        // on the shoulder above the far wall across the valley (350, 350)
+/* distance 16 keeps the sprite out of PanoStage's scale clamp (max(0.6, 10/d)), so sizeVh really is the height on
+   screen. The pitch is set from the painting rather than from the middle of the house: the grassy shelf the hut
+   stands on runs through plate (350, 352) = pitch 0.93, and at 4 vh the file is 28.8 px tall = 2.4°, so the anchor
+   sits 1.2° above the shelf and the walls come down onto it. */
+const HUT: Transform = { yaw: -34, pitch: 2.1, distance: 16 };        // standing on the shelf above the far wall (350, 352)
 const FAR_WALL: Transform = { yaw: -29.7, pitch: -8.6, distance: 20 }; // the middle of the layered grey wall on the far side (387, 434)
 const MESA: Transform = { yaw: 12, pitch: 14.5, distance: 35 };       // the flat-topped range in the sun, centre skyline (742, 236)
 const CLOUDS: Transform = { yaw: 36, pitch: 33, distance: 30 };       // the cloud bank over the right-hand massif (947, 78)
@@ -43,27 +45,28 @@ const TRAIL: Transform = { yaw: 54, pitch: -24 };                     // the dir
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
-/* The house on the far rim, in two states, and each state is a PROP with one shared hotspot beside it.
-   PanoStage drives a Hotspot's opacity — the whole element, its sprite included — from how near the gaze is,
-   so while the house lived inside its own hotspot it faded off the far rim whenever she was not looking
-   straight at it, and 17:00's one lit window could only be noticed by someone already staring at the spot it
-   happens in. As props the two houses are on the picture the whole time she stands here and the window comes on
-   in the corner of the eye, which is what §8 (17:00 山屋的窗户亮起来) is for; the hotspot is only the minute
-   she spends looking at it.
-   The two states are NOT one sprite with a swap: hut-far.webp and hut-far-lit.webp are two different paintings
-   of two different houses, and a swap entry cannot carry its own sizeVh — so the one frame where the window
-   comes on would also change the size of the building.
-   Row-scanned off the alpha of both files: hut-far is 716×459 with its walls 292 px wide and the house 209 px
-   tall; hut-far-lit is 775×675 with its walls 393 px wide and the house 314 px tall. Only the sizeVh (the height
-   of the whole file, rocks included) is under the scene's control, so the two are matched on the ONE measurement
-   the player can see across a valley — the width of the painted walls: 292 × 2.2/459 = 1.400 vh for the dark
-   house, 393 × 2.4/675 = 1.398 vh for the lit one. The lit house is still 11% taller and a different silhouette
-   (a narrow cabin against a wide gabled cottage): that cannot be fixed here and is an ART request (re-export the
-   lit house as the same building in the same frame). With the widths matched, both house bases land within a
-   quarter pixel of the anchor, so the lit one takes no pitch correction. */
-const house = (id: EntityId, transform: Transform, src: string, sizeVh: number, when: EntityDef["visible"]): EntityDef => ({
-  id, transform, visible: when,
-  sprite: { src, layer: "prop", sizeVh },
+/* The house on the far rim. ONE prop with one src swap, not two entities: hut-far.webp and hut-far-lit.webp are now
+   the same 611x401 file twice — same building, same camera, and (measured) an alpha silhouette that overlaps 1.000 —
+   so the swap cannot move the house or change its size the way two differently-cropped paintings did. The old pair
+   needed their sizeVh matched by hand on the width of the painted walls and still grew the building 17% at the one
+   frame that is supposed to read "nothing changed but the window"; that whole correction is gone with them.
+   It is a prop and not the hotspot's own sprite because PanoStage drives a Hotspot's opacity from how near the gaze
+   is: while the house lived inside its hotspot it faded off the far rim whenever she was not looking straight at it,
+   and 17:00's window could only be noticed by someone already staring at the spot it happens in. As a prop it is on
+   the picture the whole time she stands here and the window comes on in the corner of the eye, which is what §8
+   (17:00 山屋的窗户亮起来) is for; the hotspot beside it is only the minute she spends looking at it.
+   Two measurements this file has to be honest about. (1) SCALE: the far wall is 200-300 m of rock drawn about 204 px
+   tall, so a 7 m hut on its rim is 5-7 px — 4 vh (28.8 px) is a deliberate ~5x exaggeration, taken because a house
+   that reads as a house is the only way §7's decision has an object. (2) THE WINDOW: the warm pixels that separate
+   the two files sit at fractions x 0.465..0.519, y 0.741..0.825 of the file, so at 4 vh the lit window is about
+   2.4 x 2.4 px. It is the only warm colour anywhere on that side of the valley, and the beat also turns her head and
+   says one line — but a warm halo bleeding onto the wall around it is what would make it read on its own, and that
+   is an ART note (docs/ART_QUEUE.md), together with the one value the re-export still gets wrong: hut-far-lit is
+   27% darker overall than hut-far (mean luminance 90 against 123), which at 16:00 is a house that dims while the
+   whole valley stays bright. */
+const house = (id: EntityId, transform: Transform, sizeVh: number): EntityDef => ({
+  id, transform,
+  sprite: { src: "sprites/hut-far.webp", layer: "prop", sizeVh, swap: [{ when: after(HUT_LIT), src: "sprites/hut-far-lit.webp" }] },
 });
 
 /* A candidate mark. Three of them, all labelled the same, indistinguishable until she is close (v4 §3.5).
@@ -90,10 +93,9 @@ export default defineScene({
   fallback: "高原到这里就断了。",
   exitWhen: flag(CHOICE, { eq: "retreat" }),
   entities: [
-    // The one dark thing on the far rim. At 17:00 the dark one stops being drawn and the lit one starts: the walls
-    // stay the same width and stand in the same place, and one window comes on. Nobody announces it.
-    house("hut-dark", HUT, "sprites/hut-far.webp", 2.2, before(HUT_LIT)),
-    house("hut-lit", HUT, "sprites/hut-far-lit.webp", 2.4, after(HUT_LIT)),
+    // The one built thing on the far rim. At 17:00 the file swaps under the same anchor and the same sizeVh: the
+    // walls stand exactly where they stood and one window comes on. Nobody announces it.
+    house("hut-house", HUT, 4),
     // The minute she spends actually looking at it, on the same anchor: a point, not a picture.
     { id: "hut", transform: HUT,
       interactable: { verbs: ["inspect", "photograph"], label: "对面岩壁上的房子", reveal: 12, cost: { minutes: 1 } },
@@ -176,10 +178,12 @@ export default defineScene({
       ctx.setFlag("hutView.looked", true);
       ctx.say(ctx.minute() >= HUT_LIT ? "窗亮了。还是隔着一整个山谷。" : "对面。隔着一整个山谷。", { tag: "hut-look" });
     });
-    /* 17:00. The window comes on across the valley: the sprite swaps (hut-far.webp gives way to hut-far-lit.webp),
-       her head turns, one line, one entry. What the swap does not yet carry is a halo wide enough to read at 16 px
-       across a whole valley — that is an ART re-export of hut-far-lit, not a reason for the node to stay silent
-       about the one thing in this picture that changes on its own. */
+    /* 17:00. The window comes on across the valley: the file swaps under the same anchor, her head turns, one line,
+       one entry. This line is NOT gated the way 「太阳低了一格。」 is thirty lines down, and the difference is that
+       this one names something the picture really does: the same building, the same silhouette, one warm square
+       where a moment ago there was none. What the swap still does not carry is a halo wide enough to be read on its
+       own at 29 px across a whole valley — that is the ART note, not a reason for the node to stay silent about the
+       only thing in this picture that changes by itself. */
     const windowLit = () => {
       if (w.state.journal.entries.includes("E-hutLit")) return;
       glanceAt(HUT, 0.7); ctx.sfx("breath", -0.4, 0.45);
@@ -283,10 +287,10 @@ export default defineScene({
            tint, the same shadows and the same sky. The sun line is therefore gated on the light having really
            moved (it fires for anyone who takes the detour late enough), and the longer light tail is filed as a
            DESIGN request — this scene will not assert a sky that has not changed.
-           The one price the picture CAN carry today is the window across the valley: leave before 17:00, come back
-           after it, and the far rim is a different picture than the one she walked away from. The clock's mark
-           fires wherever she is standing, so the lip has to deliver it to anyone who was out on the rim when it
-           passed and never saw it (the entry is what stops it arriving twice). --- */
+           The one price the picture CAN carry today is the window across the valley, and with the re-export that is
+           now a real one: leave before 17:00, come back after it, and the far rim is the same house with a lit
+           window in it. The clock's mark fires wherever she is standing, so the lip has to deliver it to anyone who
+           was out on the rim when it passed and never saw it (the entry is what stops it arriving twice). --- */
     ctx.onEnter((from) => {
       if (from !== "hutTurn") return;
       ctx.setFlag("hutView.turned", true);

@@ -24,29 +24,34 @@ const LETTER_LEAF = 2;          // the third leaf is the 28/07 page
 
 /* Painted things. The hanger where the cable is bolted to the rock, top right; the box low on the wall under it; the
    cable's lower run at her feet, bottom left.
-   The box sprite still carries a stone plinth baked into it (a green box bolted onto a boulder, painted three-quarters
-   from above, in a bluer stone than this wall), and the recut without it is in the art queue. Until it lands the plinth
-   is made as small and as unremarkable as the scene can make it: 13.5 vh instead of 18, moved down and right off the
-   smooth pale panel onto the broken blocks at (1118, 591), where the painting is already a jumble of pale angular
-   stones with shadow between them and a borrowed boulder reads as one more block rather than as a boulder floating on a
-   vertical wall. It cannot go much lower: measured live, past about pitch -30 the sprite runs off the bottom of the
-   frame and the pad hotspots stop being reachable. The `mailbox-cut` class is there for the mask that crops the plinth
-   away the moment such a rule exists (in the requests). Nothing here points at art that does not exist: the box must
-   never stop being drawn — it is the letter. */
+   The box is `mailbox-wall.webp` / `mailbox-wall-open.webp`: the recut that the art queue asked for and that is now on
+   disk — the same green ammo box painted FACE ON, bolted through a flat plate, with no stone plinth under it and no
+   cable of its own (the old mailbox-closed/open pair carried both, so it read as a boulder pasted on a vertical wall
+   and its baked-in cable duplicated the painted one nine degrees away). Nothing is cropped or hidden any more, so the
+   `mailbox-cut` class and the clip-path request are gone with it.
+   It is also no longer a 13.5 vh postage stamp. She is standing at the box with a hand in it: at 28 vh the sprite
+   draws 202 x 214 px on a 720-high viewport, which is a 25 cm box at arm's length, and — the reason the size had to
+   move — the Memo pad the open sprite paints inside it (fractions x 0.315..0.675, y 0.345..0.60 of the file) then
+   covers 96 x 43 px instead of 25 x 32, which is what the four things she does in there need to stop sharing one
+   pointer target and one label line.
+   Screen geometry used for every offset below: 12 px per degree of pitch (60 deg over 720 px), 14.2 px per degree of
+   yaw (90 deg over 1280 px); at distance 9 PanoStage's scale is 0.9 x max(0.6, 10/9) = 1.00, so sizeVh really is the
+   height on screen. 28 vh = 16.8 deg of pitch and 15.06 deg of yaw across the file. */
 const ANCHOR: Transform = { yaw: 65, pitch: -12 };                    // the cable at the foot of the hanger plate (1195, 463)
 const LANYARD_ON_ANCHOR: Transform = { yaw: 64.5, pitch: -15.5, distance: 9 };   // the carabiner hanging from it
-const BOX: Transform = { yaw: 56, pitch: -27, distance: 9 };          // the box, on the broken blocks under the cable (1118, 591)
-/* Everything on the box is an offset from BOX, kept in the proportions that were verified against the rendered sprite
-   and rescaled with it (24 vh -> 18 vh -> 13.5 vh, so each offset x 0.75 twice over), which keeps every hotspot on the
-   same fraction of the box it was measured at: the pad the open sprite paints occupies x 0.31..0.70, y 0.35..0.56 of
-   the sprite's rectangle, and all five points below stay inside that. */
-const LID: Transform = { yaw: 56.4, pitch: -25.09 };                  // its lid: fraction (0.55, 0.24) of the closed sprite
-const PAD: Transform = { yaw: 55.78, pitch: -26.5, distance: 9 };     // the leaf standing up in the open box (0.47, 0.42)
-const PAD_EDGE: Transform = { yaw: 55.21, pitch: -27.23 };            // the pad's near left corner (0.385, 0.51)
-const PAGE_AT: Transform = { yaw: 56.23, pitch: -26.27 };             // the writing on that leaf (0.53, 0.40)
-const PAGE_CORNER: Transform = { yaw: 56.68, pitch: -27.4 };          // its loose bottom right corner (0.60, 0.575)
+const BOX: Transform = { yaw: 56, pitch: -25.5, distance: 9 };        // the box on the broken blocks under the cable (1118, 578)
+/* Everything on the box is a fraction of the rendered sprite converted through the two numbers above. The box spans
+   pitch -17.1..-33.9 and yaw 48.47..63.53; the open sprite's pad is the block x 0.315..0.675, y 0.345..0.60 inside
+   that, and the 28/07 leaf stands up out of it against the open lid. */
+const LID: Transform = { yaw: 56, pitch: -23.15 };                    // the closed lid, fraction (0.50, 0.36)
+const PAD: Transform = { yaw: 55.9, pitch: -20.5, distance: 9 };      // the leaf standing up out of the pad, 14 vh
+const PAD_EDGE: Transform = { yaw: 53.6, pitch: -26.8 };              // the pad's near left corner (0.34, 0.575)
+const PAGE_AT: Transform = { yaw: 56.6, pitch: -21.3 };               // the writing on the standing leaf
+const PAGE_CORNER: Transform = { yaw: 58.3, pitch: -24.4 };           // its loose bottom right corner
 const CABLE_UP: Transform = { yaw: 60, pitch: -13.4 };                // the cable itself, rising past the box (1152, 474)
-const CABLE_FOOT: Transform = { yaw: 3, pitch: -32.3 };               // the cable's lower run, dropping away left (666, 637)
+/* Traced on the plain plate column by column: the strand runs (620, 637) -> (666, 624) -> (700, 612) -> (760, 596).
+   The old -32.3 anchored the arrow at y = 637, a ring's width under the cable at that x. */
+const CABLE_FOOT: Transform = { yaw: 3, pitch: -30.8 };               // the cable's lower run, dropping away left (666, 624)
 
 /** The only photograph of that page: taken with this phone, at this box. */
 const LETTER_PHOTO = {
@@ -68,10 +73,9 @@ const onLetterLeaf = all(flag(OPENED), flag(PAGE, { eq: LETTER_LEAF }));
    `entityIs(id,"read")`, so it comes into being only once she has walked up and settled that mark. Nothing written from
    `real` may sit on the entity itself: a class there would be in the DOM from the first frame and would sort true from
    false before she is near either of them (§3.5 / §12 A1). */
-const MARK_SRC = (real: boolean) => real ? "sprites/blaze-red-white.webp" : "sprites/blaze-false.webp";
-const settled = (id: EntityId, real: boolean): Partial<EntityDef> => ({
+const settled = (id: EntityId, src: string, sizeVh: number, real: boolean): Partial<EntityDef> => ({
   visible: all(),
-  sprite: { src: MARK_SRC(real), layer: "prop", sizeVh: 4, swap: [{ when: entityIs(id, "read"), src: MARK_SRC(real), className: real ? "blaze-found" : "blaze-ruled-out" }] },
+  sprite: { src, layer: "prop", sizeVh, swap: [{ when: entityIs(id, "read"), src, className: real ? "blaze-found" : "blaze-ruled-out" }] },
   interactable: { verbs: ["inspect"], label: "石头上的记号", reveal: 12, cost: { minutes: 0 }, once: true },
 });
 
@@ -108,34 +112,42 @@ export default defineScene({
       visible: not(flag(CLIPPED)) },
     { id: "anchor-lanyard", transform: LANYARD_ON_ANCHOR, sprite: { src: "sprites/carabiner-blue.webp", layer: "hand", sizeVh: 7 }, visible: flag(CLIPPED) },
     // The box on the wall under the cable: closed until she has both hands; the lid is the thing she opens.
-    { id: "mailbox", transform: BOX, sprite: { src: "sprites/mailbox-closed.webp", layer: "prop", className: "mailbox-cut", sizeVh: 13.5, swap: [{ when: flag(OPENED), src: "sprites/mailbox-open.webp", className: "mailbox-cut" }] } },
+    { id: "mailbox", transform: BOX, sprite: { src: "sprites/mailbox-wall.webp", layer: "prop", sizeVh: 28, swap: [{ when: flag(OPENED), src: "sprites/mailbox-wall-open.webp" }] } },
     { id: "mailbox-lid", transform: LID,
       interactable: { verbs: ["use"], label: "金属盒", reveal: 13, cost: { minutes: 1 }, requires: handsFree },
       visible: not(flag(OPENED)) },
-    // The Memo pad inside is painted into the open box: three rain-soaked leaves. Landing on the fourth turns one leaf
-    // up against the lid — the only leaf with writing on it, and the only one this sprite ever shows.
-    { id: "memo-pad", transform: PAD, sprite: { src: "sprites/memo-page.webp", layer: "prop", sizeVh: 4.5 }, visible: onLetterLeaf },
+    // The Memo pad inside is painted into the open box: three rain-soaked leaves. Landing on the fourth stands one leaf
+    // up against the open lid — the only leaf with writing on it, and the only one this sprite ever shows.
+    { id: "memo-pad", transform: PAD, sprite: { src: "sprites/memo-page.webp", layer: "prop", sizeVh: 14 }, visible: onLetterLeaf },
     /* Turning the leaves is free. §4's rejected list says the three rain-soaked pages are scenery — "可翻，但不设时间
        成本、不设内容" — and ClockSystem rounds every spend, so half a minute a turn was a whole minute a turn driving
        the clock (§12 B10). The four minutes §6 gives this pad are on the page itself; the only thing a turn still costs
-       is the forty seconds of pulling one glove off, once. */
+       is the forty seconds of pulling one glove off, once.
+       便签本 sits on the pad still lying in the box (fraction 0.34, 0.575) and 这一页 on the leaf standing up out of it:
+       three degrees of yaw and 7.3 of pitch apart — measured live, the two rings land at (993, 583) and (1045, 518),
+       106 px apart with 97 px between the label lines, so the two names no longer print over each other. */
     { id: "memo-flip", transform: PAD_EDGE,
       interactable: { verbs: ["use"], label: "便签本", reveal: 12, cost: { minutes: 0 }, requires: handsFree },
       visible: flag(OPENED) },
-    readable("letter-page", PAGE_AT, "这一页", { kind: "note", title: "Memo · 28/07/2025", lines: LETTER_LINES_IT, entry: "E-memo", minutes: 4 },
-      { visible: onLetterLeaf, interactable: { verbs: ["read"], label: "这一页", reveal: 12, cost: { minutes: 0 }, requires: handsFree } }),
-    // The loose corner of the page. Her hand goes halfway and comes back: the one refusal in the game.
+    /* The loose corner of the page. Her hand goes halfway and comes back: the one refusal in the game — and it only
+       exists once she has read the page, which is both why she would want it and what keeps the corner from covering
+       the read on the one beat the whole game is built around. Declared before `letter-page` so the page is painted
+       last and wins the pointer wherever the two rings still touch. */
     { id: "letter-take", transform: PAGE_CORNER,
       interactable: { verbs: ["take"], label: "纸角", reveal: 12, cost: { minutes: 0.5 }, requires: handsFree, once: true },
-      visible: all(onLetterLeaf, not(entityIs("letter-take", "used"))) },
+      visible: all(onLetterLeaf, entityIs("letter-page", "read"), not(entityIs("letter-take", "used"))) },
+    readable("letter-page", PAGE_AT, "这一页", { kind: "note", title: "Memo · 28/07/2025", lines: LETTER_LINES_IT, entry: "E-memo", minutes: 4 },
+      { visible: onLetterLeaf, interactable: { verbs: ["read"], label: "这一页", reveal: 12, cost: { minutes: 0 }, requires: handsFree } }),
     // The pass, 180 m below: meadow and forest, the road's hairpins at the far left, the houses at the foot of the wall.
     lookAt("valley", { yaw: -22, pitch: -4, distance: 18 }, "脚下的山口", 2),   // §6 gives this look 2 minutes, not 1
     lookAt("road", { yaw: -46, pitch: -33, distance: 16 }, "盘山公路", 1),
     lookAt("houses", { yaw: 12, pitch: -15.5, distance: 16 }, "公路边的房子", 1),
     { id: "far-peak", transform: { yaw: -36, pitch: 24, distance: 30 }, gaze: { radius: 12, dwell: 1000 } },
     // Two candidate marks: red paint on the wall above the cable, and a rust streak on the pale rock at her feet.
-    blaze("blaze-mailbox", { yaw: 41, pitch: -8 }, true, settled("blaze-mailbox", true)),
-    blaze("rust-mailbox", { yaw: 15, pitch: -31.5 }, false, settled("rust-mailbox", false)),
+    // The streak is `blaze-streak-wet.webp` now that it exists — a water-spread orange-red stain with drips, on rock —
+    // so 「锈。不是漆。」 names what is drawn there again instead of the lichen-crusted cobble it used to borrow.
+    blaze("blaze-mailbox", { yaw: 41, pitch: -8 }, true, settled("blaze-mailbox", "sprites/blaze-red-white.webp", 4, true)),
+    blaze("rust-mailbox", { yaw: 15, pitch: -31.5 }, false, settled("rust-mailbox", "sprites/blaze-streak-wet.webp", 7, false)),
     /* On: up the cable itself, the stretch between the box and the hanger. Back: down the cable to the crack, always open.
        §3.1 gives this node 25 minutes to the next one and puts the top of the ferrata at 13:25. The fastest legal line
        through the box now costs 8 of those (anchor 1, lid 1, one glove 1, the page 4, the photograph 1) with the leaves

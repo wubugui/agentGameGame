@@ -99,7 +99,7 @@ export default defineScene({
     // headlight points with bloom, docs/ART_QUEUE.md). Until it is drawn this anchor carries `car-passing.webp` —
     // the one car in the sprite folder whose headlights are on — at 11 px, where a whole body is a lit speck on the
     // far bend. Nothing drawn at all would leave this beat with no visible cause, and the beat is the whole node.
-    prop("headlight-beam", FAR_ROAD, "sprites/car-passing.webp", 1.5, { visible: carComing }),
+    prop("headlight-beam", FAR_ROAD, "sprites/headlights-far.webp", 1.5, { visible: carComing }),
     { id: "headlights", transform: FAR_ROAD,
       interactable: { verbs: ["inspect"], label: "上来的车灯", reveal: 22 },
       gaze: { radius: 14, dwell: 600 },
@@ -117,7 +117,7 @@ export default defineScene({
        The difference between 十几步 and 四十米 is carried by everything else: the anchor sits further along the road
        and higher in the frame, and `runAfter` charges three minutes instead of one. */
     { id: "taillights", transform: tailAt,
-      sprite: { src: "sprites/taillights-far.webp", layer: "prop", sizeVh: 5 },
+      sprite: { src: "sprites/taillights-near.webp", layer: "prop", sizeVh: 5 },
       visible: flag(LEFT) },
     { id: "tail", transform: tailAt, className: "hold-hotspot",
       interactable: { verbs: ["hold"], label: "那两点红色", reveal: 45 },

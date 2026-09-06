@@ -32,8 +32,10 @@ const ROAD_NEAR = 0.32;            // 视线真正落到那片光上时，它涨
    = 26.8——22 在纸上够，在这一场真正被玩到的疲劳下不够（页面里实测两种咬法都是 11.0）。34：宽光 ≈ 14.0°，
    窄光（×0.5）落回 11°。这才是咬法的全部意义（v4 §3.4）。 */
 const HOLD_REVEAL = 34;
-/* 两处记号在屏幕上一样高（3 vh = 21.6 px），和 forest1 的三处一样：凑近之前分不出真假（v4 §3.5）。 */
-const MARK_VH = 3;
+/* 两处记号在屏幕上一样高，和 forest1 的三处一样：凑近之前分不出真假（v4 §3.5）。两张图都是树皮竖条
+   （宽约高的 0.33），8 vh = 58 px 高、19 px 宽——比它们钉着的那两根树干都窄（右边那根量出来 45 平面 px ≈ 75
+   屏幕 px，山谷灯左边那根 32 平面 px ≈ 53 屏幕 px），也不再是白天那两张亮底的石头。 */
+const MARK_VH = 8;
 
 type Kind = "root" | "rock" | "log";
 type Hold = { id: string; step: number; kind: Kind; label: string; t: Transform; sprite?: string; sizeVh?: number };
@@ -44,13 +46,14 @@ const HOLDS: Hold[] = [
   { id: "f2-root-a", step: 0, kind: "root", label: "翻出来的树根", t: { yaw: 38, pitch: -7, distance: 9 } },     // 根盘垂下来的那条粗根，往里收进 ±40°（x≈964, y≈420）
   { id: "f2-stump", step: 1, kind: "log", label: "倒木的断口", t: { yaw: -6, pitch: -12, distance: 9 } },        // 炸开的木茬（x≈589, y≈463）
   { id: "f2-bank", step: 1, kind: "rock", label: "苔藓土坎", t: { yaw: -17, pitch: -22, distance: 8 } },         // 断口下面的苔藓土脊（x≈495, y≈549）
-  { id: "f2-root-c", step: 2, kind: "root", label: "横在路上的根", t: { yaw: 18, pitch: -26, distance: 8 }, sprite: "sprites/root-arch.webp", sizeVh: 8 },  // 横穿路面被踩白的树根（x≈794, y≈583）
-  { id: "f2-rock-c", step: 2, kind: "rock", label: "路边的石头", t: { yaw: 5, pitch: -20, distance: 8 }, sprite: "sprites/rock-step.webp", sizeVh: 7 },    // 小路左沿的碎石（x≈683, y≈531）
-  { id: "f2-root-d", step: 3, kind: "root", label: "大树的板根", t: { yaw: -38, pitch: -22, distance: 8 }, sprite: "sprites/root-arch.webp", sizeVh: 11 }, // 近处大树铺开的苔藓板根（x≈316, y≈549）
-  /* 这一堆青石往左还有延伸：锚点从 (580,600) 挪到 (533,613) 那块圆的青石上。原来的位置压在引擎钉死的
-     喊一声 按钮（.story-action，pano.css:127 left:50%/bottom:9.5vh）下面——在爬行机位下那个框盖住大约
-     yaw −8…0 / pitch −26…−30，最后一格两个选择里的石头这一支多数时刻按不到。 */
-  { id: "f2-rock-d", step: 3, kind: "rock", label: "青石", t: { yaw: -12.5, pitch: -29.5, distance: 8 }, sprite: "sprites/rock-step.webp", sizeVh: 9 },    // 路左那堆青石里圆的一块（x≈533, y≈613）
+  { id: "f2-root-c", step: 2, kind: "root", label: "横在路上的根", t: { yaw: 18, pitch: -26, distance: 8 }, sprite: "sprites/root-arch-night-f2.webp", sizeVh: 8 },  // 横穿路面被踩白的树根（x≈794, y≈583）
+  { id: "f2-rock-c", step: 2, kind: "rock", label: "路边的石头", t: { yaw: 5, pitch: -20, distance: 8 }, sprite: "sprites/rock-step-night-f2.webp", sizeVh: 7 },    // 小路左沿的碎石（x≈683, y≈531）
+  { id: "f2-root-d", step: 3, kind: "root", label: "大树的板根", t: { yaw: -38, pitch: -22, distance: 8 }, sprite: "sprites/root-arch-night-f2.webp", sizeVh: 11 }, // 近处大树铺开的苔藓板根（x≈316, y≈549）
+  /* 这一堆青石往左下还有一块：锚点从 (533,613) 再挪到 (491,630) 那块浅色的圆石上。−12.5 那一格的热点框实测
+     是 [464,600]–[560,690]，引擎钉死的 喊一声 按钮（.story-action，pano.css:127 left:50%/bottom:9.5vh）实测是
+     [545,609]–[640,651]——右上角 15 x 42 px 压在按钮底下，最后一格两个选择里石头这一支的一角会答成「喊一声」。
+     −17.5 / −31.5 把框推到 [391,624]–[487,714]，离按钮左沿还有 58 px，锚点仍在那块画着的浅色圆石上。 */
+  { id: "f2-rock-d", step: 3, kind: "rock", label: "青石", t: { yaw: -17.5, pitch: -31.5, distance: 8 }, sprite: "sprites/rock-step-night-f2.webp", sizeVh: 9 },    // 路左那堆青石里浅色的一块（x≈491, y≈630）
 ];
 
 /* 比 forest1（log 4/.08、root 5/.06、rock 8/.02）每一格都更贵——这一段更陡。三种代价互不支配：
@@ -107,26 +110,30 @@ export default defineScene({
     { id: "valley-lights", transform: LIGHTS, gaze: { radius: 13, dwell: 900 },
       interactable: { verbs: ["inspect", "photograph"], label: "下面的灯", reveal: 12, cost: { minutes: 0 } } },
     /* 两处候选记号：一处是小路右边那棵细树干上的红-白-红，一处是山谷灯左边那棵中景细树干上的旧疤。
-       同一尺寸、同一标签——凑近之前分不出真假（v4 §3.5）。夜版的图还没有，先用工厂自己那两张
-       （blaze-red-white / blaze-false），缺的两张写在 docs/ART_QUEUE.md 里。
+       同一尺寸、同一标签——凑近之前分不出真假（v4 §3.5）。夜版的树皮竖条已经在盘上：blaze-656-dim 与
+       blaze-false-bark，两张都是暗的、都是树皮——标签说树干，画的也是树干（§0.5），凑近之前谁也不比谁红。
+       认过之后真的那处换成 blaze-656.webp（换 src，Hotspot 的 <img> 收得到；换 className 收不到，所以不用它）。
        认过之后两处都留在画上（§3.5 要的是留痕，不是消失），并且都用 requires 而不是 enabled：
        enabled=false 只会加一个 .is-disabled（全项目没有这条 CSS），而 Hotspot.act() 直接 return，
        结果是一个满亮度、按下去什么都不发生的死控件；requires 让 InteractionSystem 出手、回手、一声 tock，
        且不扣任何代价。假记号不写 cost：JournalSystem 已经替认错的那一次扣了 1 分钟（§3.5 只扣一次）。 */
     blaze("blaze-f2", { yaw: 11, pitch: 6, distance: 9 }, true, {
-      sprite: { src: "sprites/blaze-red-white.webp", layer: "prop", sizeVh: MARK_VH },
+      sprite: { src: "sprites/blaze-656-dim.webp", layer: "prop", sizeVh: MARK_VH,
+        swap: [{ when: entityIs("blaze-f2", "read"), src: "sprites/blaze-656.webp" }] },
       interactable: { verbs: ["inspect"], label: "树干上的记号", reveal: 12, cost: { minutes: 1 },
         requires: not(entityIs("blaze-f2", "read")) },
       visible: undefined,
     }),
     blaze("moss-f2", { yaw: -33, pitch: -12, distance: 8 }, false, {
-      sprite: { src: "sprites/blaze-false.webp", layer: "prop", sizeVh: MARK_VH },
+      sprite: { src: "sprites/blaze-false-bark.webp", layer: "prop", sizeVh: MARK_VH },
       interactable: { verbs: ["inspect"], label: "树干上的记号", reveal: 12,
         requires: not(entityIs("moss-f2", "read")) },
       visible: undefined,
     }),
     // 灯就在那几棵杉树后面，直着下去看起来近得多。八分钟，下面是一道下不去的坎。走过一次它就从画里退出去。
-    wrongWay("wrong-slope", { yaw: -18, pitch: -12 }, "下面那几棵杉树", 8, "下不去。绕回来。", {
+    // (486,462) 那一格压在杉树剪影与山谷灯光晕的交界上（13x13 窗口 min 33 / max 196），读起来像指着那片光。
+    // (477,478) 整窗 min 34 / max 38，是那棵大杉树的实心暗部；给了 distance 14，视差跟它指的中景对上。
+    wrongWay("wrong-slope", { yaw: -19, pitch: -13.8, distance: 14 }, "下面那几棵杉树", 8, "下不去。绕回来。", {
       visible: not(flag(WRONG)),
     }),
     goArrow("go", { yaw: 12, pitch: -33 }, { to: "hairpin", minutes: 70, label: "往下", kind: "walk" }),
@@ -195,7 +202,11 @@ export default defineScene({
       }
       if (progress < 0.12) return;
       // 这里原来还写了 minutes: 0.1——ClockSystem 走 Math.round，0.1 → 0，是个空操作，删掉（0.5 才会进一分钟）。
-      ctx.spend({ fear: fearUp(0.08) }, "手松了");
+      /* §3.3 给 松手 的价钱是 +0.08，而这 0.08 引擎已经收过了：CameraBodySystem 对每一次 progress > 5% 的
+         hold:release 都记 +0.08。再 spend 一次 fearUp(0.08) 是收两遍（实测 0.5 → 0.660）。场景只该收窄光
+         那一档差价：宽光 0，窄光 +0.032。 */
+      const extra = fearUp(0.08) - 0.08;
+      if (extra > 0.0001) ctx.spend({ fear: extra }, "手松了（窄光）");
       ctx.sfx("slide", pan(h.t), 0.6); ctx.kick("slip", 0.7, { yaw: 0, pitch: -6 });
       // §3.3 点名的那一句：priority 2 才越得过肾上腺素闸门（她到这一场时 fatigue 已经是 1）。
       ctx.say("手松了。再来。", { tag: "f2-slip", priority: 2 });

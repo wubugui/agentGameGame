@@ -26,21 +26,40 @@ const WET_ROAD: Transform = { yaw: 2, pitch: -1, distance: 16 };       // the we
    no phone; `nav-phone.webp` (a phone in a vent clip, lit screen, the clip over the slats) is drawn and in place, so
    the two hotspots read as two different objects. */
 const NAV: Transform = { yaw: 7, pitch: -11, distance: 6 };            // clamped on the right slats of the vent grille (700, 454)
+/* THE TWO OF THEM. 17-car is a back-seat view with two empty front seats, and the five sentences of this node are
+   theirs — the scene put nobody in the picture at all. `couple-driver.webp` (a man from behind, head and shoulder)
+   and `couple-passenger.webp` (a woman turned back over her shoulder) are both on disk and are exactly this camera.
+   Where they go was measured off the plate rather than taken from the art brief's yaw ±33: at ±33 the anchors land at
+   plate x 358 and 922, which is the dash and the windscreen. The painted seats are at the edges of the frame — the
+   left seat back runs from beyond yaw −75 in to −37.5 with its headrest between pitch +15.75 and −3.5, the right one
+   from +41 outward with the same headrest band — so the two of them sit at yaw −54 and +58.
+   Size comes off the same seats: a 0.48 m seat back drawn 35° wide puts this camera about 0.75 m behind them, so a
+   head is some 18° = 216 px tall. couple-driver's head fills 0.47 of its file and couple-passenger's 0.45, which is
+   where 64 vh and 67 vh come from; each pitch is set so the top of the head lands on the top of the headrest it is
+   drawn against instead of floating over it. They are large because they are close, which is the node. */
+const DRIVER: Transform = { yaw: -54, pitch: -2, distance: 9 };        // the left seat back and its headrest (x < 320)
+const PASSENGER: Transform = { yaw: 58, pitch: -2.8, distance: 9 };    // the right seat back and its headrest (x > 990)
 /* The gear lever this painting actually has is at the very bottom of the centre stack (642, 693) = pitch −38.9: below
    the viewport and behind `hands-lap`. What the plate does show of the two of them is the wheel, so their hands are
    there — v4 §6/§7 name 他们搭在挡杆上的手, and what tells her they are a couple is two hands touching, not one hand
-   driving. The object had to move; the beat must not, so `hand-on-wheel.webp` is briefed as the passenger's hand
-   resting over the driver's on the rim — public/sprites has no equivalent hand to stand in for it, so this one anchor
-   is still an empty ring today and the label names the rim the plate does paint (docs/ART_QUEUE.md).
-   Anchor measured on the plate: at y = 470 the dark rim band runs x 484→515,
-   so (495, 470) is inside it — the old (502, 460) sat on the thin top-right of the rim, half off its outer edge. */
-const WHEEL: Transform = { yaw: -17, pitch: -12.8, distance: 6 };      // the right arc of the steering-wheel rim (495, 470)
-/* The bottle comes back over the right of the dash: an arm and a hand, and that is all of them the picture shows.
-   Neither of them is ever drawn from the back seat — the account gives them no lines and the game gives them no face.
-   `water-bottle.webp` is a daylight bottle in a bare hand whose forearm enters from the bottom right, and at 30 vh it
-   is bright for a night interior — but it is the bottle, held out, drawn, on the anchor where it belongs, so it stays
-   until `water-bottle-night.webp` (forearm from the upper left, across the dash) is drawn. docs/ART_QUEUE.md. */
-const WATER: Transform = { yaw: 31, pitch: -13, distance: 5 };         // an arm coming back over the right of the dash (905, 471)
+   driving. `hand-on-wheel.webp` is on disk now and is exactly that: one hand laid over the other on a rim, cuffs
+   going down either side — so this anchor names something the picture draws (§0.5) instead of being an empty ring
+   under a label for a hand nobody had painted.
+   The anchor moved with the picture. The one dark band of this wheel wide enough to carry a pair of hands is the top
+   of the rim, plate x 320..560 at y 500..545; (495, 470) is on the rim but on a 35 px sliver of it, and a hand sprite
+   centred there ran off onto the dash. (430, 522) is the middle of that band, and the hands cover plate
+   378..482 x 477..569 at 18 vh (173 x 130 px — a 20 cm pair of hands on a 37 cm wheel) — on the rim, with the
+   bottom edge of the instrument cluster behind them, which is what a rim in front of a cluster looks like. */
+const WHEEL: Transform = { yaw: -24.6, pitch: -19, distance: 6 };      // the top of the steering-wheel rim (430, 522)
+/* The bottle. `water-bottle-night.webp` is the night re-cut: a dark-sleeved forearm entering from the UPPER LEFT
+   across the dash with the bottle held out at the end of it, which is §6's 递过来 — the daylight file put a bare arm
+   in from HER own bottom right, so it read as a bottle she already had. It moved with the picture: the hotspot is the
+   bottle itself, over the middle of the dash ahead of her, and the prop is offset so the bottle inside the file lands
+   on that anchor (the bottle sits at fraction 0.865, 0.56 of a 24 vh sprite = 226 x 173 px). At that size and place it
+   clears every other anchor here: the vent, the road ahead, the navigation screen and the wet road that carries the
+   way out all fall outside the sprite. */
+const WATER: Transform = { yaw: -13, pitch: -6, distance: 6 };         // the bottle held out over the dash ahead of her (529, 411)
+const WATER_ARM: Transform = { yaw: -18.8, pitch: -5.14, distance: 6 };// where the whole arm-and-bottle file has to sit for that
 
 const LOOKED = "car.looked", LINES_SAID = "car.lines", WATER_TAKEN = "car.water", PHOTO = "car.photo";
 /* What she carries away of them. Nothing here is invented: it is the account's own list, one sentence at a time. */
@@ -104,7 +123,7 @@ export default defineScene({
       interactable: { verbs: ["inspect"], label: "后视镜", reveal: 12, cost: { minutes: 0 } },
       gaze: { radius: 10, dwell: 900 } },
     // The bottle, held back over the dash until she takes it. Holding is drinking (v4 §3.2: 车里接过那瓶水 −0.20).
-    prop("water-bottle", WATER, "sprites/water-bottle.webp", 30, { visible: not(flag(WATER_TAKEN)) }),
+    prop("water-bottle", WATER_ARM, "sprites/water-bottle-night.webp", 24, { visible: not(flag(WATER_TAKEN)) }),
     { id: "water", transform: WATER, className: "hold-hotspot",
       interactable: { verbs: ["hold"], label: "递过来的水", reveal: 15 },
       hold: { ms: 900, scaleWith: ["fatigue"] },
@@ -112,6 +131,12 @@ export default defineScene({
     // The vent. Free, useless, and the whole point of the ride: it is warm in here.
     { id: "vent", transform: VENT,
       interactable: { verbs: ["use"], label: "出风口", reveal: 12, cost: { minutes: 0 } } },
+    /* The two of them, in the two seats the painting draws empty. They are props and not hotspots: what she does with
+       them is look at the things they hand her and the things they touch, and a figure inside a Hotspot would fade in
+       and out of its seat with wherever her eyes happened to be. The account gives them no lines, so nothing here is
+       clickable — they are simply there, which is the whole difference between this ride and an empty car. */
+    prop("couple-driver", DRIVER, "sprites/couple-driver.webp", 64),
+    prop("couple-passenger", PASSENGER, "sprites/couple-passenger.webp", 67),
     // The way on is the road itself: it ends at the hotel door, where the numbers and the photograph happen.
     goArrow("go", WET_ROAD, { to: "search", minutes: 0, label: "回酒店的路", kind: "walk" }),
     /* No button for the photograph. v4 §8 puts 交换联系方式合影 at the hotel door and §9 gives that door no painting,
@@ -169,36 +194,35 @@ export default defineScene({
     const seen = new Set<EntityId>();
     /* v4 §10.2-6 / §12 C3: at least six seconds between any two lines, never queued. DialogueSystem only enforces
        that below priority 1, and these have to be priority 2 or the adrenaline gate swallows them ten hours in — so
-       the six seconds are kept here. A look inside the window does not consume a sentence: it still counts, still
-       sounds, still turns her head, and the sentence waits for the next thing she rests her eyes on. Six targets
-       against five sentences leaves exactly one spare look. */
+       the six seconds are kept here.
+       Three rules, and they used to be tangled into one:
+        1. Looking at a new thing ALWAYS counts. It used to return before seen.add / looks / bump whenever the six
+           seconds had not passed, so the player looked at something new, got the sound and the turn of her head, and
+           the game recorded nothing — car.looked and the notebook then disagreed with what they had done, and they
+           had to look at the same thing again for it to register.
+        2. A sentence is OWED for every new thing, and owing one does not expire. `said < looks` is the whole budget:
+           she never says more than the player has looked at, and a look made inside the six seconds does not throw
+           its sentence away — it waits for the next time her eyes come to rest anywhere.
+        3. So the next look pays it, even a second look at something already seen. That is what keeps the five
+           sentences alive when several things are noticed at once (in the page with `reveal=1` every entity dwells
+           on the same frame, which used to eat the whole budget in one instant and leave four sentences unsaid).
+       Six targets against five sentences still leaves exactly one spare look, and looking at nothing still gets
+       nothing: `looks` stays 0 and rule 2 never lets a line out. */
     const LINE_GAP = 6000;
     let lastLineAt = -Infinity;
     let looks = 0;
     const look = (id: EntityId, pan: number, sound: "cloth" | "tick" | "tock" | "slide" | "breath") => {
-      /* Looking at something a second time still costs her nothing and still answers: the sound off that side of
-         the car and her head going that way. Only the counting and the sentence are once each. A hotspot that goes
-         silent on the second press is a dead control (§12 D7) — six of this scene's eight were exactly that. */
-      if (seen.has(id)) {
-        ctx.sfx(sound, pan, 0.45);
-        glanceAt(ctx.transformOf(id), 0.4);
-        return;
-      }
-      const said = ctx.flag<number>(LINES_SAID, 0);
-      const due = said < CAR_LINES.length && w.rt.now - lastLineAt >= LINE_GAP;
-      if (!due && said < CAR_LINES.length) {
-        // Too soon after the last one: the road answers instead, and the sentence keeps for the next look.
-        ctx.sfx(sound, pan, 0.45);
-        glanceAt(ctx.transformOf(id), 0.4);
-        return;
-      }
-      seen.add(id);
-      looks += 1;
-      ctx.bump(LOOKED, 1);
+      /* Looking at something a second time still costs her nothing and still answers: the sound off that side of the
+         car and her head going that way. A hotspot that goes silent on the second press is a dead control (§12 D7) —
+         six of this scene's eight were exactly that. */
+      const fresh = !seen.has(id);
+      if (fresh) { seen.add(id); looks += 1; ctx.bump(LOOKED, 1); }
       ctx.sfx(sound, pan, 0.45);
-      glanceAt(ctx.transformOf(id), 0.5);
-      if (looks % 3 === 0) ctx.sfx("slide", -0.35, 0.22);     // the tyres through the water under all of it
-      if (said >= CAR_LINES.length) return;
+      glanceAt(ctx.transformOf(id), fresh ? 0.5 : 0.4);
+      if (fresh && looks % 3 === 0) ctx.sfx("slide", -0.35, 0.22);   // the tyres through the water under all of it
+      const said = ctx.flag<number>(LINES_SAID, 0);
+      if (said >= CAR_LINES.length || said >= looks) return;         // nothing owed
+      if (w.rt.now - lastLineAt < LINE_GAP) return;                  // too soon: the road answers, the sentence keeps
       lastLineAt = w.rt.now;
       ctx.setFlag(LINES_SAID, said + 1);
       // priority 2: ten hours in, she is past talking to herself — but she still passes on what they say.

@@ -27,22 +27,21 @@ const TO_FOREST_EDGE = 55;       // v4 §3.1: deer 19:20 → forestEdge 20:15
 const LOST_MINUTES = 12;         // no confirmed mark: v4 §3.5 charges 12 for this terrain band (scree uses 12 too)
 
 // Things painted in 12-deer, with the pixel they were read from.
-/* deer-herd.webp has been re-cut since the anchor below was set, and re-measured against the file that is now on
-   disk it comes out right. The file is 902x390 and it is DEER ONLY: no spruce band, no grass tufts, fourteen
-   animals on transparency. Row-scanned off its alpha, the content runs y 26-365 (6.7% to 93.6% of the height) and
-   x 26-877 (2.9% to 97.2% of the width), so nothing but animals is drawn.
-   At 18 vh and distance 14 the sprite renders 130 x 301 px (PanoStage's scale is 14/10 x max(.6, 10/14) = 1.00,
-   so sizeVh is the height on screen), and centred on the anchor it occupies y 501-631, x 571-872 of the 1280x720
-   grid. The animals themselves stand from y 510 (the far heads, up against the painted larches, whose bases run
-   y 500-560 across this span) down to y 623, which is painted grass everywhere between x 579 and the sandy path
-   at x 860 - 12-deer draws the wood-to-grass line at about y 585, so the herd stands in the open with the wood
-   behind it, which is where §6 puts it. The animals come out 4 vh (back row) to 9.4 vh (front row): a 1.4 m deer
-   at about thirty down to thirteen metres.
-   The old tree-band problem is gone with the old file; what is still missing is the dusk progression, and that is
-   three faces of the herd, not a placement (ART request, see the herd entity). */
-const HERD: Transform = { yaw: 9.5, pitch: -24, distance: 14 };       // the herd at the wood edge, its front rows out on the grass (721, 566)
+/* SIZE, measured off the file that is on disk and off the painting it stands in.
+   deer-herd.webp is 902x390 no longer: it is 1549x682, alpha content rows 44-639 and cols 44-1506, fourteen animals
+   packed shoulder to shoulder on transparency — no conifer band, no grass. Column-scanned, the tallest single animal
+   spans 0.826 of the file's height (antler tip to hoof), so at sizeVh S one animal stands 0.826 x S vh on screen.
+   What the painting says that animal should be: the larches on the same ground line beside the herd are 15-20 m of
+   tree drawn about 224 screen px, i.e. 11-15 px per metre, which puts a 2 m stag at 22-30 px. At sizeVh 7 the sprite
+   draws 50 x 114 px and one animal comes out 42 px = 5.8 vh, which by the contract's own rule (143/d vh for 1.65 m)
+   reads as a 2 m animal at about 30 m — the same band as §2's «1.2 m 的鹿 25 m 外 ≈ 5vh». That is a deliberate ~1.4x
+   over the painting's own tree scale, taken so that fourteen animals are still fourteen animals and not one smudge;
+   it is stated here rather than hidden, and it is the only exaggeration in this file.
+   The old 18 vh drew each animal 15 vh — a stag at 11 m, as tall as the dwarf pines it stands among, and it made
+   §7's fawn 「往前走了两步」 meaningless because they were already close enough to touch. */
+const HERD: Transform = { yaw: 9.5, pitch: -24, distance: 14 };       // the herd at the wood edge, out on the grass (721, 566); 7 vh = plate 687..755 x 548..584
 const HERD_RUN: Transform = { yaw: 15, pitch: -25.5, distance: 12 };  // where they go up, half a step nearer the trees (768, 578)
-const FAWN_AT: Transform = { yaw: 11, pitch: -30, distance: 11 };     // the open grass two steps nearer, in front of the herd's front row (734, 617)
+const FAWN_AT: Transform = { yaw: 11, pitch: -26.2, distance: 11 };   // the grass two steps nearer: its hooves land 19 px below the herd's (734, 585)
 const PRESS: Transform = { yaw: 12.3, pitch: -30.1, distance: 10 };   // the grass they were standing in, left of the sand (745, 618)
 const HOOF: Transform = { yaw: 23.5, pitch: -32, distance: 9 };       // the wide sandy path in front of her feet; the sand runs 804-875 here (841, 634)
 const TREELINE: Transform = { yaw: 12, pitch: -15.5 };                // the tall dark spruce where the scree runs into the wood (745, 493)
@@ -53,9 +52,9 @@ const SUNSET: Transform = { yaw: 32, pitch: 26, distance: 16 };       // the ora
 const SASSO: Transform = { yaw: 44.5, pitch: 8.7, distance: 16 };     // the jagged grey wall across the valley (1020, 285)
 const TRAIL_IN: Transform = { yaw: 41, pitch: -27.5 };                // where the sandy path runs out under the first larches (1007, 597)
 
-/* The two light thresholds §6 hangs the herd on are 19:48 (lightOf < 0.3, 几个影子) and 20:15 (0, 两点反光).
-   They are not conditions in this file yet: the three dusk faces they would switch to do not exist, and a
-   condition that resolves to a missing file empties the frame instead of changing it (ART request). */
+/* The two light thresholds §6 hangs the herd on are 19:48 (lightOf < 0.3, 几个影子) and 20:15 (0, 两点反光). Both are
+   live: the three dusk faces are on disk, they are swapped by `src` (which the view compares and re-renders on), and
+   the count she gives follows the face rather than the clock. */
 const HERE = all(not(flag(GONE)), not(flag(BOLTED)));
 const AFTERWARDS = any(flag(BOLTED), flag(GONE));
 
@@ -82,28 +81,25 @@ export default defineScene({
   // No gate: leaving is itself one of the three ways past them (v4 §7), and it is what sets deer.seen.
   exitWhen: undefined,
   entities: [
-    /* The herd, standing in the grass with the wood behind it: the whole subject of the node, and it has to be on
-       the screen. It is TWO entities at one anchor — the picture of them (a prop) and the place her eyes and her
-       hand go (a hotspot) — because only PropSprite passes a sprite's className through to the <img>, and the
-       className is the one handle this file has on §6's 到得越晚看见得越少.
-       THE THREE FACES ARE ON DISK NOW (ART, art-5; re-cut art-6). All three are made from deer-herd.webp's own
-       pixels on its own 1549x682 canvas: deer-shadows only crushes the light, and the two heads-up faces move
-       nothing below the shoulder line (measured: the silhouette below it is identical pixel for pixel; the whole
-       silhouette overlaps deer-shadows 0.92), so every animal keeps its place, its pose and its size across the
-       swap and only the light and the necks change. What the alert face does NOT do is turn the heads to the
-       camera: the animals in deer-herd stand in profile, their necks come up, and turning a painted profile head
-       into a face is a redraw, which is what the art-5 attempt did and why the whole herd moved. 19:48
-       (light < 0.3) takes the herd down to silhouettes, and if her standing still has already lifted their heads
-       (ALERT, also set by the tree-line walk) it is the heads-up silhouette instead; sunset (light 0) leaves an
-       almost black herd with two points of eyeshine - one on each of the two hinds nearest her beam, which is
-       what 「两点反光」 describes on a herd standing side-on. That is §6's 完整的一群 → 几个影子 → 两点反光, and a player who
-       took the careful line down the scree now finds a different herd from the one who ran the sand — the hour
-       is in the picture instead of only in the phone. Entries are tested in order, first match wins, so night
-       comes before dusk and the alert dusk face before the plain one.
-       Running is a separate entity, not a swap, because deer-fleeing.webp is six animals filling its frame and a
-       swap entry cannot carry its own sizeVh — at the herd's 18 vh those six would be three metres tall. */
+    /* The herd, out on the open grass at the foot of the scree with the larch wood off to its right: the whole
+       subject of the node, and it has to be on the screen. It is TWO entities at one anchor — the picture of them (a prop) and the place her eyes and her hand
+       go (a hotspot) — because a sprite inside a Hotspot inherits the button's reveal opacity, and fourteen animals
+       must not fade off the meadow every time she looks somewhere else.
+       The three dusk faces are on disk and they are swapped by SRC, not by className: `SceneView.sameViews` compares
+       `sprite.src` and re-renders on it, while a className change reaches neither the comparison nor (for hotspots)
+       the DOM. All three are made from deer-herd.webp's own pixels on its own 1549x682 canvas — measured, the alpha
+       rows/cols are identical for the plain and the shadow face and the two heads-up faces differ only above the
+       shoulder line (rows 29 against 44) — so every animal keeps its place, its pose and its size across the swap
+       and only the light and the necks change. 19:48 (light < 0.3) takes the herd down to silhouettes, and if her
+       standing still has already lifted their heads (ALERT, also set by the tree-line walk) it is the heads-up
+       silhouette instead; sunset (light 0) leaves an almost black herd with two points of eyeshine — 「两点反光」 on a
+       herd standing side-on. That is §6's 完整的一群 → 几个影子 → 两点反光, and a player who took the careful line down
+       the scree now finds a different herd from the one who ran the sand. Entries are tested in order, first match
+       wins, so night comes before dusk and the alert dusk face before the plain one.
+       Running is a separate entity, not a swap: deer-fleeing.webp is a different canvas (1584x707) with the animals
+       filling more of it, and a swap entry cannot carry its own sizeVh. */
     { id: "herd-image", transform: HERD,
-      sprite: { src: "sprites/deer-herd.webp", layer: "figure", sizeVh: 18,
+      sprite: { src: "sprites/deer-herd.webp", layer: "figure", sizeVh: 7,
         swap: [
           { when: { kind: "light", lt: 0.001 }, src: "sprites/deer-eyeshine.webp" },
           { when: all({ kind: "light", lt: 0.3 }, flag(ALERT)), src: "sprites/deer-shadows-alert.webp" },
@@ -115,19 +111,15 @@ export default defineScene({
       gaze: { radius: 16, dwell: 700 },
       visible: all(HERE, not(flag(FLEEING))) },
     // The eight hundred milliseconds of them actually going. Nothing to click: it is over before a hand could move.
-    prop("herd-running", HERD_RUN, "sprites/deer-fleeing.webp", 5.5, { visible: flag(FLEEING) }),
-    // The smallest one, once she has stood still long enough for it to risk two steps. sprites/deer-fawn.webp is
-    // on disk now (ART, art-5): one calf, head on, a third shorter than the adults, standing on the open grass in
-    // front of the herd's front row. The two footfalls still carry the movement; the calf is what they arrive at.
-    /* sizeVh is 9.5, not the queue's 5 (ART, art-6). The line the queue writes is 比其他鹿矮三分之一, and that is a
-       ratio the two sprites have to satisfy between them: an adult stands 0.59 of deer-herd.webp's own canvas
-       height, so at the herd's 18 vh / distance 14 it is 0.59 x 25.2 = 14.9 vh on screen; the calf fills 0.946 of
-       its canvas, so at distance 11 it is 1.041 x sizeVh. Two thirds of 14.9 is 9.9 vh, which is sizeVh 9.5.
-       At 5 the calf came out 45% of an adult (a toy-sized deer standing NEARER the camera than the herd), and at
-       the 7.4 the review asked for it is 52% - that number was read off an adult measured at 80 px, and the same
-       animal measures 14.9 vh here. The queue's size column is the thing that has to give; flagged in the report. */
+    // deer-fleeing.webp is 1584x707 and its tallest animal fills 0.758 of it, so 6 vh draws them 4.5 vh a head —
+    // a shade smaller than the 5.8 vh they were standing at, which is what half a step further up the slope looks like.
+    prop("herd-running", HERD_RUN, "sprites/deer-fleeing.webp", 6, { visible: flag(FLEEING) }),
+    /* The smallest one, once she has stood still long enough for it to risk two steps. deer-fawn.webp is 487x1231
+       with its content filling 0.971 of the height, so sizeVh 4.2 draws the calf 4.08 vh — 71% of the 5.78 vh an
+       adult stands at, which is the queue's 比其他鹿矮三分之一 plus the little it gains by being nearer. The old 9.5
+       came out at 9.2 vh, two and a half times an adult: a calf towering over the herd it belongs to. */
     { id: "fawn", transform: FAWN_AT,
-      sprite: { src: "sprites/deer-fawn.webp", layer: "figure", sizeVh: 9.5 },
+      sprite: { src: "sprites/deer-fawn.webp", layer: "figure", sizeVh: 4.2 },
       gaze: { radius: 12, dwell: 600 },
       visible: all(flag(FAWN), not(flag(BOLTED))) },
     // Keeping to the trees instead of crossing the open grass: six minutes, and she gets to watch them longer.
@@ -230,13 +222,16 @@ export default defineScene({
 
     /* Arriving. The sound comes first and it comes from one side (v4 §3.8) — no line, no camera grab.
        If she made a noise somewhere on the way down, the grass is already empty and the prints are all there is
-       (§8: 如果在林缘前喊过，鹿已经走了，只剩蹄印). The branch is correct and it is currently unreachable:
-       UISystem refuses the `shout` command outside forestEdge / forest1 / forest2, and all three come after this
-       node in MAIN_ORDER, so shout.at stays 0 and nothing ever writes scree.shouted or signpost.shouted. §3.8
-       and §8 also disagree about which node the shout belongs to. It is left switched on and wired to all three
-       flags so that whichever way the author rules, the fork lands here without a rewrite; letting the sand slide
-       on the scree stand in for the shout is NOT the answer — the fastest line slides, and the node would lose
-       its herd on the main route. (Escalated as an ENGINE + DESIGN request.) */
+       (§8: 如果在林缘前喊过，鹿已经走了，只剩蹄印). The branch is correct and it is unreachable from inside src/scenes,
+       and it takes TWO files outside it to open, not one: `UISystem.ts:53` refuses the `shout` command outside
+       forestEdge / forest1 / forest2, and `Actions.tsx:9` only binds Space to shout in those same three scenes, so
+       even a scene-side `world.handle("shout", ...)` would never see a command — nothing can dispatch one at scree
+       or signpost. Both come after this node in MAIN_ORDER, so shout.at stays 0 and nothing writes scree.shouted or
+       signpost.shouted. It is left switched on and wired to all three flags so the fork lands here the day either
+       file moves, without a rewrite.
+       What must NOT stand in for the shout is another wrong turn — the scree gully, the sand sliding. §0.6 prices a
+       mistake in minutes and light; taking the whole herd away for one would price it in content, and the fastest
+       line slides down the sand anyway. (Escalated as an ENGINE request naming both files.) */
     ctx.onEnter(() => {
       if (herdGone()) return;
       if (ctx.flag<number>("shout.at", 0) > 0 || ctx.flag("scree.shouted", false) || ctx.flag("signpost.shouted", false)) {
@@ -256,14 +251,17 @@ export default defineScene({
       ctx.say("前面有响动。", { tag: "deer-see" });
     });
 
-    /* Counting them: three minutes, and one count. §6 wants three — 完整的一群 → 几个影子 → 两点反光 — and the
-       count follows the SPRITE, not the clock: the only herd the frame can draw today is the whole one, so
-       「十几只。」 is the only count she can honestly give. The other two arrive with the two dark faces. */
+    /* Counting them: three minutes, and one count. §6 wants three — 完整的一群 → 几个影子 → 两点反光 — and the count
+       follows the SPRITE, not the clock, so it is read off the same two light thresholds the swap is: whichever herd
+       is drawn at that minute is the one she counts. One ctx.say, three strings, and none of them describes a picture
+       that is not on the screen. */
+    const herdFace = () => (ctx.light() < 0.001 ? "night" : ctx.light() < 0.3 ? "dusk" : "day");
     ctx.onInteract("herd", (verb) => {
       if (verb === "photograph") return shoot(HERD);
       ctx.setFlag(SEEN, true); ctx.setFlag(COUNTED, true);
       ctx.sfx("breath", pan(HERD), 0.5); ctx.kick("glance", 0.3, { yaw: 0, pitch: -1 });
-      ctx.say("十几只。", { tag: "deer-count" });
+      const face = herdFace();
+      ctx.say(face === "night" ? "两点反光。" : face === "dusk" ? "数不清。几个影子。" : "十几只。", { tag: "deer-count" });
     });
 
     /* A photograph of them: the day's only picture that is not a rock. The shutter does not frighten them. */
@@ -275,13 +273,13 @@ export default defineScene({
 
     /* Standing still (v4 §7): the pointer unmoved is the whole action. First they lift their heads;
        then the smallest one risks two steps toward her; after that nothing more is given, only the breath. */
-    /* Neither beat says out loud what it does, and that is now a choice rather than a lack. Both pictures landed
-       with art-5: the fawn is drawn whenever FAWN is set, at any hour, so 「最小的那只往前走了两步。」 is honest
-       from here on and is the node author's to put back. 「它们抬起头。」 is not, unqualified: the heads-up face
-       (deer-shadows-alert) only replaces the herd once light < 0.3, so before 19:48 that line would still be
-       describing a picture that has not moved — it needs the same light gate the swap has. Until someone writes
-       them, what the player gets is what the world gives without words: hooves shifting in the grass off to one
-       side, the camera settling, then two footfalls coming nearer, one after the other, out of that direction. */
+    /* Both beats say what they do now, and each one is allowed to only because its picture moved.
+       THE FAWN: deer-fawn.webp is drawn the moment FAWN is set, at any hour, so 「最小的那只往前走了两步。」 names a
+       calf that really is standing on the grass in front of the herd where a moment ago there was nothing.
+       THE HEADS: deer-shadows-alert only replaces the herd once light < 0.3, so before 19:48 「它们抬起头。」 would be
+       describing a picture that has not moved. It carries the same light gate the swap does; before that hour the
+       beat is what the world gives without words — hooves shifting in the grass off to one side and the camera
+       settling — which is the whole difference between arriving here early and arriving here late. */
     let stills = 0;
     ctx.onWait(() => {
       if (herdGone()) return;
@@ -293,6 +291,7 @@ export default defineScene({
         ctx.setFlag(ALERT, true);
         ctx.sfx("hooves", pan(HERD), 0.25); ctx.kick("settle", 0.25);
         ctx.after(300, () => ctx.sfx("cloth", pan(HERD), 0.22));
+        if (ctx.light() < 0.3) ctx.say("它们抬起头。", { tag: "deer-alert" });
         return;
       }
       // From the tree line they are already turned toward her, so the smallest one risks it on the first stand.
@@ -300,6 +299,7 @@ export default defineScene({
         ctx.setFlag(FAWN, true);
         ctx.sfx("step", pan(FAWN_AT), 0.35); ctx.after(340, () => ctx.sfx("step", pan(FAWN_AT), 0.3));
         ctx.kick("settle", 0.3);
+        ctx.say("最小的那只往前走了两步。", { tag: "deer-fawn" });
         return;
       }
       ctx.sfx("breath", 0, 0.3); ctx.kick("settle", 0.15);
