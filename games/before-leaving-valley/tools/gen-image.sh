@@ -4,6 +4,7 @@
 set -u
 SELF_DIR=$(cd "$(dirname "$0")" && pwd)
 OUT="$1"; ASPECT="$2"; PROMPT="$3"; shift 3
+rm -f "$OUT"   # never report a stale file as success
 SCR="${TMPDIR:-/tmp}/blv-gen"; mkdir -p "$SCR/gen"
 WORK=$(mktemp -d "$SCR/gen/job.XXXXXX")
 OUTWIN=$(cygpath -w "$OUT")
