@@ -86,24 +86,28 @@ export default defineScene({
        the screen. It is TWO entities at one anchor — the picture of them (a prop) and the place her eyes and her
        hand go (a hotspot) — because only PropSprite passes a sprite's className through to the <img>, and the
        className is the one handle this file has on §6's 到得越晚看见得越少.
-       NO DUSK SWAPS OF THE SOURCE. deer-shadows.webp, deer-shadows-alert.webp and deer-eyeshine.webp do not
-       exist, and the view hides a sprite whose file is missing, so swapping to them would delete the herd out of
-       the frame from 19:48 on while the node went on charging three minutes to count it. Instead the same file is
-       swapped onto itself with a class: 19:48 (light < 0.3) dims it, sunset (light 0) dims it further, so a
-       player who took the careful line down the scree finds a darker herd than the one who ran the sand — the
-       hour is in the picture instead of only in the phone. Two things have to land for it: the CSS classes
-       (dusk-dim / night-dim — a brightness/saturation filter on .prop-item img, nothing else), and one line in
-       SceneView's sameViews, which currently compares sprite.src but not sprite.className and so can hold the
-       old class until some other entity changes; both are filed as requests. Until they do the swap is a no-op
-       and the daylight herd stands, which is what the frame can honestly draw. The three faces themselves stay
-       an ART request, and 完整的一群 → 几个影子 → 两点反光 is not claimed in any line until they exist.
+       THE THREE FACES ARE ON DISK NOW (ART, art-5; re-cut art-6). All three are made from deer-herd.webp's own
+       pixels on its own 1549x682 canvas: deer-shadows only crushes the light, and the two heads-up faces move
+       nothing below the shoulder line (measured: the silhouette below it is identical pixel for pixel; the whole
+       silhouette overlaps deer-shadows 0.92), so every animal keeps its place, its pose and its size across the
+       swap and only the light and the necks change. What the alert face does NOT do is turn the heads to the
+       camera: the animals in deer-herd stand in profile, their necks come up, and turning a painted profile head
+       into a face is a redraw, which is what the art-5 attempt did and why the whole herd moved. 19:48
+       (light < 0.3) takes the herd down to silhouettes, and if her standing still has already lifted their heads
+       (ALERT, also set by the tree-line walk) it is the heads-up silhouette instead; sunset (light 0) leaves an
+       almost black herd with two points of eyeshine - one on each of the two hinds nearest her beam, which is
+       what 「两点反光」 describes on a herd standing side-on. That is §6's 完整的一群 → 几个影子 → 两点反光, and a player who
+       took the careful line down the scree now finds a different herd from the one who ran the sand — the hour
+       is in the picture instead of only in the phone. Entries are tested in order, first match wins, so night
+       comes before dusk and the alert dusk face before the plain one.
        Running is a separate entity, not a swap, because deer-fleeing.webp is six animals filling its frame and a
        swap entry cannot carry its own sizeVh — at the herd's 18 vh those six would be three metres tall. */
     { id: "herd-image", transform: HERD,
       sprite: { src: "sprites/deer-herd.webp", layer: "figure", sizeVh: 18,
         swap: [
-          { when: { kind: "light", lt: 0.001 }, src: "sprites/deer-herd.webp", className: "night-dim" },
-          { when: { kind: "light", lt: 0.3 }, src: "sprites/deer-herd.webp", className: "dusk-dim" },
+          { when: { kind: "light", lt: 0.001 }, src: "sprites/deer-eyeshine.webp" },
+          { when: all({ kind: "light", lt: 0.3 }, flag(ALERT)), src: "sprites/deer-shadows-alert.webp" },
+          { when: { kind: "light", lt: 0.3 }, src: "sprites/deer-shadows.webp" },
         ] },
       visible: all(HERE, not(flag(FLEEING))) },
     { id: "herd", transform: HERD,
@@ -113,10 +117,17 @@ export default defineScene({
     // The eight hundred milliseconds of them actually going. Nothing to click: it is over before a hand could move.
     prop("herd-running", HERD_RUN, "sprites/deer-fleeing.webp", 5.5, { visible: flag(FLEEING) }),
     // The smallest one, once she has stood still long enough for it to risk two steps. sprites/deer-fawn.webp is
-    // an ART request; until it lands the two steps are carried by the two footfalls and the line, and there is
-    // nothing standing on the grass in front of the herd.
+    // on disk now (ART, art-5): one calf, head on, a third shorter than the adults, standing on the open grass in
+    // front of the herd's front row. The two footfalls still carry the movement; the calf is what they arrive at.
+    /* sizeVh is 9.5, not the queue's 5 (ART, art-6). The line the queue writes is 比其他鹿矮三分之一, and that is a
+       ratio the two sprites have to satisfy between them: an adult stands 0.59 of deer-herd.webp's own canvas
+       height, so at the herd's 18 vh / distance 14 it is 0.59 x 25.2 = 14.9 vh on screen; the calf fills 0.946 of
+       its canvas, so at distance 11 it is 1.041 x sizeVh. Two thirds of 14.9 is 9.9 vh, which is sizeVh 9.5.
+       At 5 the calf came out 45% of an adult (a toy-sized deer standing NEARER the camera than the herd), and at
+       the 7.4 the review asked for it is 52% - that number was read off an adult measured at 80 px, and the same
+       animal measures 14.9 vh here. The queue's size column is the thing that has to give; flagged in the report. */
     { id: "fawn", transform: FAWN_AT,
-      sprite: { src: "sprites/deer-fawn.webp", layer: "figure", sizeVh: 5 },
+      sprite: { src: "sprites/deer-fawn.webp", layer: "figure", sizeVh: 9.5 },
       gaze: { radius: 12, dwell: 600 },
       visible: all(flag(FAWN), not(flag(BOLTED))) },
     // Keeping to the trees instead of crossing the open grass: six minutes, and she gets to watch them longer.
@@ -132,8 +143,8 @@ export default defineScene({
       sprite: { src: "sprites/hoofprints.webp", layer: "prop", sizeVh: 8 },
       interactable: { verbs: ["inspect"], label: "小路上的蹄印", reveal: 13, cost: { minutes: 1 }, once: true },
       visible: AFTERWARDS },
-    // The label is the painted grass, not the press: until grass-pressed.webp exists there is nothing else drawn
-    // there, and the label has to name what the picture holds (red line 5).
+    // The press itself is drawn now (ART, art-5): a shallow oval of meadow grass combed flat one way, keyed to
+    // the value of the painted grass around it, so the label 「它们站过的那片草」 names a thing that is there.
     { id: "grass-pressed", transform: PRESS,
       sprite: { src: "sprites/grass-pressed.webp", layer: "prop", sizeVh: 4.5 },
       interactable: { verbs: ["inspect"], label: "它们站过的那片草", reveal: 13, cost: { minutes: 1 }, once: true },
@@ -264,12 +275,13 @@ export default defineScene({
 
     /* Standing still (v4 §7): the pointer unmoved is the whole action. First they lift their heads;
        then the smallest one risks two steps toward her; after that nothing more is given, only the breath. */
-    /* Neither beat says out loud what it does, at any hour. The herd has one face on disk and no alert pose, and
-       sprites/deer-fawn.webp does not exist — so 「它们抬起头。」 and 「最小的那只往前走了两步。」 would both be
-       describing a picture that has not moved, which is the fault the sun line at the lip is gated for. What the
-       player gets instead is what the world can honestly give: hooves shifting in the grass off to one side, the
-       camera settling, and then two footfalls coming a little nearer, one after the other, out of the same
-       direction. The two lines come back with the alert pose and the fawn (ART requests). */
+    /* Neither beat says out loud what it does, and that is now a choice rather than a lack. Both pictures landed
+       with art-5: the fawn is drawn whenever FAWN is set, at any hour, so 「最小的那只往前走了两步。」 is honest
+       from here on and is the node author's to put back. 「它们抬起头。」 is not, unqualified: the heads-up face
+       (deer-shadows-alert) only replaces the herd once light < 0.3, so before 19:48 that line would still be
+       describing a picture that has not moved — it needs the same light gate the swap has. Until someone writes
+       them, what the player gets is what the world gives without words: hooves shifting in the grass off to one
+       side, the camera settling, then two footfalls coming nearer, one after the other, out of that direction. */
     let stills = 0;
     ctx.onWait(() => {
       if (herdGone()) return;

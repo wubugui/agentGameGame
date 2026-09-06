@@ -109,17 +109,18 @@ export default defineScene({
     blaze("blaze-cairn", CAIRN_TOP, true, { visible: undefined, enabled: not(entityIs("blaze-cairn", "read")) }),
     blaze("lichen-boulder", BOULDERS, false, { visible: undefined, enabled: not(entityIs("lichen-boulder", "read")) }),
     /* --- The bedded limestone escarpment filling the left of the picture, and the last of the day on it.
-       The LABEL names the rock, not the light: sprites/last-light-wall.webp does not exist and is not going to
-       this round, and 10-signpost draws no band of direct sun in that face — it is uniform pale bedded ledges
-       (re-read at 3.5× at both anchor ends). A point called 「石墙上的那道光」 over rock with no light in it names
-       a thing the painting does not carry, which is red line 5; 「左边那面层岩」 is what is actually drawn there.
-       The anchor still slides with the clock, and both ends of the slide are on painted rock face — (190, 245),
-       the broad bedding band, at five o'clock, (110, 168), the top ledge, at sunset — so an hour spent on the
-       wrong arm does at least put the thing she was looking at somewhere else on the wall. That is as much of
-       §7's «回到岔口时太阳位置、天色与阴影方向都真的变了» as this file can deliver on its own: the tint is
-       lightOf()'s and lightOf() is clamped to 1 until 18:45 (DESIGN request), and the band itself is a sprite
-       that does not exist (ART request). The sprite line stays in place, sized and swapped, so that the day the
-       two files land the wall lights up with no further scene work.
+       The band is drawn now (ART, art-5): sprites/last-light-wall.webp is a stripe of light and nothing else —
+       warm white with an apricot underside, broken where the bedding cuts it, feathered away at both ends and
+       painted at about three quarters opacity so the ledges keep reading through it — and after eighteen o'clock
+       it swaps to last-light-wall-low.webp, the same stripe gone narrower, higher and rose.
+       The LABEL still names the rock, not the light: 「左边那面层岩」 is the thing that is there at every hour,
+       and the wall keeps it after the light has gone. Renaming the point to 「石墙上的那道光」 is now defensible
+       and is left to whoever owns this node's lines.
+       The anchor slides with the clock, and both ends of the slide are on painted rock face — (190, 245), the
+       broad bedding band, at five o'clock, (110, 168), the top ledge, at sunset — so an hour spent on the wrong
+       arm puts the thing she was looking at somewhere else on the wall. That is as much of §7's
+       «回到岔口时太阳位置、天色与阴影方向都真的变了» as this file can deliver on its own: the tint is lightOf()'s
+       and lightOf() is clamped to 1 until 18:45 (DESIGN request).
        It is ONE entity (a prop plus a hotspot would cost a second DOM node), it costs no minutes, and it says
        nothing: §6 puts the information in the world, and she does not describe what is not drawn. --- */
     { id: "last-light", transform: lastLightAt,
@@ -218,9 +219,9 @@ export default defineScene({
     });
 
     // --- The layered wall on the left, and the last of the day standing on it. Her eyes find it first; her head
-    //     turns and she breathes out. No line: until sprites/last-light-wall.webp is in the picture there is no
-    //     band on the wall for her to say anything about, and §6 puts the information in the world, not in her
-    //     mouth. A minute of rest for the body, and nothing else. ---
+    //     turns and she breathes out. Still no line, now by choice rather than by lack: the band is in the
+    //     picture (ART, art-5), and §6 puts the information in the world, not in her mouth. A minute of rest for
+    //     the body, and nothing else. ---
     ctx.onGaze("last-light", () => {
       if (ctx.flag("signpost.lightSeen", false)) return;
       ctx.setFlag("signpost.lightSeen", true);

@@ -24,9 +24,9 @@
       permanent carabiner panel at all. So today reading ② costs a minute and buys the journal line and nothing
       else. The panel is in this scene's `requests.engine/css`; the entry stays because the plate really does have
       that rule cast into it, not because the cost is delivered.
-   3. THE PAINT ON THE FOREGROUND ROCK IS IN THE PICTURE, NOT ONLY IN THE SPRITE — see the note on `blaze-plaque`
-      below. Until 03-plaque is repainted, §3.5's 「真假在凑近之前完全不可分辨」 does not hold in this one node,
-      and that is an art blocker, not something the scene can size its way out of. */
+   3. THE PAINT ON THE FOREGROUND ROCK IS NOW ONLY IN THE SPRITE. 03-plaque used to carry an orange-red streak of
+      its own under the cable, which broke §3.5's 「真假在凑近之前完全不可分辨」 in this one node; the painting has
+      been cleaned of it and the mark is back to the shared 4 vh. See the note on `blaze-plaque` below. */
 import { all, entityIs, flag, not, worn } from "../engine/condition";
 import type { EntityDef } from "../engine/entity";
 import { defineScene } from "../engine/scene";
@@ -109,20 +109,14 @@ export default defineScene({
       visible: not(dressed),
     }),
     /* Two candidate marks: the red paint on the pale rock below the cable, and the crustose lichen on the slab
-       above it. The paint is the one place in this group where §0.4 is broken by the picture itself and not by the
-       scene: 03-plaque already has an orange-red streak burnt into the foreground rock (I measured it at 5×: a
-       diffuse blob about 95 × 90 px, densest between x 640–700 and y 595–660). The default 4 vh blaze was a 21 px
-       sticker in the middle of it, so "confirming it leaves a very faint trace" could not be read at all — the
-       painted streak stayed at full strength behind an entity faded to .35. Recentred on the dense core and grown
-       to 13 vh (67 px) the sprite and the streak read as one mark. That is the best a scene file can do and it is
-       not enough: the side effect is that the true mark sits on a painted blob and the false one sits on bare
-       stone, so on this wall the two are told apart before she is anywhere near them and §3.5 does not hold here.
-       The fix is art and it is a blocker, not a nice-to-have — 03-plaque repainted with the streak removed (the
-       paint then IS the sprite, and this size goes back to 4), together with the other half of the same red line:
-       blaze-red-white.webp and blaze-false.webp are two different base images, so every candidate mark in the game
-       is separable by its picture. One request, one schedule; both are in docs/ART_QUEUE.md. */
-    mark("blaze-plaque", { yaw: 3.7, pitch: -32 }, true,                             // the dense core of the painted streak (672, 634)
-      { sprite: { src: "sprites/blaze-red-white.webp", layer: "prop", sizeVh: 13 } }),
+       above it. This wall used to be the one place in this group where §0.4 was broken by the picture itself and
+       not by the scene — 03-plaque had an orange-red streak burnt into the foreground rock, so the true mark sat
+       on a painted blob and the false one on bare stone and the two were told apart from across the node. Both
+       halves of that red line have now landed (docs/ART_QUEUE.md): the painting has been cleaned of the streak,
+       so the paint IS the sprite again and this mark takes the shared 4 vh; and blaze-false.webp has been
+       repainted as a mineral stain in the same three bands and the same footprint as blaze-red-white.webp, so
+       nothing separates a candidate mark from a real one until she is close enough to look at it. */
+    mark("blaze-plaque", { yaw: 3.7, pitch: -32 }, true),                            // the pale rock below the cable (672, 634)
     mark("lichen-plaque", { yaw: 5.5, pitch: 13.5 }, false),                         // the lichened patch on the slab (687, 243); sprites/blaze-false.webp is orange-grey, so her line names no colour
     // Where the cable goes over the edge, and the pass behind her. Looking is free (gaze); a 360 shot costs a
     // minute, or three from the pack. All of that is charged inside shoot(): the minute, the camera's 1%, and the

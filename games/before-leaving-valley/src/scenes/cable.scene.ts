@@ -272,11 +272,11 @@ export default defineScene({
 
     /* Looking. Down the cable from the third anchor: she leans out, looks, and takes it. §6 prices the whole
        movement at one minute and one photograph, and that minute is the phone's shutter (UISystem charges it with
-       the 1%) — this handler adds nothing, exactly like `pass-view` at `approach`. The line stays on what 04-cable
-       actually paints down there: the thick cable running out of the bottom of the picture, and nothing under it —
-       §6 asks for the whole meadow and the gravel road down there and the painting does not have them, so what is
-       delivered here is a look down, not a view over the meadow (see `requests` for the art that would make it
-       §6's line). */
+       the 1%) — this handler adds nothing, exactly like `pass-view` at `approach`. THE ART FOR §6'S LINE HAS NOW
+       LANDED: 04-cable's bottom-left corner was repainted (docs/ART_QUEUE.md) and opens over a rock brow onto the
+       meadow and the gravel path far below, which is what §6 asked for. The line below still says only that the
+       cable runs down out of sight — it was written for the picture that had nothing under it, and it is this
+       scene's author's call whether the look now becomes the view over the meadow. */
     ctx.onInteract("view-down", () => {
       ctx.kick("glance", 0.6, { yaw: -2, pitch: -8 }); ctx.sfx("breath", -0.4, 0.6);
       ctx.say("缆一直下到看不见。", { tag: "cable-view" });

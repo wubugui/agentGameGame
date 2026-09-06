@@ -72,17 +72,16 @@ export default defineScene({
   exitWhen: flag(RETURNED),
   entities: [
     /* The man behind the counter. He nods, he goes into the back room, he comes back, and at the end he spreads
-       his hands. One drawing, not three: `officer` is the id docs/ART_AUDIT.md gives him and the only one that
-       will ever be painted, and a swap to a file nobody drew would have made him disappear at exactly the two
-       moments he matters — carrying the phone over, and spreading his hands. His two gestures are carried the
-       way everything else in this room is: the door, the knock on the counter, the cloth of his sleeves and the
-       breath out. The two gesture states keep their place in the swap so the day the derived frames land they
-       are one string each (docs/ART_QUEUE.md), and until then every one of them resolves to the man himself —
-       a swap to a file nobody drew would have deleted him from the frame at exactly the two moments he matters. */
+       his hands. Three drawings of one man, all cut off flat at the counter line: `officer` standing, and the two
+       derived frames docs/ART_QUEUE.md asked for — `officer-returning`, carrying her phone on his open palm, and
+       `officer-shrug`, both hands out. The swap slots were held open with the standing frame until those two were
+       painted, because a swap to a file nobody drew would have deleted him from the frame at exactly the two
+       moments he matters; they exist now, so each state is one string. The rest of him is carried the way
+       everything else in this room is: the door, the knock on the counter, the cloth of his sleeves, the breath out. */
     { id: "officer", transform: OFFICER,
       sprite: { src: "sprites/officer.webp", layer: "figure", sizeVh: 34, swap: [
-        { when: SHRUGGING, src: "sprites/officer.webp" },        // ← officer-shrug.webp when it exists
-        { when: HANDING, src: "sprites/officer.webp" },          // ← officer-returning.webp when it exists
+        { when: SHRUGGING, src: "sprites/officer-shrug.webp" },     // both hands open: this is everything there is
+        { when: HANDING, src: "sprites/officer-returning.webp" },   // back from the inner room, her phone on his palm
       ] },
       // GazeSystem reads `interactable.reveal` first and falls back to `gaze.radius`: one number, written twice.
       interactable: { verbs: ["talk"], label: "柜台后的警察", reveal: 16, cost: { minutes: 0 } },

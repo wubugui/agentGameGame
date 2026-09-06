@@ -125,10 +125,10 @@ export default defineScene({
     lookAt("green-terraces", GREEN, "对面的岩台", 1),
     // The low sun burns out of the sky at 20:15; after half past eight one star stands in the gap over the massif.
     // 4 vh: the disc itself is a tenth of that, which is about the half degree the sun really is (contract §2).
-    // Neither file is in public/sprites and neither has an equivalent there, so both ids stay as they are and go
-    // into docs/ART_QUEUE.md. §6's «唯一能在一张画里同时看见太阳、Sassolungo 与还剩多少路的地方» is two thirds
-    // true until sun-low lands: the look up still has the painted peach cloud band and the terraces under it, and
-    // 「云和最后的夕阳都在离我而去。」 rides on the painted cloud, which is drawn.
+    // Both files landed with art-5: sun-low.webp is a warm white disc a tenth of its own frame high in a high-key
+    // haze that stays lighter than this painting's cream sky, first-star.webp a cold silver point. §6's
+    // «唯一能在一张画里同时看见太阳、Sassolungo 与还剩多少路的地方» is true now — the sun, the wall across the
+    // valley and the terraces that say how much is left are all in the one look up.
     prop("sun-low", SUN, "sprites/sun-low.webp", 4, { visible: before(SUNSET) }),
     { id: "first-star", transform: STAR, sprite: { src: "sprites/first-star.webp", layer: "back", sizeVh: 2.5 },
       gaze: { radius: 12, dwell: 900 }, visible: after(STAR_MINUTE) },
@@ -219,15 +219,15 @@ export default defineScene({
       ctx.kick("glance", 0.6, { yaw: 5, pitch: -2 }); ctx.sfx("breath", 0.6, 0.5);
     });
 
-    /* The star: it is only there after half past eight, and only for someone who looks up at that gap. The beat
-       stays — the head goes up, the breath goes out, and the gap of sky is genuinely open there — but the line
-       does not: sprites/first-star.webp is not in public/sprites (ART request), so there is nothing drawn in that
-       gap, and 「第一颗星。」 over empty sky is the same fault the sun line at the lip is gated for. The line comes
-       back with the sprite. */
+    /* The star: it is only there after half past eight, and only for someone who looks up at that gap. The head
+       goes up, the breath goes out, and now there is something in the gap to go up for — sprites/first-star.webp
+       landed with art-5 (a cold silver point in the faintest blue-white haze), so 「第一颗星。」 comes back with
+       it, as the ART QUEUE entry said it would. */
     ctx.onGaze("first-star", () => {
       if (ctx.flag("scree.star", false)) return;
       ctx.setFlag("scree.star", true);
       ctx.kick("glance", 0.4, { yaw: -2, pitch: 7 }); ctx.sfx("breath", -0.2, 0.4);
+      ctx.say("第一颗星。", { tag: "scree-star" });
     });
 
     /* The marks. A real one is settled by the journal (her hand, cloth on stone); a false one costs the minute. */

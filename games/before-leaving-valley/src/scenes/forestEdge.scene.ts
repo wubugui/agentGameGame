@@ -33,11 +33,17 @@ const LAMP_LINE = "特别特别幸运，我带了一盏拍视频用的补光灯�
    forbids and which mattered: missing this mark costs twenty minutes and +0.1 of the heart.
    13-forest-edge does draw one trunk in the open: the dwarf pine over the low rock. Brightened 2x and read at 9x,
    its reddish stem runs from (700, 540) down to (683, 615) on the 1280x720 grid and is 14-16 px wide; at y 576 it
-   spans x 686-702. The mark goes there, drawn with sprites/blaze-red-white.webp at 2.8 vh (14.4 px tall, 16 px
-   wide - it lands inside the stem): sprites/blaze-656.webp does not exist and is not going to this round, and
-   blaze-red-white is the same mark forest1 puts on its own painted trunk two nodes later, so the two nodes agree
-   and the player who learns the bar here recognises the same bar in there. The bare bar with 656 on it stays an
-   ART request; nothing in this scene names the number out loud, so nothing here asserts what the sprite lacks. */
+   spans x 686-702. The mark goes there with sprites/blaze-656.webp, which is on disk now (ART, art-5; re-cut
+   art-6): the same red-white-red bar as blaze-red-white.webp, repainted with its stone taken away and 656
+   brushed on the white band, so it reads as paint on this trunk and not as a pebble stuck to it.
+   It is a TALL bar now, 1 : 3.1, not the wide 2 : 1 one: at 2.8 vh it renders 8 x 25 on the 2048-wide plate and
+   the stem it goes on is 6-14 px there, so the paint lies along the stem instead of hanging off both sides of it
+   like a little enamel flag. That shape is also what forest1's line asks for (竖长条，不宽于 14 屏幕像素), so
+   the two nodes share ONE file again - there is no blaze-656-bare.webp any more. forest1 and forest2 still point
+   at blaze-red-white.webp and are their author's to switch over; adopting this file gives them 11 x 35 at their
+   own anchor, inside the trunk. The one thing this file does not carry is forest1's line about the mark bringing
+   its own dark bark: 13-forest-edge draws the stem, so bark in the sprite would be a second trunk here, and this
+   node's line writes 不带树皮 in as many words. Escalated to the queue author (ART report, art-6). */
 const TRUNK: Transform = { yaw: 6.2, pitch: -25.2 };                    // the dwarf pine's reddish stem, right of the trail (693, 576)
 const LEFT_BOULDER: Transform = { yaw: -23, pitch: -24 };               // the white boulder left of the trail (706, 905)
 const LOW_ROCK: Transform = { yaw: 11, pitch: -30 };                    // the small grey rock under the dwarf pine's roots (1180, 993)
@@ -75,7 +81,7 @@ export default defineScene({
     // All three stay where they are once she has settled them and go grey (v4 §3.5) — in the dark, a mark she has
     // read is the one thing she can still steer by, and deleting it off the trunk is the opposite of that.
     blaze("blaze-656", TRUNK, true, {
-      sprite: { src: "sprites/blaze-red-white.webp", layer: "prop", sizeVh: 2.8 },
+      sprite: { src: "sprites/blaze-656.webp", layer: "prop", sizeVh: 2.8 },
       interactable: { verbs: ["inspect"], label: "树干上的记号", reveal: 12, cost: { minutes: 1 } },
       visible: undefined, enabled: not(entityIs("blaze-656", "read")),
     }),

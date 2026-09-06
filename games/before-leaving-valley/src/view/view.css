@@ -15,6 +15,11 @@
 .prop-item { position:absolute; display:block; pointer-events:none; }
 .prop-item img { display:block; filter:drop-shadow(0 6px 10px rgba(0,0,0,.35)); }
 .scene-light-dusk .prop-item img { filter:brightness(.75) sepia(.2) drop-shadow(0 6px 10px rgba(0,0,0,.35)); }
+/* The cloud shadow crossing the Sella wall at `meadow` (v4 §8, 10:00–10:12). It is shade, not a thing: it
+   multiplies into the painting under it and throws no shadow of its own. The opacity is what makes the wall
+   go about a quarter darker under it rather than a third — the sprite's own grey is 0.61 of white. */
+.prop-item.cloud-shadow-sprite img { filter:none; mix-blend-mode:multiply; opacity:.68; }
+.scene-light-dusk .prop-item.cloud-shadow-sprite img { filter:none; }
 
 /* pack cloth */
 .pack-overlay { background:radial-gradient(ellipse at 50% 60%,rgba(20,14,6,.25),rgba(8,10,12,.8)); }
