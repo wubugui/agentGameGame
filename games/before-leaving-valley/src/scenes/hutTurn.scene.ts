@@ -1,7 +1,11 @@
 /* Half way to the hut, 16:22. Twenty-two minutes along the rim from the plateau lip, and the karst runs out on a
    table of cracked limestone with somebody's cairn stacked on it. The house on the far rim is nearer — and still on
    the far rim. For the first time the whole valley is open underneath: pale terraces stepping down and down, spruce
-   in the shade of them, and on the other side one hair-thin road. The sun has dropped a notch since the lip.
+   in the shade of them, and on the other side one hair-thin road.
+   §8 also lists 太阳低了一格 for this rock, and this file does NOT claim it: lightOf() is clamped to 1 from before
+   16:00 until 18:45, so between those hours the engine paints the lip and this rock with exactly the same tint and
+   nothing in 09d-hutturn moves. What this node really buys is the valley, and that it does deliver. The sun is a
+   DESIGN request (a longer light tail) — until it lands, no line, no comment and no beat here says the light changed.
    Nothing here can be gained; the map is spread a ninth time, the numbers are the same numbers, and the only way
    out is the way back (v4 §7 hutView 决策行, §8 hutTurn 行: 再摊一次地图 · 回头箭头 · 死路).
    Every coordinate below was read off the 150°×84° grid of 09d-hutturn (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84);
@@ -40,11 +44,19 @@ const FAR_ROAD: Transform = { yaw: 30.5, pitch: -5.6, distance: 26 }; // the pal
 const MASSIF: Transform = { yaw: 52.7, pitch: 23.3, distance: 40 };   // the big tan wall holding the last direct light (1090, 160)
 const CLOUDS: Transform = { yaw: 6.4, pitch: 21, distance: 30 };      // the cloud band coming down over the skyline (695, 180)
 const CAIRN_T: Transform = { yaw: -16.1, pitch: -18.9, distance: 9 }; // the stacked flat stones on the table rock (503, 522)
-/* The added stone rests ON the painted top stone. Column-scanned on 09d-hutturn at x 486–520: the top stone's
-   pale body starts at y 462 and its shadow line is at y 470, so its upper edge is y 462 = pitch −11.9. A 2.2 vh
-   sprite is 11.3 px tall on the 84°/720 px grid, so anchoring at the edge itself puts the new stone's lower half
-   down into the stone under it instead of leaving it floating above the stack. */
-const CAIRN_TOP: Transform = { yaw: -16.1, pitch: -11.9 };            // on top of the painted top stone of the stack (503, 462)
+/* The added stone rests ON the painted top stone. Re-read at 5× on 09d-hutturn: the stack tapers to a top stone
+   that occupies x 493–508, y 461–471 — fifteen pixels wide — and the one under it is twenty-two.
+   The stone she lays there is sprites/stone-flat.webp, the flat slab that already exists (there is no
+   cairn-stone.webp and there is not going to be one this round; a flat slab is what this stack is made of).
+   Its alpha content fills x 32–1091, y 31–570 of the 1123×602 file, i.e. 94% of the width and 89.5% of the
+   height. Sprite sizes are screen vh and the camera magnifies the painting 1.35× here (60° over 720 px against
+   the grid's 84°), so at 1.05 vh the box renders 7.6 px tall and the stone inside it 13.3 × 6.8 screen px — one
+   more pebble, a shade narrower than the 16-screen-px stone it sits on, which is how a cairn tapers. The
+   content's lower edge is at 94.7% of the box, and pitch −11.8 lands that edge a pixel inside the painted top
+   stone. Checked in one frame against two probes injected at the painted stones' own grid pitches, which came
+   out within 2 px of the paint — grid and render agree. Two minutes of holding it there finally leave something
+   in the frame. */
+const CAIRN_TOP: Transform = { yaw: -16.35, pitch: -11.8 };           // on top of the painted top stone of the stack (500, 461)
 const MAP_STONE: Transform = { yaw: 2.3, pitch: -32, distance: 9 };   // the broad flat slab right of the cairn; the rock face here starts at −28.5 (660, 634)
 const BLAZE_ROCK: Transform = { yaw: -31, pitch: -29 };               // the raised pale block left of the cairn (350, 609)
 const LICHEN_ROCK: Transform = { yaw: 20, pitch: -35 };               // a paler patch on the slab by her right boot (811, 660)
@@ -77,8 +89,13 @@ export default defineScene({
   entities: [
     // The house, nearer by twenty-two minutes and still on the other side: near enough now for the aerial on the
     // roof, and at 17:00 for the one lit window — the sprite changes itself, nobody announces either of them.
+    // The picture and the point are two entities: PanoStage fades a Hotspot's whole element, sprite included,
+    // as the gaze moves off it, so a house that lives inside its own hotspot goes out whenever she looks away —
+    // and 17:00's one lit window can then only be seen by somebody already staring at it. As a prop the house
+    // stands on the far rim the whole time and the window comes on in the corner of her eye.
+    { id: "hut-image", transform: HUT,
+      sprite: { src: "sprites/hut-near.webp", layer: "prop", sizeVh: 4, swap: [{ when: after(HUT_LIT), src: "sprites/hut-near-lit.webp" }] } },
     { id: "hut", transform: HUT,
-      sprite: { src: "sprites/hut-near.webp", layer: "prop", sizeVh: 4, swap: [{ when: after(HUT_LIT), src: "sprites/hut-near-lit.webp" }] },
       interactable: { verbs: ["inspect", "photograph"], label: "对面岩壁上的房子", reveal: 12, cost: { minutes: 1 } },
       gaze: { radius: 12, dwell: 900 } },
     // The thing this walk bought her: the whole valley, open all the way down. It arrives when her eyes rest on it.
@@ -91,19 +108,20 @@ export default defineScene({
     lookAt("massif", MASSIF, "还照着太阳的大墙", 1),
     { id: "clouds", transform: CLOUDS, gaze: { radius: 14, dwell: 1200 } },
     // Somebody else's cairn. Two minutes to hold a flat stone on the top of it until it sits — for nothing at all.
-    // The stack stays on the picture afterwards and the point goes grey (`enabled`, not `visible`): until
-    // sprites/cairn-stone.webp exists the added stone has nothing to draw, and a stack that silently loses its
-    // hotspot with nothing in its place is worse than a dead point on the stones she just built up (ART request).
+    // The stack stays on the picture afterwards and the point goes grey (`enabled`, not `visible`), and the stone
+    // she laid is drawn on top of it: the node's one lasting result is now actually in the frame (§3.5).
     { id: "cairn", transform: CAIRN_T, className: "hold-hotspot",
       interactable: { verbs: ["hold"], label: "往石堆上加一块石头", reveal: 13, cost: { minutes: 2, fatigue: 0.01 }, requires: not(flag(CAIRN)) },
       hold: { ms: 600, scaleWith: ["fatigue"] }, enabled: not(flag(CAIRN)) },
-    prop("cairn-cap", CAIRN_TOP, "sprites/cairn-stone.webp", 2.2, { visible: flag(CAIRN) }),
+    prop("cairn-cap", CAIRN_TOP, "sprites/stone-flat.webp", 1.05, { visible: flag(CAIRN) }),
     // Two candidates on the rim: the bar on the raised block, and a pale patch on the slab by her right boot.
     mark("blaze-turn-a", BLAZE_ROCK, true),
     mark("blaze-turn-b", LICHEN_ROCK, false),
-    // The ninth spreading. Stones on the corners first — up here the paper will not lie still (v4 §3.7).
+    // The ninth spreading, and it costs what the eighth costs: v4 §6 prices this map at 6–18 minutes and it is the
+    // same sheet, the same folds and the same wind out here as it is on the lip. Four minutes to get it open and
+    // oriented; the stone on each corner is the script's extra minute (§3.7); the legs are two minutes each.
     prop("paper-map", MAP_STONE, "sprites/map-folded.webp", 11, {
-      interactable: { verbs: ["use"], label: "在平石上摊开地图", reveal: 12, cost: { minutes: 0 }, requires: has("paperMap") },
+      interactable: { verbs: ["use"], label: "在平石上摊开地图", reveal: 20, cost: { minutes: 4 }, requires: has("paperMap") },
     }),
     // The rock carries on past the break, and so does the way to the hut. Nine minutes to stand in it and turn
     // round — and it is NOT `once`: what this ledge is, is that it goes on being nine minutes long and then nine
@@ -201,14 +219,25 @@ export default defineScene({
     /* --- The map, spread on the flat rock. Stones on the corners, then it is the paper's business (v4 §3.7). --- */
     ctx.onInteract("paper-map", () => {
       ctx.bump(SPREAD, 1);
-      ctx.spend({ minutes: 0.5 }, "用石头压住地图角");
+      // ClockSystem does Math.round on cost minutes and drops anything that rounds to zero, so the stones are
+      // written as the whole minute the clock actually takes — the same line hutView carries for the same action.
+      ctx.spend({ minutes: 1 }, "用石头压住地图角");
       ctx.hand(MAP_STONE); glanceAt(MAP_STONE, 0.45);
       w.dispatch({ type: "item:use", item: "paperMap" });
     });
-    // A leg goes down under her finger: the pencil is JournalSystem's, her head dipping to the paper is the scene's.
+    /* A leg goes down under her finger. Two minutes the first time each one is traced — that is 低估了在岔路口看
+       地图……所需要的时间 with a number on it (v4 §1.2, §6). The paid list is shared with the lip (map.legsPaid),
+       because it is one piece of arithmetic on one sheet of paper: tracing a leg here that she already traced up
+       there costs nothing, and the slider dragging through five values costs one leg, not five. */
     ctx.on("ui:action", ({ id }) => {
       if (!id.startsWith("map:leg:")) return;
       ctx.kick("glance", 0.25, { yaw: 0, pitch: -2 });
+      const leg = id.slice("map:leg:".length);
+      const paid = ctx.flag<string>("map.legsPaid", "").split(",").filter(Boolean);
+      if (paid.includes(leg)) return;
+      paid.push(leg);
+      ctx.setFlag("map.legsPaid", paid.join(","));
+      ctx.spend({ minutes: 2 }, "在地图上量一段");
     });
 
     /* --- The map carries the same two buttons out here that it carries at the lip (PaperMap draws them for both

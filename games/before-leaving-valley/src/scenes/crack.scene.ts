@@ -15,9 +15,17 @@
    The paint on the middle block is still worth pressing (the journal, the lesson, the stats); it is worth no
    minutes, and the rust streak costs the minute that being unsure has always cost.
 
-   ART STILL TO LAND: sprites/crack-ledge.webp, hold-flake-cracked.webp, hold-groove-wet.webp. Nothing in this file
-   describes any of them as if it were on screen; the shelf is labelled by the part of the painting it is in, and a
-   used-up hold fades instead of changing its picture. */
+   ART STILL TO LAND: sprites/crack-ledge.webp (blocking — see below), hold-flake-cracked.webp, hold-groove-wet.webp.
+   Nothing in this file describes any of them as if it were on screen; the shelf is labelled by the part of the
+   painting it is in, and a used-up hold fades instead of changing its picture.
+   ONE RULE FOR ALL OF THEM, and it is the contract's §1: a sprite may name a file that does not exist yet, the view
+   hides the img, and the ring stays where it is. So `ledge` keeps its ring over the dark of the chimney even though
+   crack-ledge.webp has not been drawn — deleting it would delete §6's only place on the whole wall to sit down —
+   and it is labelled 「裂缝深处」 rather than 「岩台」 so the caption never promises a shape the picture has not
+   got. The same rule and the same reading now hold in roadside (the trail board, the shop window, the two hikers
+   and their car), approach (the 1912 letters and the old cable) and cable (the cap): a missing picture is a queue
+   entry, never a reason to take a beat out of the game. crack-ledge.webp is the blocking one of the three, because
+   it is the only one of them that a §6 row depends on. */
 import { all, entityIs, flag, not } from "../engine/condition";
 import type { Condition } from "../engine/condition";
 import { defineScene, type WalkStep } from "../engine/scene";
@@ -93,7 +101,11 @@ const falseHold = (h: typeof FALSE[number], sizeVh: number): EntityDef => ({
      way a confirmed mark does. Without this the seam stayed on the wall at full strength with its picture and its
      label unchanged after her hand had already slid out of it: a hold that had silently stopped working. Fading is
      `enabled`, and for a hold that is safe: view/Hotspot.tsx sends hold:start on pointer-down whatever the view
-     says, and InteractionSystem turns it back with the hand and the tock that `requires` owes her. */
+     says, so the press still reaches the engine and `requires` above turns it back.
+     What the engine gives that refusal is one sound and nothing else — InteractionSystem's hold:start branch emits
+     a tock and returns, and the hand + glance that the `interact` branch emits on the same kind of refusal are not
+     on this path. §12 D7 wants two non-text channels, so the script adds the missing one itself (see the second
+     hold:start handler at the bottom of the script). */
   enabled: not(entityIs(h.id, "read")),
 });
 
@@ -278,6 +290,24 @@ export default defineScene({
       if (from !== "crack") return;
       stand();
     });
+
+    /* A used-up false hold, pressed again. `requires` refuses it inside InteractionSystem and that costs nothing —
+       but all the engine puts on the hold:start refusal path is a tock, where the `interact` refusal path emits a
+       hand and a glance as well. So this handler rides alongside the engine's on the same command and supplies the
+       body half: her hand goes out to the seam and comes back, the camera dips, and the engine's tock lands with
+       it. It is registered on the command (not on a bus event) because a refused hold never reaches the bus, and
+       it is torn down with the scene. No cost, no text — she has already seen what is wrong with this one.
+       (The engine-side fix, so that hold refusals and interact refusals feel the same everywhere, is in
+       `requests.engine`; this stays correct either way, because it only fires when the hold is already refused.) */
+    const offRefusedHold = w.handle("hold:start", ({ entity }) => {
+      const h = FALSE.find((f) => f.id === entity);
+      if (!h || w.rt.hold) return;                       // a hold that actually started is not a refusal
+      const state = ctx.entity(entity).state;
+      if (!state.read && !state.hidden) return;
+      ctx.hand(PLACE[entity] ?? h, "grip");
+      ctx.kick("glance", 0.4, { yaw: 0, pitch: -4 });
+    });
+    w.sceneUnsub(offRefusedHold);
   },
   // Fastest legal line: four holds and out. 4 + 5 + 5 + 8 on the holds and 38 walking is the hour §3.1 gives this
   // node. The paint is not in this line any more — it buys no minutes here (header) — it is in `thorough`.

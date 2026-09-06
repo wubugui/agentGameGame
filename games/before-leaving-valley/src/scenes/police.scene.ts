@@ -28,8 +28,16 @@ const WINDOW: Transform = { yaw: 54, pitch: 13, distance: 40 };  // the mountain
 const GERANIUM: Transform = { yaw: 54, pitch: -5.5 };       // the geranium on the windowsill (1101, 407)
 /* 21-police paints no door on this side of the room, so the way out is the mat somebody put down in front of
    it: the grey-green doormat between the counter's end and the big rug runs plate x 942–995, y 627–677, and at
-   {42, −31} the arrow stood on the bare terracotta beside it. */
-const DOORWAY_OUT: Transform = { yaw: 37.5, pitch: -32.7 }; // the doormat by the way out (960, 640)
+   {42, −31} the arrow stood on the bare terracotta beside it.
+   Every point of that floor projects below the resting frame — at this yaw the bottom edge is pitch −24.6 and
+   the highest terracotta pixel in the room is −29.8 — so the exit is reached with a glance down however it is
+   placed, and a painted door edge is the only real cure (filed). What can be done from here is take it off the
+   middle of the mat and put it on the mat's near edge, where the skirting board meets the tiles (plate row 622,
+   sampled 162/148/125 against the board's 127/101/82 two rows above). Measured in the running view: at rest the
+   node is [1097,798,1152,847] where the middle of the mat put it at ≈865, and it is whole and inside the frame
+   by look(0.65,0.86) — [960,662,1015,711] — where before it still hung over the bottom edge at look(0.72,0.88).
+   Forty rows, and one notch less of a look down for the last door in the game. */
+const DOORWAY_OUT: Transform = { yaw: 37.9, pitch: -30.5 }; // the near edge of the doormat by the way out (963, 622)
 /* Sprites: the man behind the counter, and her phone on the green desk pad in front of him. */
 /* He is cut off by the counter, so the cut has to land ON the counter. Sampled down the plate at x 606: the
    wooden back panel runs to row 528, the counter's top lip is 531 and the green pad has 533–575 — and that lip
@@ -63,11 +71,18 @@ export default defineScene({
   // v4 §8: phoneReturned. Nothing else is asked of her here; the album, the map and the question are all optional.
   exitWhen: flag(RETURNED),
   entities: [
-    // The man behind the counter. He nods, he goes into the back room, he comes back, and at the end he spreads his hands.
+    /* The man behind the counter. He nods, he goes into the back room, he comes back, and at the end he spreads
+       his hands. One drawing, not three: `officer` is the id docs/ART_AUDIT.md gives him and the only one that
+       will ever be painted, and a swap to a file nobody drew would have made him disappear at exactly the two
+       moments he matters — carrying the phone over, and spreading his hands. His two gestures are carried the
+       way everything else in this room is: the door, the knock on the counter, the cloth of his sleeves and the
+       breath out. The two gesture states keep their place in the swap so the day the derived frames land they
+       are one string each (docs/ART_QUEUE.md), and until then every one of them resolves to the man himself —
+       a swap to a file nobody drew would have deleted him from the frame at exactly the two moments he matters. */
     { id: "officer", transform: OFFICER,
       sprite: { src: "sprites/officer.webp", layer: "figure", sizeVh: 34, swap: [
-        { when: SHRUGGING, src: "sprites/officer-shrug.webp" },
-        { when: HANDING, src: "sprites/officer-returning.webp" },
+        { when: SHRUGGING, src: "sprites/officer.webp" },        // ← officer-shrug.webp when it exists
+        { when: HANDING, src: "sprites/officer.webp" },          // ← officer-returning.webp when it exists
       ] },
       // GazeSystem reads `interactable.reveal` first and falls back to `gaze.radius`: one number, written twice.
       interactable: { verbs: ["talk"], label: "柜台后的警察", reveal: 16, cost: { minutes: 0 } },
@@ -79,7 +94,12 @@ export default defineScene({
       gaze: { radius: 13, dwell: 900 } },
     // Her phone, on the green pad, screen down, not a scratch on it. Holding it is taking it back (v4 §8 phoneReturned).
     { id: "phone-returned", transform: PAD, className: "hold-hotspot",
-      sprite: { src: "sprites/phone-returned.webp", layer: "prop", sizeVh: 3 },
+      /* Her phone, and there is only one of it in the game: `item-phone` is that drawing — dark case, screen
+         dark, front on — and it is what lies on the pad. `phone-returned` was a second name for it, and while
+         it named a file nobody had drawn its 3vh was never seen: measured, that is 22 px, a speck on a desk
+         pad in the one shot the whole game is walking towards. 5vh is what docs/ART_AUDIT.md asks for at this
+         exact spot, it is 36 px on the pad, and it still lands under the officer's counter line. */
+      sprite: { src: "sprites/item-phone.webp", layer: "prop", sizeVh: 5 },
       interactable: { verbs: ["hold"], label: "我的手机", reveal: 15 },
       hold: { ms: 700, scaleWith: ["fatigue"] },
       visible: ON_PAD },
@@ -189,6 +209,10 @@ export default defineScene({
     ctx.onEnter(() => {
       if (w.state.body.fatigue > 0) w.emit("body:fatigue", { delta: -1, reason: "第三天" });
       if (w.state.body.fear > 0) w.emit("body:fear", { delta: -1, reason: "第三天" });
+      /* The first of August. enterScene stamps engine/registry.ts's dateOfDay(3) onto clock.date on the way in
+         and that still says July, so the HUD contradicted the phone in the same frame; busStop and bench put
+         the same date back for the same reason, until the engine does (see requests). */
+      w.patch("clock", { date: { year: 2025, month: 8, day: 1 } });
     });
 
     /* He is reading something when she comes in; he puts it down. */

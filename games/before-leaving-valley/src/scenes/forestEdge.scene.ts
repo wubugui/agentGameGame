@@ -33,9 +33,11 @@ const LAMP_LINE = "特别特别幸运，我带了一盏拍视频用的补光灯�
    forbids and which mattered: missing this mark costs twenty minutes and +0.1 of the heart.
    13-forest-edge does draw one trunk in the open: the dwarf pine over the low rock. Brightened 2x and read at 9x,
    its reddish stem runs from (700, 540) down to (683, 615) on the 1280x720 grid and is 14-16 px wide; at y 576 it
-   spans x 686-702. The mark goes there, and the sprite is the bare red-white-red bar with 656 on it at 2.8 vh
-   (14.4 px tall, 16 px wide - it lands inside the stem) - the SAME asset and the same size forest1 uses on its
-   own painted trunk, so one file serves both and neither scene needs a bar welded to a painted trunk. */
+   spans x 686-702. The mark goes there, drawn with sprites/blaze-red-white.webp at 2.8 vh (14.4 px tall, 16 px
+   wide - it lands inside the stem): sprites/blaze-656.webp does not exist and is not going to this round, and
+   blaze-red-white is the same mark forest1 puts on its own painted trunk two nodes later, so the two nodes agree
+   and the player who learns the bar here recognises the same bar in there. The bare bar with 656 on it stays an
+   ART request; nothing in this scene names the number out loud, so nothing here asserts what the sprite lacks. */
 const TRUNK: Transform = { yaw: 6.2, pitch: -25.2 };                    // the dwarf pine's reddish stem, right of the trail (693, 576)
 const LEFT_BOULDER: Transform = { yaw: -23, pitch: -24 };               // the white boulder left of the trail (706, 905)
 const LOW_ROCK: Transform = { yaw: 11, pitch: -30 };                    // the small grey rock under the dwarf pine's roots (1180, 993)
@@ -73,7 +75,7 @@ export default defineScene({
     // All three stay where they are once she has settled them and go grey (v4 §3.5) — in the dark, a mark she has
     // read is the one thing she can still steer by, and deleting it off the trunk is the opposite of that.
     blaze("blaze-656", TRUNK, true, {
-      sprite: { src: "sprites/blaze-656.webp", layer: "prop", sizeVh: 2.8 },
+      sprite: { src: "sprites/blaze-red-white.webp", layer: "prop", sizeVh: 2.8 },
       interactable: { verbs: ["inspect"], label: "树干上的记号", reveal: 12, cost: { minutes: 1 } },
       visible: undefined, enabled: not(entityIs("blaze-656", "read")),
     }),
@@ -269,8 +271,18 @@ export default defineScene({
     /* The lamp out of the pack. The button is only one way to it — the cloth in the pack has its own. The beat hangs
        on her hand finding the lamp (the `item:use` event), so it happens whichever way she reaches for it. */
     ctx.onInteract("lamp-out", () => { w.dispatch({ type: "item:use", item: "fillLight" }); });
+    /* Changing the bite. v4 §3.4 prices it at 20 seconds and ClockSystem cannot hold twenty seconds — it rounds
+       cost minutes and drops anything under half of one — so it is charged as the whole minute the clock can
+       take, and only the first time each bite is set up: the lamp has to come out of her teeth, the shroud gets
+       turned, and it goes back in. Flipping back and forth after that is free, which is the honest reading of a
+       cost the clock cannot represent. (InventorySystem emits its own 0.3 minutes for the same action and
+       ClockSystem rounds it away; this is that cost, written as a number the clock can take.) Narrow also takes
+       its slice of the heart, every time. */
     ctx.on("lamp:mode", ({ mode }) => {
+      const first = ctx.flag(`forestEdge.bite.${mode}`, false) === false;
+      ctx.setFlag(`forestEdge.bite.${mode}`, true);
       ctx.setFlag("forestEdge.lampMode", mode);
+      if (first) ctx.spend({ minutes: 1 }, "换咬法");
       ctx.sfx("tock", 0, 0.7); ctx.kick("glance", 0.4, { yaw: 0, pitch: -3 });
       ctx.fx("flashlight", mode === "narrow" ? 1.2 : 0.8);
       if (mode === "narrow") ctx.spend({ fear: 0.06 }, "窄光");

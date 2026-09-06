@@ -105,7 +105,8 @@ export default defineScene({
        and it only means what the morning already meant: she came through there (v4 §4, redJacket). */
     {
       id: "jacket", transform: JACKET,
-      sprite: { src: "sprites/jacket-chairback.webp", layer: "prop", sizeVh: 19 },
+      // `jacket-red` is the drawn one, and it is the id docs/ART_AUDIT.md gives this exact spot (19-hotel (c)).
+      sprite: { src: "sprites/jacket-red.webp", layer: "prop", sizeVh: 19 },
       interactable: { verbs: ["inspect"], label: "椅背上的红冲锋衣", reveal: 12, cost: { minutes: 0 } },
     },
     /* The hotel's own decoration: a painted alpine meadow, framed, on the panelling above the desk. */
@@ -247,8 +248,11 @@ export default defineScene({
         ctx.kick("settle", 0.35);
         ctx.sfx("cloth", -0.3, 0.4);
         ctx.after(600, () => ctx.sfx("breath", -0.2, 0.5));
-        ctx.learn("E-mama", "room-phone");
-        ctx.say("妈说：在伦敦一年没被偷，得丢一个以示尊重。", { priority: 1, tag: "hotel-mama" });
+        // The page is requested and does not exist yet: written only when data/entries.ts has it, the same
+        // guard this scene's own seed uses. Without it JournalSystem drops the id and logs a warning.
+        if (ENTRIES["E-mama"]) ctx.learn("E-mama", "room-phone");
+        // SOURCE_TRANSCRIPT §14, 妈妈打趣. 手机 is the noun the joke turns on and it stays in.
+        ctx.say("妈说：在伦敦一年手机没被偷，得丢一个以示尊重。", { priority: 1, tag: "hotel-mama" });
         return;
       }
       if (!ctx.flag("hotel.entries", false)) { ctx.setFlag("hotel.entries", true); ctx.learn("E-hotels", "room-phone"); }

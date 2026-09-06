@@ -1,7 +1,15 @@
 /* The hairpin at 22:45. The forest path spits her out onto the asphalt; the bus went hours ago and the phone is
    somewhere back under the spruces. Two headlights will come up the valley. The first one always goes by and the
    second one always stops — the only thing she decides is where it stops, by where she stands and how she signals.
-   Coordinates read off the 150°×84° grid of 16-hairpin (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84, W×H = 1280×720). */
+   Coordinates read off the 150°×84° grid of 16-hairpin (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84, W×H = 1280×720).
+
+   Two things about this scene are workarounds for the engine, not design intent, and both are in the report's
+   `requests`: (1) the three ways of signalling are one E button that hands itself on (挥手 → 喊 help → 举补光灯 →
+   挥手) because `.story-action` is pinned to a single slot (pano.css:127) and `Actions.tsx` sends E to the first
+   node it finds — with three slots this goes back to three buttons under E/1/2/3, and 怎么示意 becomes a choice
+   again instead of a place in a rotation; (2) 护栏边的柏油 is the strip of asphalt hard against the guardrail posts,
+   where §7 says 护栏外侧 — beyond the posts this painting has nothing but the drop into the valley, so the anchor
+   moved to the only painted footing there is. */
 import { all, any, flag, has, not } from "../engine/condition";
 import { defineScene } from "../engine/scene";
 import { prop } from "./_shared";
@@ -87,10 +95,11 @@ export default defineScene({
        point stays reveal-gated: to take the beat she has to turn and look at it. */
     // 1.5 vh ≈ 11 px on a 720-high viewport. On a 5.6× crop of the plate that far bend's road band is ~11 plate px
     // (1.3°) and its guardrail posts ~5 plate px apart, which puts it 180 m or more away: a whole car body there is
-    // about 8 px. `car-passing.webp` is a whole car body drawn at 5 vh — twice the height of the road it stood on,
-    // which read as a small car parked on the hillside. What is coming up the valley at that range is light, so this
-    // anchor takes a new file: two headlight points with bloom (brief in the report), and nothing until it is drawn.
-    prop("headlight-beam", FAR_ROAD, "sprites/headlights-far.webp", 1.5, { visible: carComing }),
+    // about 8 px. What is coming up the valley at that range is light, so `headlights-far.webp` is briefed (two
+    // headlight points with bloom, docs/ART_QUEUE.md). Until it is drawn this anchor carries `car-passing.webp` —
+    // the one car in the sprite folder whose headlights are on — at 11 px, where a whole body is a lit speck on the
+    // far bend. Nothing drawn at all would leave this beat with no visible cause, and the beat is the whole node.
+    prop("headlight-beam", FAR_ROAD, "sprites/car-passing.webp", 1.5, { visible: carComing }),
     { id: "headlights", transform: FAR_ROAD,
       interactable: { verbs: ["inspect"], label: "上来的车灯", reveal: 22 },
       gaze: { radius: 14, dwell: 600 },
@@ -102,13 +111,13 @@ export default defineScene({
        so they are painted, not found. The hold sits on the same moving point with a wide reveal (18° of live radius
        on ten-hour legs), so the button arrives as soon as the braking has turned her head that way. */
     /* 5 vh ≈ 36 px: two tail lamps with their bloom, not a car's back end (0.2 m of lamp at 40 m is a few pixels;
-       what carries at night is the glow). One entity means one on-screen height, so the difference between 十几步
-       and 四十米 is carried by the art — the near file has the heavier bloom and a hint of the rear panel — and by
-       everything else about the two states: the anchor sits further along the road and higher in the frame, and
-       `runAfter` charges three minutes instead of one. */
+       what carries at night is the glow). Both states draw the same file: `taillights-near.webp` (heavier bloom, a
+       hint of the rear panel) is briefed in docs/ART_QUEUE.md, and a `swap` to a file that does not exist left the
+       whole 被落下 beat — which is more than half of the ways this scene can end — with nothing on the road at all.
+       The difference between 十几步 and 四十米 is carried by everything else: the anchor sits further along the road
+       and higher in the frame, and `runAfter` charges three minutes instead of one. */
     { id: "taillights", transform: tailAt,
-      sprite: { src: "sprites/taillights-far.webp", layer: "prop", sizeVh: 5,
-        swap: [{ when: flag(STOP, { eq: "near" }), src: "sprites/taillights-near.webp" }] },
+      sprite: { src: "sprites/taillights-far.webp", layer: "prop", sizeVh: 5 },
       visible: flag(LEFT) },
     { id: "tail", transform: tailAt, className: "hold-hotspot",
       interactable: { verbs: ["hold"], label: "那两点红色", reveal: 45 },
@@ -179,7 +188,9 @@ export default defineScene({
       });
       ctx.spend({ minutes: 1 }, "第一辆车过去了");   // still phase "one" while this drains, so it cannot summon the second
       ctx.setFlag(PHASE, "gap");
-      ctx.say("它没有停。", { tag: "hairpin-first" });
+      /* No line. She arrives here at fatigue 1, and BodySystem's adrenaline latch means DialogueSystem drops
+         everything under priority 2 — so a line here is either unreachable or shouted over the gate. The beam
+         across the trunks, the tyres changing note twice and the road going quiet again say it by themselves. */
     };
 
     /* The second car. It always stops. Where it stops is the whole decision: the crook plus the raised lamp puts it
@@ -198,16 +209,14 @@ export default defineScene({
       if (where === "front") {
         w.emit("ambience", { overrides: { engine: 0.3 } });
         ctx.after(600, () => { ctx.sfx("doorOpen", 0.2, 0.55); ctx.kick("settle", 0.5); });
-        ctx.spend({ minutes: 1 }, "它停在面前");
-        ctx.say("车窗降下来了。", { tag: "hairpin-stop" });
+        ctx.spend({ minutes: 1 }, "它停在面前");   // the brake, the door and an engine idling in front of her: this beat needs no sentence
       } else {
         ctx.setFlag(LEFT, true);
         const tail = where === "near" ? TAIL_NEAR : TAIL_FAR;
         w.emit("ambience", { overrides: { engine: 0.1 } });
         // The red is out at the edge of what she can see: the sound and the head turn are what take her eyes there.
         ctx.after(600, () => { ctx.sfx("slide", 0.7, 0.5); ctx.kick("glance", 0.8, { yaw: tail.yaw * 0.4, pitch: -8 }); });
-        ctx.spend({ minutes: 1 }, "它从身边过去了");
-        ctx.say("它在前面停下了。", { tag: "hairpin-past" });
+        ctx.spend({ minutes: 1 }, "它从身边过去了");   // what speaks is the head turn, and two red points coming up on the road
       }
     };
 
@@ -267,8 +276,7 @@ export default defineScene({
       w.emit("body:rest", { seconds: 4 });
       w.emit("ambience", { overrides: { engine: 0.3 } });
       ctx.sfx("exhale", 0, 0.95);
-      ctx.kick("land", 1.0);
-      ctx.say("追上了。", { tag: "hairpin-caught" });
+      ctx.kick("land", 1.0);   // thirty seconds of running, one landing, one breath — no line gets past the gate here, and none is needed
     };
     const caughtBreath = (progress: number) => {
       if (progress < 0.15) return;
@@ -282,13 +290,15 @@ export default defineScene({
     ctx.onInteract("bus-plate", () => {
       ctx.hand(PLATE, "grip");
       ctx.kick("glance", 0.45, { yaw: -2, pitch: -4 });
-      // §6 sanctions this half only. The empty phone slot is hers to find in the pack (§3.6), not to be told about.
-      ctx.say("公交早没了。", { tag: "hairpin-bus" });
+      /* §6 makes this line the whole return on reading the plate, so it is the one line in this scene that has to
+         reach the screen: she arrives at fatigue 1, BodySystem latches adrenaline, and DialogueSystem drops
+         everything under priority 2. §6 sanctions this half only — the empty pocket is hers to find in the pack
+         (§3.6), never to be told about. */
+      ctx.say("公交早没了。", { tag: "hairpin-bus", priority: 2 });
     });
     ctx.onInteract("village-lights", () => {
       ctx.kick("glance", 0.6, { yaw: 8, pitch: -3 });
-      ctx.sfx("breath", 0.4, 0.55);
-      ctx.say("下面有一点点光。", { tag: "hairpin-village" });
+      ctx.sfx("breath", 0.4, 0.55);   // the valley lights are painted down there; she does not say them back
     });
     ctx.onInteract("milky-way", () => {
       ctx.kick("settle", 0.7, { yaw: 0, pitch: 6 });

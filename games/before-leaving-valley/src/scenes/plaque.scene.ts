@@ -7,7 +7,26 @@
    now spent where the engine actually spends them — four on the dressing it makes compulsory (pack open and close
    round 0.5 up to 1 each, helmet 1, lanyard 1) and one on stepping off the gravel onto the wall. The fastest legal
    line therefore leaves at 10:29 and opens `cable` at 10:30, exactly the baseline; everything else here (the four
-   plates, the marks, the anchor, the two shots, the comparison) is optional and priced on top. */
+   plates, the marks, the anchor, the two shots, the comparison) is optional and priced on top.
+
+   THREE THINGS A READER SHOULD NOT HAVE TO REDERIVE:
+   1. THE 360 SHUTTER TOUCHES THE PHONE'S ALBUM AND NOTHING ELSE OF THE PHONE'S. `shoot()` writes the picture with
+      `phoneDispatch(capture_photo)` and then charges the 360 camera (1% of its own battery) and the minute. It is
+      safe to write straight into the album because the reducer no longer owns power or time: phoneModel's
+      capture_photo returns `{...state, photos}` and says so in a comment, and the phone's clock is moved only by
+      ClockSystem (advanceClockOnly) and its battery only by PowerSystem. Verified on the machine after this round:
+      four shots in a row leave `power.phone` and the lock-screen battery equal and unchanged, and worldClock and
+      phoneClock equal (both +1 per shot, from the minute this scene spends). Do not "fix" this by re-routing the
+      shot through `phone:shoot` — that is the phone raising itself, and it would charge the phone's 1% for a
+      picture the 360 took.
+   2. ② IS A PROMISE THE VIEW HAS NOT KEPT YET. `plate-grade` writes E-carabinerRule, and §6 prices missing it as
+      「锁扣面板只显示颜色，不显示状态文字」 — but nothing in src/view reads that entry, and `cable` has no
+      permanent carabiner panel at all. So today reading ② costs a minute and buys the journal line and nothing
+      else. The panel is in this scene's `requests.engine/css`; the entry stays because the plate really does have
+      that rule cast into it, not because the cost is delivered.
+   3. THE PAINT ON THE FOREGROUND ROCK IS IN THE PICTURE, NOT ONLY IN THE SPRITE — see the note on `blaze-plaque`
+      below. Until 03-plaque is repainted, §3.5's 「真假在凑近之前完全不可分辨」 does not hold in this one node,
+      and that is an art blocker, not something the scene can size its way out of. */
 import { all, entityIs, flag, not, worn } from "../engine/condition";
 import type { EntityDef } from "../engine/entity";
 import { defineScene } from "../engine/scene";
@@ -58,7 +77,10 @@ export default defineScene({
     // stamped on it and nothing else; the line itself is on the plate, for her to look at.
     readable("plate-route", { yaw: 33, pitch: 7 }, "路线图", {                     // bronze plate under ① (918, 300)
       kind: "plaque", title: "Schizzo dell'itinerario",
-      lines: ["Via ferrata Pössnecker", "Piz Selva 2941 m"],
+      // What is stamped along the drawn line and nowhere else on this wall: the route's number, the summit it ends
+      // at, and the refuge the line runs on to across the plateau. The previous two lines were both already cast
+      // into ① — a minute spent reading a plate should not be a minute spent reading the first plate again.
+      lines: ["649", "Piz Selva 2941 m", "Rifugio Boè"],
       entry: "E-summit", minutes: 1,
     }),
     readable("plate-hut", { yaw: 38, pitch: 1.5 }, "玻璃下的告示", {               // the white sheet under glass (963, 347)
@@ -92,8 +114,13 @@ export default defineScene({
        diffuse blob about 95 × 90 px, densest between x 640–700 and y 595–660). The default 4 vh blaze was a 21 px
        sticker in the middle of it, so "confirming it leaves a very faint trace" could not be read at all — the
        painted streak stayed at full strength behind an entity faded to .35. Recentred on the dense core and grown
-       to 13 vh (67 px) the sprite and the streak read as one mark. The real fix is art: `requests` asks for the
-       streak to be painted out of 03-plaque so the paint is the sprite entirely, and this size drops back to 4. */
+       to 13 vh (67 px) the sprite and the streak read as one mark. That is the best a scene file can do and it is
+       not enough: the side effect is that the true mark sits on a painted blob and the false one sits on bare
+       stone, so on this wall the two are told apart before she is anywhere near them and §3.5 does not hold here.
+       The fix is art and it is a blocker, not a nice-to-have — 03-plaque repainted with the streak removed (the
+       paint then IS the sprite, and this size goes back to 4), together with the other half of the same red line:
+       blaze-red-white.webp and blaze-false.webp are two different base images, so every candidate mark in the game
+       is separable by its picture. One request, one schedule; both are in docs/ART_QUEUE.md. */
     mark("blaze-plaque", { yaw: 3.7, pitch: -32 }, true,                             // the dense core of the painted streak (672, 634)
       { sprite: { src: "sprites/blaze-red-white.webp", layer: "prop", sizeVh: 13 } }),
     mark("lichen-plaque", { yaw: 5.5, pitch: 13.5 }, false),                         // the lichened patch on the slab (687, 243); sprites/blaze-false.webp is orange-grey, so her line names no colour

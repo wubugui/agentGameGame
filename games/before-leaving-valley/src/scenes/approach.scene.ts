@@ -4,14 +4,21 @@
    at the far right edge (1182–1238 × 610–647: roof, gable and window, not a dot).
    Coordinates read off the 150°×84° grid of 02-approach.
    WHAT IS AND IS NOT PAINTED: the wall, the road, the bulge, the pale block and the hut are painted; the rusted
-   cable and the 1912 letters are not, and neither is blaze-arrow-old.webp. A ring labelled 旧钢缆 laid on a
-   shadowed groove, and PÖSSNECKER / 1912 read out of a stone with nothing written on it, are the same accident as
-   pointing at a patch of grass (§0.5) — only it happens inside the reading overlay. So this file has one switch,
-   ART_LANDED, and while it is false the two keepsakes v4 §6 gives this node are simply not in the scene; the look
-   back at the pass, which IS painted (roof, gable and window, 56 px of it), carries this row of §6 on its own.
-   E-possnecker is still reachable today: the first bronze plate at `plaque` writes it.
-   The third candidate mark keeps its ring but drops the picture it did not have: without the override `blaze()`
-   gives it blaze-false.webp, so all three marks now look like marks (§3.5) instead of two marks and a bare ring. */
+   cable and the 1912 letters are not. This file used to hold a switch (ART_LANDED) that took both of them out of
+   the scene until their pictures arrived, which emptied the whole "可发现的事" column §8 gives this node and took
+   away the echo §6 asks for (1912 in the rock here, 1912 on the first bronze plate at `plaque` fifteen minutes
+   later). The switch is gone. What decides whether a ring may exist is the contract's §1 rule and nothing else:
+   **a sprite may name a file that does not exist yet; the view hides the img and leaves the ring where it is** —
+   so a ring is allowed exactly when the thing it is drawn on is painted.
+     · `carving-1912` sits on the lit face of the pale block at the wall's foot (a painted block, measured at 5x),
+       and the reading overlay is what the letters say. Same construction as the four blank bronze plates at
+       `plaque`, which are also read off a painting with no lettering in it.
+     · `old-cable` is a pure sprite on the grey face right of the bulge — a shadowed groove is a real place on a
+       real painted wall, and 旧钢缆 is what is hanging there. Until sprites/old-cable.webp lands the player finds
+       cold rusted iron by touch, which is exactly what §6 prices at one minute.
+   Both files are in docs/ART_QUEUE.md, old-cable first: it is the one that is only a sprite.
+   The third candidate mark keeps its ring and takes the picture `blaze()` gives it by default (blaze-false.webp),
+   so all three marks look like marks (§3.5) instead of two marks and a bare ring. */
 import { entityIs, flag, not } from "../engine/condition";
 import type { EntityDef } from "../engine/entity";
 import { defineScene } from "../engine/scene";
@@ -25,16 +32,26 @@ import { blaze, goArrow, prop, readable } from "./_shared";
 const mark = (id: EntityId, transform: Transform, real: boolean, extra: Partial<EntityDef> = {}): EntityDef =>
   blaze(id, transform, real, { visible: undefined, enabled: not(entityIs(id, "read")), ...extra });
 
-/** Flip to true in the same commit as sprites/old-cable.webp, carving-1912.webp and blaze-arrow-old.webp. */
-const ART_LANDED: boolean = false;
-
 const CUT = "approach.cut";
 const BOULDER: Transform = { yaw: 14, pitch: -12 };                   // the rounded bulge of the wall right of the road
 const OUTCROP: Transform = { yaw: -19, pitch: -12 };                   // the lit face of the pale block at the wall's foot (478, 463); its top edge and the shadow behind it are at y 450
 const OLD_CABLE: Transform = { yaw: 24, pitch: -6, distance: 12 };     // the grey face just right of the bulge
 const HOLLOW: Transform = { yaw: -7, pitch: -12 };                     // the dark recess where the road ends
 const WALL_TOP: Transform = { yaw: 0, pitch: 22, distance: 20 };       // the crest of the wall, straight overhead
-const HUT: Transform = { yaw: 65, pitch: -31.5, distance: 30 };        // the hut on the pass meadow, far right (it spans yaw 64–70; this end of it stays inside the reachable gaze)
+/* The hut on the pass meadow, far right, and the one point in this file that had to be checked twice — once on the
+   painting and once on a real frame, because at this corner the two do not agree to the pixel.
+   ON THE PAINTING (the grid, contract §2): red-brown pixels of the building run x 1188–1240 by y 612–650 — dark
+   gable wall, pale roof, one lit window. This point is the middle of that gable wall: (1206, 628), which is
+   yaw = (1206/1280 − .5)×150 = 66.3 and pitch = (.5 − 628/720)×84 = −31.3.
+   ON A REAL FRAME (drive with the pointer pushed to the bottom-right, gaze 67.5 / −37.2, which is as far as the
+   camera goes): the hut's red-brown pixels land at x 1053–1131 by y 666–719, and the ring lands inside that box.
+   The old (1195, 630) rendered about a degree up and left of the painted hut — that gap is the renderer's, not
+   this file's (it shows on any anchor this far off axis), and it is written into `requests.engine`; the fix here
+   is simply to aim at the middle of the wall instead of its top-left corner, which is on the hut in both frames.
+   Reach: the gaze goes to about yaw 69 (yawLimit 28.5 + halfHfov·0.9) and pitch −37.6 (pitchLimit 12.9 + fov/2·0.9),
+   so with reveal 18 the ring fades up while the head is still turning: at the corner the distance term is
+   hypot(2.7, 6.3×1.4) = 9.2, well inside 18. Ring and label are both fully on screen in the frame above. */
+const HUT: Transform = { yaw: 66.3, pitch: -31.3, distance: 30 };      // (1206, 628), the middle of the gable wall
 const FINE_GRAVEL: Transform = { yaw: -32, pitch: -8 };                // the smooth sand between the stones, straight up the slope
 const ROAD_TOP: Transform = { yaw: -2, pitch: -21 };                   // where the road narrows into the wall's foot
 
@@ -61,17 +78,15 @@ export default defineScene({
     mark("lichen-stone", { yaw: -36, pitch: -22 }, false),
     mark("arrow-old", { yaw: 40, pitch: -4 }, false),
     // What the wall keeps from 1912 (v4 §6/§8): a rusted length of cable on the face, and letters chiselled into
-    // the pale block. Neither is painted, so neither is here until its picture is (see the header).
-    ...(ART_LANDED ? [
-      prop("old-cable", OLD_CABLE, "sprites/old-cable.webp", 9, {
-        interactable: { verbs: ["inspect"], label: "旧钢缆", reveal: 12, cost: { minutes: 1 } },
-      }),
-      readable("carving-1912", OUTCROP, "石头上凿的字", {
-        kind: "carving", title: "PÖSSNECKER 1912",
-        lines: ["PÖSSNECKER", "1912", "凿进石灰岩的字，边缘已经被风磨圆了。"],
-        entry: "E-possnecker", minutes: 1,
-      }, { sprite: { src: "sprites/carving-1912.webp", layer: "prop", sizeVh: 4.5 } }),
-    ] : []),
+    // the pale block. Both rings are on painted stone; the two pictures are queued (see the header).
+    prop("old-cable", OLD_CABLE, "sprites/old-cable.webp", 9, {
+      interactable: { verbs: ["inspect"], label: "旧钢缆", reveal: 12, cost: { minutes: 1 } },
+    }),
+    readable("carving-1912", OUTCROP, "石头上凿的字", {
+      kind: "carving", title: "PÖSSNECKER 1912",
+      lines: ["PÖSSNECKER", "1912", "凿进石灰岩的字，边缘已经被风磨圆了。"],
+      entry: "E-possnecker", minutes: 1,
+    }, { sprite: { src: "sprites/carving-1912.webp", layer: "prop", sizeVh: 4.5 } }),
     // The hollow at the foot of the wall, and the crest straight overhead: looking is free and gets a breath, not a word.
     { id: "wall-foot", transform: HOLLOW, gaze: { radius: 12, dwell: 900 } },
     { id: "wall-up", transform: WALL_TOP, gaze: { radius: 14, dwell: 1000 } },
@@ -79,8 +94,10 @@ export default defineScene({
     // dispatches verbs[0] — turning round and raising the phone is one movement, and §6 prices the whole movement
     // at one minute. That minute is the phone: `phone:shoot` charges it (UISystem) together with the 1%, so this
     // hotspot charges nothing of its own. It used to charge a minute as well, which made the look back cost two.
+    // reveal 18, not 14: at the far right of the painting the ring has to fade in while the head is still turning,
+    // or it only ever exists with the pointer jammed into the corner.
     { id: "pass-view", transform: HUT,
-      interactable: { verbs: ["photograph"], label: "山口的木屋", reveal: 14, cost: { minutes: 0 } } },
+      interactable: { verbs: ["photograph"], label: "山口的木屋", reveal: 18, cost: { minutes: 0 } } },
     // The fine gravel straight up the slope looks shorter than the road. Every step slides back (v4 §8: −9 min, fatigue +0.08:
     // 0.05 here, and the 0.03 that BodySystem adds for the body:slip of severity 0.6 the hold emits — do not move the total into one place).
     { id: "gravel-cut", transform: FINE_GRAVEL, className: "foot-hotspot",
@@ -103,12 +120,14 @@ export default defineScene({
       { type: "interact", entity: "blaze-boulder", verb: "inspect" },
       { type: "travel", entity: "go" },
     ],
-    // Everything the road offers today: the false arrow, the lichen, the real mark, and the look back with its
-    // photograph. (The cable and the letters rejoin this list with their pictures.)
+    // Everything the road offers: the false arrow, the lichen, the real mark, the old cable, the 1912 letters,
+    // and the look back with its photograph.
     thorough: [
       { type: "interact", entity: "arrow-old", verb: "inspect" }, { wait: 300 },
       { type: "interact", entity: "lichen-stone", verb: "inspect" }, { wait: 300 },
       { type: "interact", entity: "blaze-boulder", verb: "inspect" },
+      { type: "interact", entity: "old-cable", verb: "inspect" }, { wait: 300 },
+      { type: "interact", entity: "carving-1912", verb: "read" }, { type: "overlay:close" }, { wait: 300 },
       { type: "interact", entity: "pass-view", verb: "photograph" },
       { wait: 400 },
       { type: "travel", entity: "go" },
@@ -130,8 +149,7 @@ export default defineScene({
       ctx.say(line, { tag: `approach-${entity}` });
     });
 
-    // The old cable: a hand on it, and it answers like the stone it has become. (Registered whether or not the
-    // picture exists; with ART_LANDED false the entity is not in the scene and this never fires.)
+    // The old cable: a hand on it, and it answers like the stone it has become.
     ctx.onInteract("old-cable", () => {
       ctx.setFlag("approach.cable", true);
       ctx.hand(OLD_CABLE); ctx.sfx("clink", 0.3, 0.5); ctx.kick("clink", 0.4);

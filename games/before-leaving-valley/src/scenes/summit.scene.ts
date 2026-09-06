@@ -8,7 +8,7 @@
 import { any, entityIs, flag, not } from "../engine/condition";
 import { defineScene } from "../engine/scene";
 import type { Transform } from "../engine/types";
-import { backArrow, goArrow, lookAt } from "./_shared";
+import { backArrow, goArrow, lookAt, prop, readable } from "./_shared";
 
 const SELFIE = "summit.selfie";          // required downstream (policy §6)
 const CAM_UP = "summit.cameraUp";
@@ -23,6 +23,20 @@ const POST_UP: Transform = { yaw: -24.3, pitch: 9, distance: 9 };
 const CROSSING: Transform = { yaw: -23.5, pitch: -0.5, distance: 9 };
 const RIBBON: Transform = { yaw: -47.5, pitch: -5.5, distance: 9 };          // the wrapped tape on the left arm's tip (235, 405)
 const SIT_STONE: Transform = { yaw: -6, pitch: -27, distance: 8 };           // the pale flat block right of the cross's foot (587, 595)
+/* The plate, on the bare stretch of post between the crossbar's binding (pitch -3.1) and the next one (pitch -16.7).
+   The post was measured, not eyeballed, twice over and they agree. On the plate: sampling 08-summit's row y = 446 for
+   lit wood gives x 422..446, i.e. centre yaw -24.1, 2.8° wide. In the running frame, with the pointer held dead centre
+   so PanoStage's idle wander never starts (it moves the post and the sprite together, which is what made a drifted
+   screenshot lie about their offset): the post covers screen x 343..375 just above the plate and 342..380 just below,
+   and the sprite lands on 344..379 — flush. The sprite carries its own block of weathered post, so it is sized to the
+   post's width: 5.6 vh × (554/639) = 4.9 vh = 2.9° across, and 3.4° tall — y 432..460 of a bare stretch running
+   395..497. */
+const PLATE: Transform = { yaw: -24.1, pitch: -10, distance: 9 };
+/* The machine itself, out over the valley on the left in the clear band of sky between the two cloud banks (370, 185):
+   nothing is painted there, so a sprite may stand in it. distance 14 keeps it inside PanoStage's 1:1 band
+   (scale = max(.6, 10/d) cancels the wrapper's d/10 up to 16.7), so 3 vh is 22 px of helicopter on a 720-high screen —
+   a machine a few hundred metres out, which is what a rotor you can hear over a summit looks like. */
+const HELI_AT: Transform = { yaw: -31.6, pitch: 20.4, distance: 14 };
 
 export default defineScene({
   id: "summit",
@@ -37,14 +51,16 @@ export default defineScene({
   fallback: "眼前是 Sassolungo 和云海。",
   exitWhen: flag(SELFIE),
   entities: [
-    /* --- The cross. The post to put a hand on, the crossing to raise the camera at.
-       §6 also gives this node the PIZ SELVA / 2941 m plate; 08-summit does not paint one — between the crossbar and the
-       next rope binding the post is bare wood (checked at 4×) — and `summit-cross-plate.webp` has not been drawn. A
-       readable hanging on nothing is a hotspot that is not on the thing the painting paints (§0.5), so the plate is not
-       in this scene today: the art is a P0 request with its placement, and the entity comes back with it. Nothing is
-       lost downstream — `E-summit` is the route plate's entry at plaque, and it is written there. --- */
+    /* --- The cross. The post to put a hand on, the crossing to raise the camera at, and the plate screwed to the post
+       under the crossbar. 08-summit paints bare wood there, so the plate is a sprite; it is a `prop` and the reading is
+       a second entity on the same point, because a prop is drawn all the time while a hotspot's picture only fades up
+       as the gaze comes near it (PanoStage.tsx:427) — a plate that materialises when you look at the post is worse than
+       no plate. Same split as `mailbox` / `mailbox-lid`. What she reads is what is drawn (§0.5), and the two of them
+       together cost the 8 minutes §6 gives "木十字架与 PIZ SELVA 2941 m 铭牌". Neither is required for anything. --- */
     { id: "cross", transform: POST_UP,
       interactable: { verbs: ["inspect"], label: "木十字架", reveal: 12, cost: { minutes: 4 } } },
+    prop("cross-plate", PLATE, "sprites/summit-cross-plate.webp", 5.6),
+    readable("plate", PLATE, "铭牌", { kind: "plaque", title: "Piz Selva", lines: ["PIZ SELVA", "2941 m"], entry: "E-summit", minutes: 4 }),
     { id: "selfie", transform: CROSSING, className: "hold-hotspot",
       interactable: { verbs: ["hold"], label: "举起相机", reveal: 13, cost: { minutes: 4, camera: 3 }, requires: any({ kind: "held", item: "camera360" }, flag(CAM_UP)) },
       hold: { ms: 1200, scaleWith: ["fatigue"] },
@@ -63,12 +79,15 @@ export default defineScene({
     { id: "plateau-way", transform: { yaw: 46, pitch: -4, distance: 18 },
       interactable: { verbs: ["inspect"], label: "右边的石坡", reveal: 13, cost: { minutes: 4 } } },
 
-    /* --- The helicopter is not an entity today. `helicopter.webp` / `helicopter-passing.webp` have not been drawn, and
-       hanging the one thing §6 calls a discoverable on an invisible point in an empty sky means the only way to find it
-       is to rest the pointer on a pixel with nothing on it. Until the art lands it is what it was in the valley all
-       afternoon: a rotor somewhere off to the left, and then, if she is standing still, the whole machine going over —
-       sound, a head thrown back, and the gust of it (see the script's onWait). Both sprites, and the `heli-passing`
-       crossing rule, are in the requests; the gaze targets come back with them. --- */
+    /* --- The helicopter. §10 and §12 A5 are explicit: it is in the picture and it waits, and only her eyes start it
+       ("进画面然后等着 … 没有任何一个 timeout 会替玩家把它们点着"). So it hangs out over the valley on the left with its
+       rotor going, drawn the whole time — no `interactable`, because a hotspot's picture only fades up as the gaze
+       reaches it and a machine you cannot see until you are already looking at it is not "in the picture". Resting her
+       eyes on it for 0.6 s is what sends it over her head. Once it has, it is gone: 直升机只飞一次. --- */
+    { id: "heli", transform: HELI_AT,
+      sprite: { src: "sprites/helicopter.webp", layer: "prop", sizeVh: 3 },
+      gaze: { radius: 14, dwell: 600 },
+      visible: not(flag(HELI)) },
 
     // --- The flat stone in front of the cross: the only seat on the summit. ---
     { id: "sit-stone", transform: SIT_STONE,
@@ -103,8 +122,8 @@ export default defineScene({
       rotor(0.5);
     };
     /* And then it comes over: four minutes of standing with her head back, from the left to the right, the way the cue
-       itself sweeps. With no machine painted in that sky this is sound, neck and wind — nothing to click, nothing on a
-       timer, and nothing she is made to look at. It happens once, to a player who is standing still (§6: 直升机只飞一次). */
+       itself sweeps. It happens once (§6: 直升机只飞一次) and only when she has found the machine herself — never on a
+       timer, never on a wait (§12 A5). */
     const heliCross = () => {
       if (ctx.flag(HELI, false)) return;
       ctx.setFlag(HELI, true);
@@ -113,10 +132,11 @@ export default defineScene({
       ctx.kick("turn", 0.9, { yaw: 0, pitch: 8 });
       ctx.fx("gust", 0.8);
       ctx.say("头顶飞过一架直升机。", { tag: "summit-heli", priority: 1 });
-      // The crossing is the whole of it: it comes from the left, it goes out to the right, and that is the last of it
-      // today. (When the two sprites land, HELI_GONE goes back to being the moment she watches it leave the frame.)
+      // The crossing is the whole of it: it comes from the left, it goes out to the right, the sprite leaves the sky
+      // with it, and that is the last of it today.
       ctx.setFlag(HELI_GONE, true);
     };
+    ctx.onGaze("heli", heliCross);
 
     /* Raising the camera from the pack is what frees the hold at the crossing; stowing it takes that back. */
     ctx.on("item:use", ({ item }) => {
@@ -180,19 +200,13 @@ export default defineScene({
       w.emit("body:rest", { seconds: 5 }); w.emit("body:fatigue", { delta: -0.1, reason: "坐下" });
       ctx.kick("settle", 1.2, { yaw: 0, pitch: -3 }); ctx.sfx("exhale"); ctx.sfx("cloth", 0.2, 0.5);
     });
-    /* Standing still: the first breath brings the rotor up out of the valley on the left, the next one is it still out
-       there, and the one after that is the machine itself going over. Three breaths is about twenty seconds of a player
-       doing nothing at all on a summit — she is not made to wait, and a player who never stops moving never hears more
-       than the first thump. */
-    let breaths = 0;
+    /* Standing still: the first breath brings the rotor up out of the valley on the left, and every one after it is the
+       machine still out there, idling. That is all a wait ever does — it tells her where to look; it never looks for
+       her (§12 A5). */
     ctx.onWait(() => {
-      breaths += 1;
       const first = !ctx.flag(HELI_NEAR, false);
       heliCome();
-      if (!first && !ctx.flag(HELI, false)) {
-        if (breaths >= 3) heliCross();
-        else rotor(0.3);
-      }
+      if (!first && !ctx.flag(HELI, false)) rotor(0.3);
       if (ctx.flag(SAT, false)) w.emit("body:fatigue", { delta: -0.02, reason: "坐着" });
     });
 
@@ -205,7 +219,7 @@ export default defineScene({
 
     /* A gust taking her cap onto the rocks to the right was a hold on `item-cap.webp`, which has not been drawn (cable
        is waiting on the same file). Grabbing a hat that is not in the picture is worse than not losing it, so the whole
-       branch is out until the sprite lands; it is in the requests with the placement it had. */
+       branch is out until the sprite lands; it is in the art queue with the placement it had. */
   },
   walkthrough: [
     { type: "pack:open" },
@@ -221,13 +235,15 @@ export default defineScene({
     // Everything the summit offers: the cross, both photos, the valley, the way on, the stone, the helicopter, a message.
     full: [
       { type: "interact", entity: "cross", verb: "inspect" },
+      { type: "interact", entity: "plate", verb: "read" }, { wait: 400 }, { type: "overlay:close" }, { wait: 300 },
       { type: "interact", entity: "sassolungo", verb: "photograph" },
       { type: "interact", entity: "cloud-sea", verb: "photograph" },
       { type: "interact", entity: "valley", verb: "inspect" },
       { type: "interact", entity: "plateau-way", verb: "inspect" },
       { type: "interact", entity: "sit-stone", verb: "use" },
-      // Three breaths on the stone: the rotor comes up out of the valley, it is still out there, and then it goes over.
-      { type: "wait" }, { wait: 400 },
+      // Two breaths on the stone: the rotor comes up out of the valley and is still out there. Whether the machine
+      // itself goes over depends on where she is looking, so it is not a step — a headless run with `reveal=1` sees
+      // every gaze target and takes it; a run with real reveal radii, and the full replay, do not.
       { type: "wait" }, { wait: 400 },
       { type: "wait" }, { wait: 900 },
       { type: "phone:open", tab: "messages" }, { type: "phone:send", contact: "mama", kind: "text", text: "到顶了" }, { wait: 2200 }, { type: "phone:close" },

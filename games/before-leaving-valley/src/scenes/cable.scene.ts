@@ -11,18 +11,29 @@
       nowhere else, and it would make no sense here: the line up this gully is a cable bolted to the rock and there
       is no second line to take. Confirming a mark on this wall is confirmation and nothing more; a false one still
       costs its minute to the JournalSystem, which is the price of being unsure, not of being wrong.
-   3. The cap. sprites/item-cap.webp is not drawn, so while ART_LANDED is false the gust never takes it: a
-      snatch at a cap the painting cannot show would be an E-key button pointing at bare limestone, which is what
-      §12 A1 forbids. The whole beat — the gust, the cap on the rock, the grab — comes back with the picture. */
+   3. The cap is in play, and it always should have been. A switch in this file used to hold the whole beat back
+      "until sprites/item-cap.webp lands" — but public/sprites/item-cap.webp has been on disk all along (632×926,
+      the beige cap from the day-1 kit list), and even if it had not been, the contract §1 answer is that the view
+      hides a missing img and leaves the entity where it is. Deleting the beat did more than remove a picture: cap
+      is the only item in §4 that can be lost this way, so with it switched off nothing anywhere in the game could
+      take it, GazeSystem's cap bonus (reveal ×1.1 in light > 0.6) was permanently on, and one whole system line
+      was quietly dead. `summit` still has its half of the same branch commented out; that is not this file's to
+      edit and it is written into this scene's `requests`.
+   4. THERE IS NO CARABINER PANEL ON THIS WALL YET. §4 and §6 want two locks' current segment numbers standing at
+      the bottom of the screen, with E-carabinerRule (read off plate ② at `plaque`) deciding whether it shows the
+      numbers or only the two colours. src/view has no such panel, so reading ② today costs a minute and changes
+      nothing here. The panel is in this scene's `requests.engine/css`; until it lands, that cost is undelivered and
+      should not be described anywhere as if it worked.
+   5. §6 gives this node two things to look at at 「各 1 分」, and each is charged exactly once now. `view-down`
+      leans out and takes one picture: the phone's own shutter is that minute (UISystem charges it), so this scene
+      adds nothing on top — it used to spend a minute of its own as well and the lean cost two. `climbers-far` is
+      an interactable at one minute; its gaze stays, free, as the moment she first notices them. */
 import { entityIs, flag, not, worn } from "../engine/condition";
 import type { EntityDef } from "../engine/entity";
 import { defineScene, type WalkStep } from "../engine/scene";
 import type { EntityId, Transform } from "../engine/types";
 import type { World } from "../engine/world";
 import { blaze, goArrow, offset } from "./_shared";
-
-/** Flip to true in the same commit as sprites/item-cap.webp. */
-const ART_LANDED: boolean = false;
 
 /* A mark that stays on its rock after she has read it (v4 §3.5 / §3.8 memory ③): the paint keeps a very faint
    highlight until she leaves the node, and can no longer be pressed. `enabled: false` is what fades it
@@ -153,25 +164,25 @@ export default defineScene({
     { id: "view-down", transform: VIEW_DOWN,
       interactable: { verbs: ["photograph"], label: "往下的钢缆", reveal: 12, cost: { minutes: 0 } },
       visible: flag(STEP, { gte: 2 }) },
-    // Two dots high on the right wall: the only two people she will meet all day, an hour ahead of her.
+    // Two dots high on the right wall: the only two people she will meet all day, an hour ahead of her. The gaze
+    // is the free half — she notices them — and looking properly is the minute §6 prices (header note 4).
     { id: "climbers-far", transform: CLIMBERS, sprite: { src: "sprites/climbers-far.webp", layer: "figure", sizeVh: 2.4 },
+      interactable: { verbs: ["inspect"], label: "上面的两个小点", reveal: 12, cost: { minutes: 1 } },
       gaze: { radius: 10, dwell: 900 }, visible: flag(STEP, { gte: 1 }) },
     // Three candidate marks: paint on the left wall beside the lowest rung, a rust streak on the right block, lichen on the loose boulder.
     mark("blaze-cable", { yaw: -24, pitch: -13 }, true),
     mark("rust-cable", { yaw: 41, pitch: -12 }, false),
     mark("lichen-cable", { yaw: -22, pitch: -32 }, false),
     // The cap, when a gust takes it (v4 §8: 风大时抓帽子): snagged on the rock beside her until the next gust, and
-    // an E-key action to snatch it back, which is where the engine puts things done in one movement. Both halves
-    // wait for sprites/item-cap.webp together (see the header): a button reading 抓住帽子 over a piece of rock with
-    // no cap on it is a promise the painting cannot keep.
-    ...(ART_LANDED ? [
-      { id: "cap-loose", transform: (w: World) => offset(near(anchorAt(stepOf(w))), -11, -7),
-        sprite: { src: "sprites/item-cap.webp", layer: "prop" as const, sizeVh: 7 },
-        visible: flag(CAP, { eq: true }) },
-      { id: "cap-grab", transform: OFFSCREEN, tags: ["action"],
-        interactable: { verbs: ["take" as const], label: "抓住帽子", reveal: 0, cost: { minutes: 1 } },
-        visible: flag(CAP, { eq: true }) },
-    ] : []),
+    // an E-key action to snatch it back, which is where the engine puts things done in one movement. Neither half
+    // exists until a gust has actually taken it (`visible: cable.capLoose`), so the button never sits over bare
+    // limestone: by the time it is there, there is a cap on that rock and its picture is on disk.
+    { id: "cap-loose", transform: (w: World) => offset(near(anchorAt(stepOf(w))), -11, -7),
+      sprite: { src: "sprites/item-cap.webp", layer: "prop", sizeVh: 7 },
+      visible: flag(CAP, { eq: true }) },
+    { id: "cap-grab", transform: OFFSCREEN, tags: ["action"],
+      interactable: { verbs: ["take"], label: "抓住帽子", reveal: 0, cost: { minutes: 1 } },
+      visible: flag(CAP, { eq: true }) },
     // The big ring where the long cable ends, off to the right. A hand on it, and the cable answers.
     { id: "anchor-ring", transform: RING, interactable: { verbs: ["inspect"], label: "锚环", reveal: 13, cost: { minutes: 0 } } },
     goArrow("go", LIP, { to: "crack", minutes: 40, label: "往上", kind: "walk" }),
@@ -194,7 +205,7 @@ export default defineScene({
       ctx.setFlag(CAP, false); ctx.lose("cap", how);
       ctx.sfx("cloth", -0.5, 0.8); ctx.kick("turn", 0.8); ctx.fx("gust", 0.8);
     };
-    if (ART_LANDED) ctx.on("camera:impulse", ({ kind, strength }) => {
+    ctx.on("camera:impulse", ({ kind, strength }) => {
       if (kind !== "turn") return;
       const s = strength ?? 0;
       if (ctx.flag(CAP, false)) { if (s >= 0.9) capGone("被风吹走"); return; }
@@ -259,21 +270,28 @@ export default defineScene({
     ctx.onRelease("haul-cable", slipBack);
     ctx.onRelease("rock-holds", slipBack);
 
-    /* Looking. Down the cable from the third anchor: she leans out, looks, and takes it — a minute for the lean and
-       the phone's own minute for the shutter (v4 §6 gives this one minute and one photograph; the lean is the
-       minute, the shutter is the phone's). The line stays on what 04-cable actually paints down there: the thick
-       cable running out of the bottom of the picture, and nothing under it — §6 asks for the whole meadow and the
-       gravel road down there and the painting does not have them, so what is delivered here is a look down, not a
-       view over the meadow (see `requests` for the art that would make it §6's line). */
+    /* Looking. Down the cable from the third anchor: she leans out, looks, and takes it. §6 prices the whole
+       movement at one minute and one photograph, and that minute is the phone's shutter (UISystem charges it with
+       the 1%) — this handler adds nothing, exactly like `pass-view` at `approach`. The line stays on what 04-cable
+       actually paints down there: the thick cable running out of the bottom of the picture, and nothing under it —
+       §6 asks for the whole meadow and the gravel road down there and the painting does not have them, so what is
+       delivered here is a look down, not a view over the meadow (see `requests` for the art that would make it
+       §6's line). */
     ctx.onInteract("view-down", () => {
-      ctx.spend({ minutes: 1 }, "往下看");
       ctx.kick("glance", 0.6, { yaw: -2, pitch: -8 }); ctx.sfx("breath", -0.4, 0.6);
       ctx.say("缆一直下到看不见。", { tag: "cable-view" });
       w.dispatch({ type: "phone:shoot" }); ctx.setFlag("cable.photoDown", true);
     });
+    /* The two dots on the right wall. The gaze is free and is only her head coming up — a tick of cable somewhere
+       and the camera lifting; the minute is the interactable's, and it is where the line lives. */
     ctx.onGaze("climbers-far", () => {
-      ctx.setFlag("cable.sawClimbers", true);
+      if (ctx.flag("cable.noticedClimbers", false)) return;
+      ctx.setFlag("cable.noticedClimbers", true);
       ctx.sfx("clink", 0.3, 0.25); ctx.kick("glance", 0.4, { yaw: 1, pitch: 6 });
+    });
+    ctx.onInteract("climbers-far", () => {
+      ctx.setFlag("cable.sawClimbers", true);
+      ctx.sfx("exhale", 0.3, 0.5); ctx.kick("glance", 0.5, { yaw: 1, pitch: 5 });
       ctx.say("上面很远的地方有两个小点。", { tag: "cable-climbers" });
     });
 
@@ -327,6 +345,7 @@ export default defineScene({
       { type: "interact", entity: "anchor-ring", verb: "inspect" }, { wait: 300 },
       ...round("rock-holds", 2900), ...round("haul-cable", 2100),
       { type: "interact", entity: "view-down", verb: "photograph" }, { wait: 300 },
+      { type: "interact", entity: "climbers-far", verb: "inspect" }, { wait: 300 },
       { type: "interact", entity: "rust-cable", verb: "inspect" }, { wait: 300 },
       ...round("rock-holds", 2900), ...round("haul-cable", 2100), ...round("haul-cable", 2100),
       { type: "travel", entity: "go" },

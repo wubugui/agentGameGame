@@ -45,10 +45,15 @@ const PACK_DOWN: Transform = { yaw: 4, pitch: -24.5 };                // the gra
    point at (yaw, pitch) on screen row 360·(1 − tan(pitch)/(cos(yaw)·tan 30°)), so the further off centre a thing
    is, the lower it lands. Everything below −25° at these yaws falls out under the bottom edge, arrow and all. */
 const DOWN_PATH: Transform = { yaw: 13.7, pitch: -22.9 };             // the sand of the trail, going back down the way she came (757, 556)
-/* The way home walks off down the green. At {−37, −19.3} it stood on the pale scree fan instead — the whole row
-   there is dry grass and stone (R≈G, 179/176/137) and the solid green only starts fifteen pixels down and right
-   (358, 555) = 73/82/66 — so the arrow that says 顺草坡 was standing on the scree it is walking away from. */
-const HOME_SLOPE: Transform = { yaw: -33, pitch: -22.8 };             // the green slope falling away to the left (358, 555)
+/* The way home goes down through the boulder field on her left. Two things had to be true of it. It has to be
+   in the resting frame, which rules out the one patch of open green this canvas has: that is plate (250, 590),
+   yaw −45.7, outside the ±45° the player sees without turning his head, and the only way home in the scene
+   would be invisible standing still. And it has to be named after what is painted under it. At (358, 555) the pixels are green
+   (73/82/66) but a 2× crop shows why: it is a dew-covered dwarf pine sitting on a mossy boulder, with more
+   boulders below and left of it and the pale scree fan — the thing this route walks away from — further left
+   still. There is no 草坡 anywhere under this arrow, so it is not called one: what she does here is go down
+   between the stones. */
+const HOME_SLOPE: Transform = { yaw: -33, pitch: -22.8 };             // the boulders and scrub falling away to the left (358, 555)
 
 const TO_SEARCH = 12;      // the twelve minutes search charges to walk over here, paid again going back
 const TO_HOTEL = 35;       // those twelve plus the twenty-five from the path down to the village
@@ -102,14 +107,15 @@ export default defineScene({
     { id: "wall-above", transform: WALL,
       interactable: { verbs: ["inspect"], label: "上方那面锯齿石墙", reveal: 14, cost: { minutes: 1 }, once: true },
       gaze: { radius: 14, dwell: 900 } },
-    // One stone lifted out of the heap and left lying beside it.
-    prop("moved-stone", MOVED_STONE, "sprites/stone-turned.webp", 4, { visible: entityIs("wall-rocks", "used") }),
+    /* One stone lifted out of the heap and left lying beside it. Same drawn stone as `search` puts on the sand
+       (`stone-loose`, the reusable tilted round stone of docs/ART_AUDIT.md); `stone-turned` was never drawn. */
+    prop("moved-stone", MOVED_STONE, "sprites/stone-loose.webp", 4, { visible: entityIs("wall-rocks", "used") }),
     // The pack comes off her back the first time she kneels, and stays on the grass.
     // 12vh: the same bag at the same size as the other two outdoor stands (a 0.45 m pack about three metres off).
     prop("pack-down", PACK_DOWN, "sprites/backpack-floor.webp", 12, { visible: flag(TURNED, { gte: 1 }) }),
     // Both ways out, on the painting from the first minute.
     backArrow("back", DOWN_PATH, "search", "沿沙路走回去", TO_SEARCH),
-    goArrow("go-hotel", HOME_SLOPE, { to: "hotel", minutes: TO_HOTEL, label: "顺草坡回酒店", kind: "walk" }),
+    goArrow("go-hotel", HOME_SLOPE, { to: "hotel", minutes: TO_HOTEL, label: "从石头间下去回酒店", kind: "walk" }),
   ],
   seed: (w) => {
     // What this stand leaves behind: three more of the eight places turned over, and nothing found.

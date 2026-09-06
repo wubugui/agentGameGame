@@ -136,7 +136,10 @@ export default defineScene({
       interactable: { verbs: ["inspect"], label: "蓝色站牌", reveal: 12, cost: { minutes: 0 }, requires: HAS_TIME } },
     /* Everything she owns, down on the grass beside her boots, until she picks it up to get on. */
     { id: "backpack", transform: BAG,
-      sprite: { src: "sprites/backpack-grass.webp", layer: "prop", sizeVh: 11 },
+      // The same bag `hotel` stands against the skirting board and the three search stands put on the ground:
+      // `backpack-floor` is the drawn one, and there is no second pack in the story to draw (`backpack-grass`
+      // was a name for the same object standing on a different surface).
+      sprite: { src: "sprites/backpack-floor.webp", layer: "prop", sizeVh: 11 },
       visible: not(flag(BOARDED)) },
 
     /* The 472 comes up from the Canazei side and is a long way off for a long time (v4 §8: 从画面右侧远处驶近).
@@ -280,6 +283,11 @@ export default defineScene({
     ctx.onEnter(() => {
       if (w.state.power.camera <= 0) w.patch("power", { camera: 100 });
       if (w.state.journal.objective !== QUESTURA) w.patch("journal", { objective: OBJ_LEAVE });
+      /* And it is the first of August. enterScene writes engine/registry.ts's dateOfDay(3) into clock.date and
+         that function still returns July for day three, so the HUD read 「7月1日」 while `hotel` had already
+         handed the phone { month: 8 } on the way over: two different dates in one frame. The engine is where
+         this belongs (see requests) — until it lands, the third day is not shipped with the wrong date on it. */
+      w.patch("clock", { date: { year: 2025, month: 8, day: 1 } });
     });
 
     /* ---- The forty seconds. They start when she has given her answer and nothing else. ---- */

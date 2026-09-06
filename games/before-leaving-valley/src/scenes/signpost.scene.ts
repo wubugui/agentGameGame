@@ -23,13 +23,16 @@ const LIGHT_FROM = 17 * 60, LIGHT_TO = 20 * 60 + 15;
 
 /* The four arms, top to bottom, re-measured at 4.5× off 10-signpost: the painted boards sit at
    (657–848, 299–345) / (635–808, 348–392) / (612–850, 396–452) / (613–855, 452–508).
-   The board itself is a PROP and the reading is a HOTSPOT on top of it, and they have to be two entities.
-   PanoStage drives a Hotspot's opacity from how near the gaze is — `(reveal − distanceDeg) / (reveal × 0.45)`
-   with the pitch weighted 1.4× — and the four boards span 18.4° of pitch, so with the reveal of 12° that §6 asks
-   for, no gaze can ever have more than two of them up at once: the sign came apart into blank painted arms plus
-   one or two glowing lettered ones, sliding in and out as the eye travelled down the post. PropSprite writes no
-   data-reveal at all, so a prop never fades; the physical sign is on the picture the whole time she stands here,
-   and the reveal-12 hotspot is only about reading it. (E1's repaint is still an ART request — see requests.) */
+   The sign is the PAINTING's, and this round it stays that way. §12 E1 asks for 10-signpost re-exported with post
+   and cap only plus the four arms as sprites, and that repaint is not going to land this round; the four
+   arm-*.webp files that do exist cannot stand in for it. Composited over the painted boards they read as
+   double-ended arrows in two palettes — a DOM anchor is projected as a point plus a uniform scale while the
+   painting is a true perspective texture, so the sprite slides off its board the moment the player turns their
+   head and the painted red tips come out from under it — arm-schiavaneis points LEFT while the painted top board
+   points RIGHT, and all four still carry a blue key edge along the bottom after the re-key.
+   So: no board props. The painting draws the whole sign, correctly, at every gaze angle; the four readings below
+   are hotspots on the four painted boards and carry the text §6 wants read. When the repaint lands, the four
+   props go back in with the same four anchors (ART request, filed). */
 const BOARD_SCHIAVANEIS: Transform = { yaw: 13.2, pitch: 4.4 };  // top board, painted centre (752, 322)
 const BOARD_SELVA: Transform = { yaw: 9.5, pitch: -1.2 };        // second board, painted centre (721, 370)
 const BOARD_BOE: Transform = { yaw: 10.7, pitch: -7.5 };         // third board, painted centre (731, 424)
@@ -77,19 +80,6 @@ export default defineScene({
   // Which way she took is written down on the way out.
   exitWhen: undefined,
   entities: [
-    // --- The four boards themselves: props, so the sign is one object on the picture at every gaze angle.
-    // Each sprite is scaled 8% taller than the board painted under it, which at these aspects puts it 4–11%
-    // wider as well. That is as much overhang as there is room for: the painted arms are only 4–5 px apart on the
-    // 720 px grid, and any more height stacks them on top of each other. It does NOT close the painted arms:
-    // a DOM anchor is projected as a point plus a uniform CSS scale while the painting is a true perspective
-    // texture, so the sprite slides off the painted board as soon as the player turns their head and the painted
-    // red arrow tips come out from under it (measured: 4% of the sign's painted red pixels still show at the
-    // resting gaze, 18% panned down-right). No sprite geometry closes that. The only fix is the repaint that
-    // §12 E1 / §11 already ask for — 10-signpost re-exported with post and cap only — and it is an ART request. ---
-    prop("board-schiavaneis", BOARD_SCHIAVANEIS, "sprites/arm-schiavaneis.webp", 9.7),
-    prop("board-selva", BOARD_SELVA, "sprites/arm-selva.webp", 9.3),
-    prop("board-boe", BOARD_BOE, "sprites/arm-boe.webp", 11.8),
-    prop("board-lasties", BOARD_LASTIES, "sprites/arm-lasties.webp", 11.8),
     // --- Reading them. Each one has to be read from close up (reveal 12°) and costs its minute (v4 §6). ---
     readable("arm-schiavaneis", ARM_SCHIAVANEIS, "最上面的木牌", {
       kind: "sign", title: "VAL DE SCHIAVANEIS",
@@ -118,18 +108,24 @@ export default defineScene({
     // Both stay on the picture after she wipes them, greyed out: her attention, not a UI highlight (v4 §3.5).
     blaze("blaze-cairn", CAIRN_TOP, true, { visible: undefined, enabled: not(entityIs("blaze-cairn", "read")) }),
     blaze("lichen-boulder", BOULDERS, false, { visible: undefined, enabled: not(entityIs("lichen-boulder", "read")) }),
-    // --- The last direct sun on the grey wall: the one thing in this picture that is supposed to move, and the
-    // whole of v4 §7's promise for this node — come back an hour later and the light is somewhere else on the
-    // wall and a different colour. It is ONE entity: the split into a prop plus a hotspot cost a DOM node the
-    // scene does not have (§2 caps them at 16, and the four boards plus the four readings take half of that).
-    // Two things are missing under it and both are requests, not scene work: sprites/last-light-wall.webp and
-    // -low.webp do not exist, so nothing is drawn on the wall at any hour; and lightOf() is clamped to 1 until
-    // 18:45, so the hour the wrong arm costs comes back to a pixel-identical frame. Until the band is actually
-    // in the picture this look costs nothing and says nothing — she does not comment on what is not there. ---
+    /* --- The bedded limestone escarpment filling the left of the picture, and the last of the day on it.
+       The LABEL names the rock, not the light: sprites/last-light-wall.webp does not exist and is not going to
+       this round, and 10-signpost draws no band of direct sun in that face — it is uniform pale bedded ledges
+       (re-read at 3.5× at both anchor ends). A point called 「石墙上的那道光」 over rock with no light in it names
+       a thing the painting does not carry, which is red line 5; 「左边那面层岩」 is what is actually drawn there.
+       The anchor still slides with the clock, and both ends of the slide are on painted rock face — (190, 245),
+       the broad bedding band, at five o'clock, (110, 168), the top ledge, at sunset — so an hour spent on the
+       wrong arm does at least put the thing she was looking at somewhere else on the wall. That is as much of
+       §7's «回到岔口时太阳位置、天色与阴影方向都真的变了» as this file can deliver on its own: the tint is
+       lightOf()'s and lightOf() is clamped to 1 until 18:45 (DESIGN request), and the band itself is a sprite
+       that does not exist (ART request). The sprite line stays in place, sized and swapped, so that the day the
+       two files land the wall lights up with no further scene work.
+       It is ONE entity (a prop plus a hotspot would cost a second DOM node), it costs no minutes, and it says
+       nothing: §6 puts the information in the world, and she does not describe what is not drawn. --- */
     { id: "last-light", transform: lastLightAt,
       sprite: { src: "sprites/last-light-wall.webp", layer: "back", sizeVh: 5.4, className: "light-beam-sprite",
         swap: [{ when: after(18 * 60), src: "sprites/last-light-wall-low.webp" }] },
-      interactable: { verbs: ["inspect", "photograph"], label: "石墙上的那道光", reveal: 14, cost: { minutes: 0 } },
+      interactable: { verbs: ["inspect", "photograph"], label: "左边那面层岩", reveal: 14, cost: { minutes: 0 } },
       gaze: { radius: 14, dwell: 900 },
       visible: before(LIGHT_TO) },
     // --- The map on the flat stone, and the green shoulder the bells come from. ---
@@ -187,7 +183,7 @@ export default defineScene({
     const w = ctx.world;
     const glance = (dir: { yaw: number; pitch: number }, strength = 0.4) => ctx.kick("glance", strength, dir);
     const shoot = () => w.dispatch({ type: "phone:shoot" });
-    // Her eyes go to wherever the band is on the wall right now — the one thing in this picture that moves.
+    // Her eyes go to wherever the light is standing on the wall right now — the one anchor in this scene that moves.
     const towardLight = () => {
       const t = lastLightAt(w);
       glance({ yaw: t.yaw < -50 ? -5 : -4, pitch: t.pitch > 16 ? 3 : 2 }, 0.45);
@@ -221,9 +217,10 @@ export default defineScene({
       w.dispatch({ type: "item:use", item: "paperMap" });
     });
 
-    // --- The last direct sun on the wall. Her eyes find it first; her head turns to it and she breathes out.
-    //     No line: until sprites/last-light-wall.webp is in the picture there is no band on the wall for her to
-    //     say anything about, and §6 puts the information in the world, not in her mouth. ---
+    // --- The layered wall on the left, and the last of the day standing on it. Her eyes find it first; her head
+    //     turns and she breathes out. No line: until sprites/last-light-wall.webp is in the picture there is no
+    //     band on the wall for her to say anything about, and §6 puts the information in the world, not in her
+    //     mouth. A minute of rest for the body, and nothing else. ---
     ctx.onGaze("last-light", () => {
       if (ctx.flag("signpost.lightSeen", false)) return;
       ctx.setFlag("signpost.lightSeen", true);
@@ -254,8 +251,10 @@ export default defineScene({
       ctx.say("牛铃。很远。", { tag: "sp-bell" });
     });
 
-    // --- The clock crossing her while she stands here. Six o'clock brings the crickets and takes the wide gold band
-    // off the wall (the sprite swaps to the narrow red one); half past seven turns the wind. No words for either. ---
+    // --- The clock crossing her while she stands here — and it does cross her: the hour up the green track is
+    // spent standing at this post, so 18:00 and 19:30 arrive under her feet. Six o'clock brings the crickets up
+    // out of the valley (and swaps the wall sprite to the low one, the day it exists); half past seven turns the
+    // wind and drops it a tone. No words for either: the world changes, she does not narrate it. ---
     ctx.onMark("crickets-in", () => {
       w.emit("ambience", { overrides: { crickets: 0.22, birds: 0.12 } });
       ctx.sfx("tick", 0.3, 0.35);

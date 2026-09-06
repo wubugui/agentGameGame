@@ -11,9 +11,6 @@ import type { EntityId, Transform } from "../engine/types";
 import type { World } from "../engine/world";
 import { blaze, goArrow, lookAt, wrongWay } from "./_shared";
 
-/** Flip to true in the same commit as sprites/cloud-shadow.webp and the .cloud-shadow-sprite class. */
-const ART_LANDED: boolean = false;
-
 const BELL_MINUTE = 10 * 60;                                   // the chapel bell strikes the hour
 const CLOUD_FROM = 10 * 60, CLOUD_TO = 10 * 60 + 12;           // v4 §8: the cloud shadow crosses the wall 10:00–10:12
 
@@ -27,11 +24,17 @@ const WALL_ROUTE: Transform = { yaw: -15, pitch: 9, distance: 24 };  // the dark
 const SASSOLUNGO: Transform = { yaw: 48, pitch: 6, distance: 40 };   // the main tower of the jagged wall across the road (1050, 309)
 const HUT: Transform = { yaw: 46.5, pitch: -14, distance: 18 };      // the wooden house on the road (1037, 480)
 const TRACK_BEND: Transform = { yaw: 24.4, pitch: -24.7 };           // on the dirt itself, where the track swings right toward the chapel and the road (848, 572; the dirt runs 832–856 on that row)
-/* The faint pale track up the rise at the far-left end of the grass. It was at yaw -66 (x 77), 3 degrees short of
-   the 68.9 the camera can actually turn to - the only exit in the scene, pinned to the edge of the reachable world.
-   Traced on a brightened 7x crop, the same track runs down-right through (95, 425) and (112, 434) before it fades
-   into the scree foot near x 135, so yaw -62 is the same painted line with 7 degrees of margin instead of 3. */
-const FAR_TRACK: Transform = { yaw: -62, pitch: -8.7 };              // (111, 435)
+/* The faint pale track up the rise at the far-left end of the grass, and the one exit in the scene. It was at
+   yaw -66 (x 77), 3 degrees short of the 68.9 the camera can actually turn to; then it was moved to yaw -62, which
+   is x 111 - and x 111 is not the track, it is dark grass between the track and the scree fan.
+   I re-traced the line on the clean plate instead of on a brightened crop: for each row, the brightest pixel in
+   x 55-125 (the fan starts brightening past x 125 and swamps any wider window). The ridge is unbroken and moves
+   down-right one pixel per row: (67,420) (72,426) (78,432) (84,436) (87,438) (91,440) (95,442) (98,444) (102,446)
+   (105,448) (109,450) (113,452) (119,454), each peak 10-30 grey levels over the row's median. This point is the
+   brightest pixel of the ridge at y 444 - 130 against a 108 background, with the whole line visible either side of
+   it on an 8x crop: yaw = (98/1280 - .5)x150 = -63.5, pitch = (.5 - 444/720)x84 = -9.8. That leaves 5.5 degrees of
+   yaw under the 69 the gaze reaches, where the old -66 left 3 and the -62 "fix" left 7 but was off the path. */
+const FAR_TRACK: Transform = { yaw: -63.5, pitch: -9.8 };            // (98, 444), on the track's own ridge
 
 /* A mark that stays on its stone after she has read it (v4 §3.5 / §3.8 memory ③): the paint keeps a very faint
    highlight on the painting until she leaves the node, and can no longer be pressed.
@@ -75,14 +78,14 @@ export default defineScene({
     look("sassolungo", SASSOLUNGO, "对面的锯齿石墙"),
     look("hut", HUT, "公路边的木屋"),
     /* The cloud shadow crossing the Sella wall between ten and twelve past (v4 §8: the one thing there is to
-       discover here). sprites/cloud-shadow.webp and the class .cloud-shadow-sprite (multiply, no drop shadow) are
-       not drawn, and a gaze entity over a picture that fails to load is a patch of sky that answers when you rest
-       your eyes on it — so while ART_LANDED is false the beat has one way in only, and it is a painted one:
-       looking at the wall itself while the shadow is on it (see the script). Nothing on screen changes shape that
-       the player cannot see change. */
-    ...(ART_LANDED ? [{ id: "cloud-shadow", transform: cloudAt,
-      sprite: { src: "sprites/cloud-shadow.webp", layer: "back" as const, sizeVh: 14, className: "cloud-shadow-sprite" },
-      gaze: { radius: 14, dwell: 1200 }, visible: all(after(CLOUD_FROM), before(CLOUD_TO)) }] : []),
+       discover here). It drifts left to right across the painted wall, so the gaze that finds it is a gaze resting
+       on the wall — the thing the ring is on is painted whether or not sprites/cloud-shadow.webp has landed, and
+       until it does the view hides the img (contract §1) and the beat is a gust and a darkening she feels rather
+       than a shape she sees. It has never been the only way in: looking at the wall itself inside the window does
+       it too, and so does the chapel (see the script), so the beat is not hanging off one click. */
+    { id: "cloud-shadow", transform: cloudAt,
+      sprite: { src: "sprites/cloud-shadow.webp", layer: "back", sizeVh: 14, className: "cloud-shadow-sprite" },
+      gaze: { radius: 14, dwell: 1200 }, visible: all(after(CLOUD_FROM), before(CLOUD_TO)) },
     // The wrong track: the obvious one, bending right to the chapel and the road. Ten minutes there and back; never
     // a dead end. Pressing it a second time gets the hand out and back and a tock — and that is `requires`, not
     // `enabled`: an entity with `enabled: false` is faded, but view/Hotspot.tsx swallows the press before it ever
@@ -143,6 +146,7 @@ export default defineScene({
     // Looking. A glance of the camera, a breath, and a minute off the clock; only the wall and Sassolungo get a half-line.
     ctx.onInteract("chapel", () => {
       glanceAt(CHAPEL, 0.6); ctx.sfx("breath", 0.3, 0.4); ctx.setFlag("meadow.chapel", true);
+      cloudCrosses();                                    // she looks up from the chapel and the wall behind it has gone dark
     });
     ctx.onInteract("wall", () => {
       glanceAt(WALL_ROUTE, 0.7); ctx.sfx("breath", -0.2, 0.7); ctx.setFlag("meadow.wall", true);
@@ -157,9 +161,10 @@ export default defineScene({
       glanceAt(HUT, 0.5); ctx.sfx("breath", 0.6, 0.35); ctx.setFlag("meadow.hut", true);
     });
 
-    // The cloud shadow crossing the wall: only for someone still here between ten and twelve past. Two ways in —
-    // the gaze resting on the shadow itself (once its picture exists), or looking at the wall while it is on it.
-    // No line: a shadow and a gust are the world's to say, not hers (v4 §10.2.2).
+    // The cloud shadow crossing the wall: only for someone still here between ten and twelve past. Three ways in —
+    // the gaze resting on the shadow itself, looking at the wall while it is on it, or looking at the chapel and
+    // catching the wall behind it — so the one discoverable thing in this node is not hanging off a single paid
+    // click. No line: a shadow and a gust are the world's to say, not hers (v4 §10.2.2).
     const cloudCrosses = () => {
       const now = ctx.minute();
       if (now < CLOUD_FROM || now >= CLOUD_TO || ctx.flag("meadow.sawCloud", false)) return;

@@ -8,7 +8,7 @@
 import { all, entityIs, flag, not, worn } from "../engine/condition";
 import type { EntityDef } from "../engine/entity";
 import { defineScene, type WalkStep } from "../engine/scene";
-import type { Transform } from "../engine/types";
+import type { EntityId, Transform } from "../engine/types";
 import type { World } from "../engine/world";
 import { backArrow, blaze, goArrow, lookAt } from "./_shared";
 
@@ -17,11 +17,16 @@ import { backArrow, blaze, goArrow, lookAt } from "./_shared";
    `visible` (an `all` of nothing is true) leaves it there, and `once` carries "already settled": the second press comes
    back as `interact:refused` and the script answers with her hand. Not `enabled` — PanoStage writes an inline opacity
    onto every hotspot with a reveal every frame (PanoStage.tsx:427), so `.hotspot.is-disabled` never reaches the screen
-   and a disabled mark would be a silent dead button. The grey of a ruled-out mark and the faint highlight of the paint
-   hang off these two classes, as `filter` rather than opacity; that rule is the integrator's and is in the requests. */
-const settled = (real: boolean): Partial<EntityDef> => ({
+   and a disabled mark would be a silent dead button.
+
+   The class that greys a ruled-out mark hangs off `sprite.swap` (registry.ts:69) and is gated on
+   `entityIs(id,"read")`: it comes into being only after she has been over there and settled that one. Nothing written
+   from `real` may sit on the entity — a class there would be in the DOM from the first frame and would tell the player
+   which of the three lines carries the paint before she has walked to any of them (§3.5 / §12 A1). */
+const MARK_SRC = (real: boolean) => real ? "sprites/blaze-red-white.webp" : "sprites/blaze-false.webp";
+const settled = (id: EntityId, real: boolean): Partial<EntityDef> => ({
   visible: all(),
-  className: real ? "blaze-found" : "blaze-ruled-out",
+  sprite: { src: MARK_SRC(real), layer: "prop", sizeVh: 4, swap: [{ when: entityIs(id, "read"), src: MARK_SRC(real), className: real ? "blaze-found" : "blaze-ruled-out" }] },
   interactable: { verbs: ["inspect"], label: "石头上的记号", reveal: 12, cost: { minutes: 0 }, once: true },
 });
 
@@ -97,9 +102,9 @@ export default defineScene({
     { id: "climbers-photo", transform: LEDGE, interactable: { verbs: ["photograph"], label: "两位攀登者", reveal: 14, cost: { minutes: 0 }, once: true },
       visible: all(flag(NODDED), not(flag(PHOTO)), not(flag(PASSED))) },
     // Three candidate marks, one per line: the white-topped stone where the flagstones end, the boulder on the left scree, the tower's foot on the right.
-    blaze("blaze-exit-a", { yaw: -20, pitch: -11.5 }, true, settled(true)),
-    blaze("blaze-exit-b", { yaw: -33, pitch: -11.5 }, false, settled(false)),
-    blaze("blaze-exit-c", { yaw: 16, pitch: -4 }, false, settled(false)),
+    blaze("blaze-exit-a", { yaw: -20, pitch: -11.5 }, true, settled("blaze-exit-a", true)),
+    blaze("blaze-exit-b", { yaw: -33, pitch: -11.5 }, false, settled("blaze-exit-b", false)),
+    blaze("blaze-exit-c", { yaw: 16, pitch: -4 }, false, settled("blaze-exit-c", false)),
     // The two other lines that look walkable from here. Twelve minutes each, a slide or a dead face, then back.
     { id: "wrong-left", transform: { yaw: -38, pitch: -22 }, className: "wrong-hotspot", tags: ["wrongWay"],
       interactable: { verbs: ["inspect"], label: "左边的碎石坡", reveal: 18, cost: { minutes: 12, fatigue: 0.1 }, once: true } },
@@ -110,8 +115,11 @@ export default defineScene({
     /* Looking back down the cable: the box is a dot on the pale slope under it. One tick of attention, nothing said.
        distance 16 keeps it inside PanoStage's 1:1 band (scale = max(.6, 10/d) cancels the wrapper's d/10 up to 16.7),
        so sizeVh is the height it really draws — beyond that the 0.6 floor makes a "far" sprite come out bigger. */
+    /* §8: "回望：如果盒子没开过，盒盖在下面反光。" It catches the light for the player who came up the cable without
+       stopping at it; for anyone who already has the page in her phone there is nothing down there to find. */
     { id: "mailbox-below", transform: { yaw: 54, pitch: -28, distance: 16 },
       sprite: { src: "sprites/mailbox-far.webp", layer: "prop", sizeVh: 1.9 },
+      visible: not(flag("mailbox.opened")),
       gaze: { radius: 12, dwell: 900 } },
     backArrow("back", { yaw: 66, pitch: -27.3 }, "mailbox", "回头", 12),
     goArrow("go", { yaw: -17, pitch: -5.5 }, { to: "summit", minutes: 88, label: "往上", kind: "walk" }),
@@ -193,7 +201,10 @@ export default defineScene({
       if (entity === "blaze-exit-a" && real) { ctx.kick("settle", 0.5); ctx.sfx("step", -0.2, 0.5); return; }
       if (entity === "blaze-exit-b" || entity === "blaze-exit-c") {
         ctx.kick("glance", 0.5, { yaw: 0, pitch: -3 });
-        ctx.say(entity === "blaze-exit-b" ? "地衣。不是漆。" : "锈。不是漆。", { tag: "exit-false" });
+        /* Both false marks draw the same picture (blaze-false: a pale stone with an orange-grey crust on it), so only
+           one of them may be given the name of the thing that is drawn; the other gets the finding without a name.
+           blaze-streak-wet / blaze-arrow-old are in the art queue, and each gets its own word back when they land. */
+        ctx.say(entity === "blaze-exit-b" ? "地衣。不是漆。" : "不是漆。", { tag: "exit-false" });
       }
     });
 

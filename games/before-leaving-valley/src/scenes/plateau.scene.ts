@@ -3,7 +3,7 @@
    skyline and a dark cloud bank coming over from the right. Nobody. Four marks on the stones (two are not paint),
    two ways across, the plateau's lip off to the right, and the twenty seconds the wind stops.
    Coordinates read off the 150°×84° grid of 09-plateau (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84). */
-import { all, has } from "../engine/condition";
+import { all, entityIs, has } from "../engine/condition";
 import { defineScene } from "../engine/scene";
 import type { Transform, Verb } from "../engine/types";
 import { blaze, goArrow, lookAt, prop, windy, wrongWay } from "./_shared";
@@ -26,17 +26,22 @@ const STILL_MS = 19000;             // how long the wind stays down
    `once` carries "settled": a second press comes back as `interact:refused`, which the script answers with her hand
    going out and returning. Not `enabled` — PanoStage writes an inline opacity onto every hotspot with a reveal every
    frame (PanoStage.tsx:427), so `.hotspot.is-disabled`'s .35 never reaches the screen and a disabled mark would be a
-   silent dead button. The grey of the two that are not paint and the faint highlight of the two that are hang off
-   these classes, as `filter` rather than opacity for that same reason; the rule is the integrator's, in the requests. */
-const mark = (id: string, t: Transform, real: boolean, sizeVh?: number) =>
-  blaze(id, t, real, {
+   silent dead button.
+
+   The grey of the two that are not paint hangs off `sprite.swap` (registry.ts:69) and nothing else, gated on
+   `entityIs(id,"read")`: the class exists only after she has crouched over that stone and settled it. Nothing written
+   from `real` may sit on the entity — a class there would be in the DOM from the first frame, and two of the four
+   candidates on the most expensive blaze node in the game would be sorted out before she had touched any of them
+   (§3.5 / §12 A1). Every mark therefore writes its `sprite` out in full, default size included, so that the swap has
+   somewhere to hang. */
+const mark = (id: string, t: Transform, real: boolean, sizeVh = 4) => {
+  const src = real ? "sprites/blaze-red-white.webp" : "sprites/blaze-false.webp";
+  return blaze(id, t, real, {
     interactable: { verbs: ["inspect"] as Verb[], label: "石头上的记号", reveal: 12, cost: { minutes: real ? 1 : 0 }, once: true },
     visible: all(),
-    className: real ? "blaze-found" : "blaze-ruled-out",
-    ...(sizeVh
-      ? { sprite: { src: real ? "sprites/blaze-red-white.webp" : "sprites/blaze-false.webp", layer: "prop" as const, sizeVh } }
-      : {}),
+    sprite: { src, layer: "prop" as const, sizeVh, swap: [{ when: entityIs(id, "read"), src, className: real ? "blaze-found" : "blaze-ruled-out" }] },
   });
+};
 
 const TOWERS: Transform = { yaw: -30, pitch: 15, distance: 25 };   // the left flat-topped tower (x≈385, y≈230)
 const CAIRN: Transform = { yaw: -2, pitch: -4, distance: 14 };     // the little stack behind the stepped slab (x≈625, y≈395)

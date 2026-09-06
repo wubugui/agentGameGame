@@ -79,7 +79,12 @@ export default defineScene({
     // The flat top of the near rib: the third place all day where the notebook comes out (v4 §9 ledge).
     { id: "flat-rock", transform: FLAT, className: "foot-hotspot",
       interactable: { verbs: ["use"], label: "平岩上摊开本子", reveal: 12, cost: { minutes: 1 }, requires: has("notebook") } },
-    prop("notebook-open", FLAT, "sprites/notebook-open.webp", 9, { visible: flag(SKETCHED) }),
+    /* The notebook, once it is out and weighted down: the folded sheet lying open on the rib. `notebook-open.webp` (an
+       open notebook seen from above in the long afternoon light) has not been drawn and is in the art queue; until it
+       is, this draws the sheet that already exists and is the same object — `item-notebook.webp`, the back of the
+       Tabacco map with her pencil lines on it. It is a picture of the thing that is actually there, so the beat lands
+       today: the sheet appears on the rock and the notebook page opens (`item:use notebook` → the notes overlay). */
+    prop("notebook-open", FLAT, "sprites/item-notebook.webp", 9, { visible: flag(SKETCHED) }),
     // The blocks along the left shoulder look like they carry on. Four minutes to find out they do not.
     wrongWay("blocks", BLOCKS, "左边那堆乱石", 4, "只有石头。没有路。"),
     // The way back over the turf channel, onto the plateau. Always open (A4).

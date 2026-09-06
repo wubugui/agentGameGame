@@ -44,10 +44,13 @@ const HOLDS: Hold[] = [
   { id: "f2-root-a", step: 0, kind: "root", label: "翻出来的树根", t: { yaw: 38, pitch: -7, distance: 9 } },     // 根盘垂下来的那条粗根，往里收进 ±40°（x≈964, y≈420）
   { id: "f2-stump", step: 1, kind: "log", label: "倒木的断口", t: { yaw: -6, pitch: -12, distance: 9 } },        // 炸开的木茬（x≈589, y≈463）
   { id: "f2-bank", step: 1, kind: "rock", label: "苔藓土坎", t: { yaw: -17, pitch: -22, distance: 8 } },         // 断口下面的苔藓土脊（x≈495, y≈549）
-  { id: "f2-root-c", step: 2, kind: "root", label: "横在路上的根", t: { yaw: 18, pitch: -26, distance: 8 }, sprite: "sprites/root-arch-night.webp", sizeVh: 8 },  // 横穿路面被踩白的树根（x≈794, y≈583）
-  { id: "f2-rock-c", step: 2, kind: "rock", label: "路边的石头", t: { yaw: 5, pitch: -20, distance: 8 }, sprite: "sprites/rock-step-night.webp", sizeVh: 7 },    // 小路左沿的碎石（x≈683, y≈531）
-  { id: "f2-root-d", step: 3, kind: "root", label: "大树的板根", t: { yaw: -38, pitch: -22, distance: 8 }, sprite: "sprites/root-arch-night.webp", sizeVh: 11 }, // 近处大树铺开的苔藓板根（x≈316, y≈549）
-  { id: "f2-rock-d", step: 3, kind: "rock", label: "青石", t: { yaw: -7, pitch: -28, distance: 8 }, sprite: "sprites/rock-step-night.webp", sizeVh: 9 },         // 路左的青石堆（x≈580, y≈600）
+  { id: "f2-root-c", step: 2, kind: "root", label: "横在路上的根", t: { yaw: 18, pitch: -26, distance: 8 }, sprite: "sprites/root-arch.webp", sizeVh: 8 },  // 横穿路面被踩白的树根（x≈794, y≈583）
+  { id: "f2-rock-c", step: 2, kind: "rock", label: "路边的石头", t: { yaw: 5, pitch: -20, distance: 8 }, sprite: "sprites/rock-step.webp", sizeVh: 7 },    // 小路左沿的碎石（x≈683, y≈531）
+  { id: "f2-root-d", step: 3, kind: "root", label: "大树的板根", t: { yaw: -38, pitch: -22, distance: 8 }, sprite: "sprites/root-arch.webp", sizeVh: 11 }, // 近处大树铺开的苔藓板根（x≈316, y≈549）
+  /* 这一堆青石往左还有延伸：锚点从 (580,600) 挪到 (533,613) 那块圆的青石上。原来的位置压在引擎钉死的
+     喊一声 按钮（.story-action，pano.css:127 left:50%/bottom:9.5vh）下面——在爬行机位下那个框盖住大约
+     yaw −8…0 / pitch −26…−30，最后一格两个选择里的石头这一支多数时刻按不到。 */
+  { id: "f2-rock-d", step: 3, kind: "rock", label: "青石", t: { yaw: -12.5, pitch: -29.5, distance: 8 }, sprite: "sprites/rock-step.webp", sizeVh: 9 },    // 路左那堆青石里圆的一块（x≈533, y≈613）
 ];
 
 /* 比 forest1（log 4/.08、root 5/.06、rock 8/.02）每一格都更贵——这一段更陡。三种代价互不支配：
@@ -103,20 +106,24 @@ export default defineScene({
     // 树缝里，下面山谷的一小片光。
     { id: "valley-lights", transform: LIGHTS, gaze: { radius: 13, dwell: 900 },
       interactable: { verbs: ["inspect", "photograph"], label: "下面的灯", reveal: 12, cost: { minutes: 0 } } },
-    // 两处候选记号，都刷/长在树皮上：一处是小路右边那棵细树干上的红-白-红，一处是山谷灯左边那棵中景细树干上的旧树脂疤。
-    // 两张精灵都是树皮上的一块记号（没有石头），同一轮廓、同一尺寸——凑近之前完全分不出来（v4 §3.5）。
-    // 认过的那一处和 forest1 一样留在树皮上：换一张压暗的图，热点变 disabled（.is-disabled，Hotspot.act() 直接返回），
-    // 而不是留一个永远默默拒绝的按钮。两场相邻的场景对同一样东西的行为必须一致。
+    /* 两处候选记号：一处是小路右边那棵细树干上的红-白-红，一处是山谷灯左边那棵中景细树干上的旧疤。
+       同一尺寸、同一标签——凑近之前分不出真假（v4 §3.5）。夜版的图还没有，先用工厂自己那两张
+       （blaze-red-white / blaze-false），缺的两张写在 docs/ART_QUEUE.md 里。
+       认过之后两处都留在画上（§3.5 要的是留痕，不是消失），并且都用 requires 而不是 enabled：
+       enabled=false 只会加一个 .is-disabled（全项目没有这条 CSS），而 Hotspot.act() 直接 return，
+       结果是一个满亮度、按下去什么都不发生的死控件；requires 让 InteractionSystem 出手、回手、一声 tock，
+       且不扣任何代价。假记号不写 cost：JournalSystem 已经替认错的那一次扣了 1 分钟（§3.5 只扣一次）。 */
     blaze("blaze-f2", { yaw: 11, pitch: 6, distance: 9 }, true, {
-      sprite: { src: "sprites/blaze-656.webp", layer: "prop", sizeVh: MARK_VH,
-        swap: [{ when: entityIs("blaze-f2", "read"), src: "sprites/blaze-656-dim.webp" }] },
-      interactable: { verbs: ["inspect"], label: "树干上的记号", reveal: 12, cost: { minutes: 1 } },
-      enabled: not(entityIs("blaze-f2", "read")),
+      sprite: { src: "sprites/blaze-red-white.webp", layer: "prop", sizeVh: MARK_VH },
+      interactable: { verbs: ["inspect"], label: "树干上的记号", reveal: 12, cost: { minutes: 1 },
+        requires: not(entityIs("blaze-f2", "read")) },
       visible: undefined,
     }),
     blaze("moss-f2", { yaw: -33, pitch: -12, distance: 8 }, false, {
-      sprite: { src: "sprites/blaze-false-bark.webp", layer: "prop", sizeVh: MARK_VH },
-      interactable: { verbs: ["inspect"], label: "树干上的记号", reveal: 12, cost: { minutes: 1 } },
+      sprite: { src: "sprites/blaze-false.webp", layer: "prop", sizeVh: MARK_VH },
+      interactable: { verbs: ["inspect"], label: "树干上的记号", reveal: 12,
+        requires: not(entityIs("moss-f2", "read")) },
+      visible: undefined,
     }),
     // 灯就在那几棵杉树后面，直着下去看起来近得多。八分钟，下面是一道下不去的坎。走过一次它就从画里退出去。
     wrongWay("wrong-slope", { yaw: -18, pitch: -12 }, "下面那几棵杉树", 8, "下不去。绕回来。", {
@@ -159,8 +166,7 @@ export default defineScene({
         ctx.sfx("thud", pan(h.t), 1); ctx.sfx("slide", pan(h.t), 0.8);
         ctx.kick("jolt", 1.2, { yaw: 0, pitch: -8 });
         ctx.spend({ minutes: 4, fear: fearUp(0.08) }, "倒木动了一下");
-        ctx.say("木头动了。", { tag: "f2-roll", priority: 1 });
-        return;
+        return;   // 木头动了这件事由 thud/slide 和一次 jolt 说，不用一句话（§3.2：肾上腺素状态下她不再说话）
       }
       const next = here + 1;
       ctx.setFlag(STEP, next);
@@ -179,13 +185,20 @@ export default defineScene({
     };
     // 松手：五秒，手抖一下，重新来。永远不会掉下去。
     const release = (h: Hold) => (progress: number) => {
+      /* 自己松的手不算丢了把手：低吼要用嘴，按住的手必须松开（v4 §3.3，InteractionSystem 的 hold:start 也这么拦）。
+         CameraBodySystem 对每一次 progress > 0.05 的 hold:release 都记 +0.08 心跳，所以退款必须排在任何阈值之前——
+         否则刚抓住就换咬法（下面的 lamp:mode 无条件 hold:end）落在 5%–12% 那个窗口里，静默地涨心跳，符号正好反了。
+         引擎请求：让 hold:end 带上"主动放的"还是"松掉的"。 */
+      if (w.rt.growling || ctx.flag(BITING, false)) {
+        if (progress > 0.05) ctx.spend({ fear: -0.08 }, "自己松的手");
+        return;
+      }
       if (progress < 0.12) return;
-      // 自己松的手不算丢了把手：低吼要用嘴，按住的手必须松开（v4 §3.3，InteractionSystem 的 hold:start 也这么拦）。
-      // CameraBodySystem 对每一次 hold:release 都记 +0.08 心跳，在引擎能分辨"松掉的"和"主动放的"之前，这里把它退回去。
-      if (w.rt.growling || ctx.flag(BITING, false)) { ctx.spend({ fear: -0.08 }, "自己松的手"); return; }
-      ctx.spend({ minutes: 0.1, fear: fearUp(0.08) }, "手松了");
+      // 这里原来还写了 minutes: 0.1——ClockSystem 走 Math.round，0.1 → 0，是个空操作，删掉（0.5 才会进一分钟）。
+      ctx.spend({ fear: fearUp(0.08) }, "手松了");
       ctx.sfx("slide", pan(h.t), 0.6); ctx.kick("slip", 0.7, { yaw: 0, pitch: -6 });
-      ctx.say("手松了。再来。", { tag: "f2-slip", priority: 1 });
+      // §3.3 点名的那一句：priority 2 才越得过肾上腺素闸门（她到这一场时 fatigue 已经是 1）。
+      ctx.say("手松了。再来。", { tag: "f2-slip", priority: 2 });
     };
     for (const h of HOLDS) { ctx.onHold(h.id, () => advance(h)); ctx.onRelease(h.id, release(h)); }
 
@@ -213,8 +226,8 @@ export default defineScene({
     };
     ctx.onGaze("valley-lights", () => {
       if (!seeRoad()) return;
+      // 第一次看见下面那片光：引擎声涨一档、头转过去、一口气。那片光自己在画上，不用她说出来。
       ctx.kick("glance", 0.5, { yaw: -4, pitch: 2 }); ctx.sfx("breath", -0.5, 0.6);
-      ctx.say("下面有光。", { tag: "f2-road" });
     });
     ctx.onInteract("valley-lights", (verb) => {
       if (verb === "photograph") {
@@ -243,7 +256,6 @@ export default defineScene({
       w.emit("body:fatigue", { delta: 0.04, reason: "往灯的方向下了一段" });
       ctx.spend({ fear: fearUp(0.06) }, "黑下去的一段");
       ctx.after(700, () => { ctx.kick("turn", 0.7); ctx.sfx("step", -0.2, 0.6); });
-      ctx.say("下不去。绕回来。", { tag: "f2-wrong" });
     });
 
     /* --- 站着不动：腿在回，心跳在涨（光束停在一个地方超过八秒，v4 §3.3）。旁边什么都没有。
@@ -284,7 +296,8 @@ export default defineScene({
       if (to !== "hairpin" || ctx.flag(CERTAIN, false)) return;
       ctx.spend({ minutes: LOST_MINUTES, fear: 0.1 }, "没认记号，在林子里找了一段");
       ctx.kick("turn", 0.5);
-      ctx.say("走错了一小段。", { tag: "f2-lost", priority: 1 });
+      // §3.5 点名的那一句：同样要 priority 2 才越得过肾上腺素闸门。
+      ctx.say("走错了一小段。", { tag: "f2-lost", priority: 2 });
     });
   },
   /* 最快的合法路线。倒木是这一场最便宜的抓手（5 分），但十小时之后它会自己动一下——除非先花一分钟用手压过它

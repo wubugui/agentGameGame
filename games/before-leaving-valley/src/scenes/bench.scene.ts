@@ -171,7 +171,13 @@ export default defineScene({
     };
 
     // The third day has no objective written on the map any more.
-    ctx.onEnter(() => { if (w.state.journal.objective) w.patch("journal", { objective: null }); });
+    ctx.onEnter(() => {
+      if (w.state.journal.objective) w.patch("journal", { objective: null });
+      /* And it is still the first of August. enterScene stamps engine/registry.ts's dateOfDay(3) onto
+         clock.date every time, and that function returns July for day three; busStop and police put the same
+         date back on the way in, so the last scene of the game does not disagree with the phone in her hand. */
+      w.patch("clock", { date: { year: 2025, month: 8, day: 1 } });
+    });
 
     /* 长椅上没有钟 (v4 §7), and §6 prices this whole stand at 免费. The engine does not know that: UISystem
        charges `phone:shoot` a minute and one percent, PowerSystem charges every `phone:open` the same (see

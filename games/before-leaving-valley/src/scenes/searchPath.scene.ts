@@ -31,8 +31,14 @@ type Spot = {
   transform: Transform; find?: "moss" | "knee" | "branch";
 };
 const SPOTS: Spot[] = [
-  // The pale sand of the path itself, right where it flattens out in front of her (700, 568).
-  { id: "path-sand", label: "路面的沙土", sfx: "slide", pan: 0.1, fx: "dust", transform: { yaw: 7, pitch: -23 }, find: "knee" },
+  /* The pale sand of the path itself, a couple of paces up from her boots (700, 523). It used to sit at −23°,
+     three degrees off the arrow that leaves the scene: measured in the running view the two <button> boxes —
+     [689,607,744,648] and [651,621,717,670] — overlapped by 28×27 px, and the exit is later in the entities
+     array, so it painted on top and a click aimed at the left half of 「路面的沙土」 walked the player out
+     instead of turning the sand over. The exit cannot move (fifty rows of frame under it), so this does: at
+     −19° it is the same path surface four degrees further up, still bright sand on the plate (178/159/136),
+     and the two boxes clear each other by 24 px with the knee print 64 px away on the other side. */
+  { id: "path-sand", label: "路面的沙土", sfx: "slide", pan: 0.1, fx: "dust", transform: { yaw: 7, pitch: -19 }, find: "knee" },
   // The mossy bank of roots and stones on the left, where the green runs down to the bare dirt (529, 467).
   { id: "moss-bank", label: "路边的苔藓", sfx: "cloth", pan: -0.3, fx: "gust", transform: { yaw: -13, pitch: -12.5 }, find: "moss" },
   // The creeping pine spread over the slope on the right, its near lobe over the path edge (964, 514).
@@ -59,7 +65,10 @@ const UP_PATH: Transform = { yaw: 5, pitch: -10 };             // the sand going
    on the right — so the two arrows are not the same patch of ground with two different words on it. */
 /* Sampled across that row on the plate: x 600–620 is the pale stone, 630–660 is brown needle dirt, and the sand
    itself only starts at x≈665 (198/166/132). At yaw 0.5 the arrow that says 沿小路 stood on the needle bank at
-   the right tip of the long stone; yaw 4 is the sand it is named after. */
+   the right tip of the long stone; yaw 4 is the sand it is named after.
+   This one does not move again. Its whole <button> is [651,621,717,670] and there are only fifty rows of frame
+   left under it — everything below −28° at this yaw has the label hanging over the bottom edge — so the clash
+   with 「路面的沙土」 is taken out of the search spot instead, which has the whole upper path to move into. */
 const DOWN_PATH: Transform = { yaw: 4, pitch: -24.5 };         // the middle of the sand, going down out of the frame (674, 570)
 const HOME_PATH: Transform = { yaw: 24.5, pitch: -22.8 };      // where the sand's right edge runs into the pine needles (849, 555)
 

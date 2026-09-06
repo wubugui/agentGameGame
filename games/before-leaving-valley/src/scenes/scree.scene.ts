@@ -16,7 +16,15 @@ const TOTAL = 6;
 const SUNSET = 20 * 60 + 15;          // ClockSystem's sunset mark
 const STAR_MINUTE = 20 * 60 + 30;     // v4 §8: the first star, after half past eight
 const HALFWAY = 3;                    // v4 §8: the look back at the whole wall comes at half way
-const TO_DEER = 80;                   // v4 §3.1: the hundred minutes of this node minus the six steps themselves
+/* v4 §3.1 gives this node about a hundred minutes; TO_DEER is that minus the six steps. It comes down from 80 to
+   74 because the steps themselves got dearer: §7 makes this the one place in the game where 快 is right — 跑沙的
+   玩家能在天光里到达林线、看见完整的鹿群与最后的夕阳；稳扎稳打的玩家到林线时天已经黑了 — and at 4 / 2 / 3 minutes
+   the six choices were worth a seventeen-minute spread, which is nothing against deer's own thresholds (19:48 and
+   20:15). At 5 / 2 / 4 the sand line spends twelve minutes on the slope and the stone line thirty, so the two
+   arrive eighteen minutes apart before anything else is counted, and the careful player who also looks up twice,
+   walks the blocks back to the trail and hunts for the line arrives after the light has gone. The six minutes the
+   fast line saves here are the six the lip now charges for the map (§6's 6–18), so D2's 23:00 ±15 is untouched. */
+const TO_DEER = 74;
 const LOST_MINUTES = 12;              // v4 §3.5: no confirmed mark on scree costs twelve
 const GULLY_MINUTES = 14;             // straight down the fall line on loose sand (v4 §9: screeGully, folded into the node)
 
@@ -91,13 +99,13 @@ export default defineScene({
   entities: [
     // The three footings. Only one of each exists at a time; each sits on the thing it is named after.
     { id: "flat-stone", transform: (w) => FLAT[stepOf(w)], className: "foot-hotspot",
-      interactable: { verbs: ["step"], label: "平石", reveal: 14, cost: { minutes: 4, fatigue: 0.01 } },
+      interactable: { verbs: ["step"], label: "平石", reveal: 14, cost: { minutes: 5, fatigue: 0.01 } },
       visible: flag(STEP, { lt: TOTAL }) },
     { id: "sand-run", transform: (w) => SAND[stepOf(w)], className: "foot-hotspot",
       interactable: { verbs: ["step"], label: "细沙", reveal: 14, cost: { fatigue: 0.02 } },
       visible: flag(STEP, { lt: TOTAL }) },
     { id: "block-detour", transform: (w) => BLOCK[stepOf(w)], className: "foot-hotspot",
-      interactable: { verbs: ["step"], label: "大石块", reveal: 14, cost: { minutes: 3, fatigue: 0.02 } },
+      interactable: { verbs: ["step"], label: "大石块", reveal: 14, cost: { minutes: 4, fatigue: 0.02 } },
       visible: flag(STEP, { lt: TOTAL }) },
     // Three candidate marks (v4 §3.5): paint on the middle boulder, lichen on the near shelf, an old bar on the far
     // terrace. All three keep their stone on the slope after she has settled them and go grey instead of vanishing:
@@ -117,6 +125,10 @@ export default defineScene({
     lookAt("green-terraces", GREEN, "对面的岩台", 1),
     // The low sun burns out of the sky at 20:15; after half past eight one star stands in the gap over the massif.
     // 4 vh: the disc itself is a tenth of that, which is about the half degree the sun really is (contract §2).
+    // Neither file is in public/sprites and neither has an equivalent there, so both ids stay as they are and go
+    // into docs/ART_QUEUE.md. §6's «唯一能在一张画里同时看见太阳、Sassolungo 与还剩多少路的地方» is two thirds
+    // true until sun-low lands: the look up still has the painted peach cloud band and the terraces under it, and
+    // 「云和最后的夕阳都在离我而去。」 rides on the painted cloud, which is drawn.
     prop("sun-low", SUN, "sprites/sun-low.webp", 4, { visible: before(SUNSET) }),
     { id: "first-star", transform: STAR, sprite: { src: "sprites/first-star.webp", layer: "back", sizeVh: 2.5 },
       gaze: { radius: 12, dwell: 900 }, visible: after(STAR_MINUTE) },
@@ -207,12 +219,15 @@ export default defineScene({
       ctx.kick("glance", 0.6, { yaw: 5, pitch: -2 }); ctx.sfx("breath", 0.6, 0.5);
     });
 
-    /* The star: it is only there after half past eight, and only for someone who looks up at that gap. */
+    /* The star: it is only there after half past eight, and only for someone who looks up at that gap. The beat
+       stays — the head goes up, the breath goes out, and the gap of sky is genuinely open there — but the line
+       does not: sprites/first-star.webp is not in public/sprites (ART request), so there is nothing drawn in that
+       gap, and 「第一颗星。」 over empty sky is the same fault the sun line at the lip is gated for. The line comes
+       back with the sprite. */
     ctx.onGaze("first-star", () => {
       if (ctx.flag("scree.star", false)) return;
       ctx.setFlag("scree.star", true);
       ctx.kick("glance", 0.4, { yaw: -2, pitch: 7 }); ctx.sfx("breath", -0.2, 0.4);
-      ctx.say("第一颗星。", { tag: "scree-star" });
     });
 
     /* The marks. A real one is settled by the journal (her hand, cloth on stone); a false one costs the minute. */

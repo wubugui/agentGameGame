@@ -5,10 +5,10 @@
    changes no event; it is only how a lot of people find that letter. The only way out is back down the way she came.
    Every coordinate below was read off the 150°×84° grid of 05b-slab (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84);
    the pixel it came from (1280×720) is noted beside it. */
-import { all, any, flag, worn } from "../engine/condition";
+import { all, any, entityIs, flag, worn } from "../engine/condition";
 import type { EntityDef } from "../engine/entity";
 import { defineScene, type WalkStep } from "../engine/scene";
-import type { Transform } from "../engine/types";
+import type { EntityId, Transform } from "../engine/types";
 import { backArrow, blaze, lookAt, wrongWay } from "./_shared";
 
 /* §3.5: settling a mark never deletes it. The factory's default is `visible: not(entityIs(id,"read"))` — the stone goes
@@ -16,11 +16,16 @@ import { backArrow, blaze, lookAt, wrongWay } from "./_shared";
    nothing is true) and stops being an answer instead: `once` makes the second press an `interact:refused`, which the
    script answers with the hand going out and coming back. `enabled` is deliberately NOT used for this: PanoStage writes
    an inline opacity onto every hotspot with a reveal each frame (PanoStage.tsx:427), so `.hotspot.is-disabled`'s .35
-   never reaches the screen and a disabled mark would be a silent dead button. The class each mark carries is what the
-   grey and the faint highlight of §3.5 should hang off — as `filter`, not opacity, for the same reason. In the requests. */
-const settled = (real: boolean): Partial<EntityDef> => ({
+   never reaches the screen and a disabled mark would be a silent dead button.
+
+   The class that carries the grey of §3.5 hangs off `sprite.swap` and nothing else (registry.ts:69 reads
+   `swap.className`), gated on `entityIs(id,"read")` — i.e. it exists only after she has been over there and settled it.
+   Nothing on the entity may be written from `real`: a class on the definition would be in the DOM from the first frame
+   and would sort the true marks from the false ones before she has walked up to any of them (§3.5 / §12 A1). */
+const MARK_SRC = (real: boolean) => real ? "sprites/blaze-red-white.webp" : "sprites/blaze-false.webp";
+const settled = (id: EntityId, real: boolean): Partial<EntityDef> => ({
   visible: all(),
-  className: real ? "blaze-found" : "blaze-ruled-out",
+  sprite: { src: MARK_SRC(real), layer: "prop", sizeVh: 4, swap: [{ when: entityIs(id, "read"), src: MARK_SRC(real), className: real ? "blaze-found" : "blaze-ruled-out" }] },
   interactable: { verbs: ["inspect"], label: "石头上的记号", reveal: 12, cost: { minutes: 0 }, once: true },
 });
 
@@ -29,7 +34,7 @@ const HUM = "slab.hum", RIDGE = "slab.ridge", TRIED = "slab.triedClip";
 
 /* Things painted in 05b-slab, with the pixel they were read from. */
 const BOLT: Transform = { yaw: -28.5, pitch: -6, distance: 12 };      // the anchor bolt clamped on the far rib (398, 412)
-const BOX: Transform = { yaw: -28, pitch: -8.5, distance: 12 };       // bolted to the rib beside it, one box-height down (400, 431)
+const BOX: Transform = { yaw: -23.8, pitch: -7.8, distance: 12 };     // bolted to the pale boss right of the bolt (437, 427)
 const SEAM: Transform = { yaw: -12, pitch: -4 };                      // the near lip of the vertical cleft (527, 383)
 const FACE: Transform = { yaw: 26, pitch: -5 };                       // the middle of the polished panel (862, 403)
 const LICHEN: Transform = { yaw: 13, pitch: 0 };                      // the pale streaked band across the middle of the slab (751, 360)
@@ -58,10 +63,13 @@ export default defineScene({
     lookAt("route", BOLT, "对面的锚栓", 1, { interactable: { verbs: ["inspect", "photograph"], label: "对面的锚栓", reveal: 13, cost: { minutes: 1 } } }),
     /* Bolted to the rock beside it: a small dark box. One sprite in one state — the lid turning over in the light is
        carried by the tick, the glance and her line, not by a second picture. This is the same picture the box gets in
-       06-mailbox and in exit's look back down the cable, at 4 vh ≈ 29 px: at that height the pale stone baked into the
-       sprite is a few pixels of rock under the box, and it lands on the pale boulder the anchor is drilled into.
-       (A face-on recut without that stone — `mailbox-wall` — is in the art request; the id swaps when it exists. Until
-       then nothing here points at a picture that has not been painted: this node's one discoverable must stay drawn.) */
+       06-mailbox and in exit's look back down the cable, at 4 vh ≈ 29 px on screen ≈ 26 × 21 px of the plate.
+       Placement, measured rather than guessed: the bolt's shaft ends at (417,427) and the pale boss it is drilled into
+       runs x 402..495 / y 362..472, while the cable crosses the frame well to the left of that (x 355..420). Centring
+       the box at (437,427) puts the whole sprite — its own few pixels of borrowed stone included — on the lit face of
+       that boss, clear of both the strand and the ironwork. (A face-on recut without the stone, `mailbox-wall`, is in
+       the art queue; the id swaps when it exists. Nothing here points at a picture that has not been painted: this
+       node's one discoverable must stay drawn.) */
     { id: "box", transform: BOX,
       sprite: { src: "sprites/mailbox-far.webp", layer: "prop", sizeVh: 4 },
       gaze: { radius: 12, dwell: 900 } },
@@ -73,12 +81,14 @@ export default defineScene({
     { id: "face", transform: FACE, className: "hold-hotspot",
       interactable: { verbs: ["hold"], label: "打磨过的石板", reveal: 14, cost: { minutes: 1, fatigue: 0.02 } },
       hold: { ms: 800, scaleWith: ["fatigue"] } },
-    /* Two candidate marks, neither of them paint. Both carry the factory's false-blaze — the pale pebble with the
-       orange-grey lichen band, the one false mark that exists and draws — so what she names is what is on the screen:
-       lichen where it has crept along the streaked band, and the rust-orange of the same crust low on the panel.
-       Once confirmed each stays where it is (§3.5): the picture is never deleted, the hotspot simply stops taking her hand. */
-    blaze("lichen-slab", LICHEN, false, settled(false)),
-    blaze("rust-slab", RUST, false, settled(false)),
+    /* Two candidate marks, neither of them paint. Both draw the same picture — `blaze-false`, the pale stone with the
+       orange-grey crust on it — so neither of them may be given a name the picture does not have: the upper one is
+       lichen where it has crept along the streaked band, and the lower one gets no name at all, only the finding.
+       (Two separate false marks, `blaze-streak-wet` and `blaze-arrow-old`, are in the art queue; when they land each
+       gets its own word back.) Once confirmed each stays where it is (§3.5): the picture is never deleted, the hotspot
+       simply stops taking her hand. */
+    blaze("lichen-slab", LICHEN, false, settled("lichen-slab", false)),
+    blaze("rust-slab", RUST, false, settled("rust-slab", false)),
     // The deep cleft at the right edge. Three minutes of shuffling along the ledge to look into it.
     wrongWay("chimney", CHIMNEY, "右边的深缝", 3, "缝里过不去。"),
     // Her own ledge, and the two hundred metres of pass under it.
@@ -164,7 +174,7 @@ export default defineScene({
       if (entity !== "lichen-slab" && entity !== "rust-slab") return;
       ctx.hand(ctx.transformOf(entity));
       ctx.kick("glance", 0.5, { yaw: 0, pitch: -3 });
-      ctx.say(entity === "lichen-slab" ? "地衣。不是漆。" : "锈。不是漆。", { tag: "slab-false" });
+      ctx.say(entity === "lichen-slab" ? "地衣。不是漆。" : "不是漆。", { tag: "slab-false" });
     });
 
     /* The cleft at the right edge: a shuffle along the ledge, cold air out of it, and a shuffle back. */

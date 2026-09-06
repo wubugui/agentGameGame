@@ -1,0 +1,16 @@
+
+const def = __scenes["hutView"];
+const steps = def.walkthrough;
+window.__trace = [];
+if (!steps) { window.__trace.push("NO STEPS"); }
+else {
+  window.__trace.push("start " + __world.state.sceneId + " @" + __world.state.clock.minuteOfDay);
+  for (const step of steps) {
+    if (step.wait) { await new Promise(r => setTimeout(r, step.wait)); continue; }
+    __cmd(step);
+    await new Promise(r => setTimeout(r, 180));
+  }
+  await new Promise(r => setTimeout(r, 2600));
+  window.__trace.push("end " + __world.state.sceneId + " @" + __world.state.clock.minuteOfDay);
+  window.__trace.push("says " + JSON.stringify(__world.rt.log.slice(-30)));
+}

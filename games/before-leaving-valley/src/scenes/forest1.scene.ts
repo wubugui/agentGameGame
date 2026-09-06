@@ -6,10 +6,10 @@
    trunks on the left there is a gap that looks like a way through — from in there the road cannot be heard.
    Every coordinate was read off the 150°×84° grid of 14-forest-1 (yaw = (x/W − .5)·150, pitch = (.5 − y/H)·84);
    the pixel it came from (1280×720) is noted beside it.
-   Sprites: none of the four this scene names exists yet (root-arch-night, rock-step-night, blaze-656 /
-   blaze-656-dim, blaze-arrow-old-night, blaze-lichen-night are all new files — there is no daylit
-   `blaze-arrow-old.webp` in public/sprites to derive from), so today every hold and every mark is an empty ring.
-   That is the state the scene is written for; the briefs are in the report's `sprites`. */
+   Sprites: no night art exists yet, so every anchor here points at the daylight file that already draws the same
+   object — root-arch / rock-step for the two holds, blaze-red-white for the 656 and blaze-false for the two decoys
+   (the shared factory's own two files). They are the right things drawn in the wrong light, which is a note in
+   docs/ART_QUEUE.md, not a hole in the scene: everything is on the painting and everything answers today. */
 import type { Ambience } from "../soundscape";
 import type { Condition } from "../engine/condition";
 import { all, entityIs, flag, not } from "../engine/condition";
@@ -25,14 +25,18 @@ const TOTAL = 4;
 const ROAD_ENGINE = 0.12;              // the pass road, a long way under the trees: present, and easy to miss
 
 /* The four pulls, bottom of the frame first. Roots and stones both painted; the log only exists on the right bank. */
+/* The first pair is off the bottom-centre of the frame on purpose: `Actions.tsx` pins the engine's own 喊一声 into
+   `.story-action` (pano.css:127, left:50% / bottom:9.5vh), a box that sits over roughly yaw −8…0 / pitch −26…−30 in
+   this scene's crawling camera and over the hotspot layer. A hold under it gets a shout (fear −0.40, four-second
+   cooldown) instead of a hand. Both first-step anchors are now clear of that column by more than a ring's width. */
 const ROOTS: Transform[] = [
-  { yaw: -1.5, pitch: -28, distance: 8 },    // the root arch across the trail at her feet (627, 600)
+  { yaw: 10.5, pitch: -28.5, distance: 8 },  // the root lying across the right half of the trail at her feet (730, 604)
   { yaw: 28, pitch: -16.5, distance: 11 },   // the root mat over the right bank (879, 501)
   { yaw: 0, pitch: -10, distance: 12 },      // the mossy root ridge right of the trail (640, 446)
   { yaw: -22, pitch: -26.5, distance: 9 },   // the roots at the foot of the left mossy bank (452, 587)
 ];
 const ROCKS: Transform[] = [
-  { yaw: -13, pitch: -32, distance: 8 },     // the pale flat stones at the left edge of the near trail (529, 634)
+  { yaw: -23.4, pitch: -23.9, distance: 8 }, // the mossy dome of stone at the left edge of the trail (440, 565)
   { yaw: 13, pitch: -12, distance: 11 },     // the mossy rocks right of the trail (751, 463)
   { yaw: -11, pitch: -7, distance: 12 },     // the shoulder of the white boulder (546, 420)
   { yaw: -32, pitch: -16, distance: 10 },    // the big mossy boulder left of the trail (367, 497)
@@ -68,8 +72,6 @@ const COST: Record<"root" | "rock" | "log", Cost> = {
   rock: { minutes: 8, fatigue: 0.02, fear: 0.16 },
   log: { minutes: 4, fatigue: 0.08, fear: 0.16 },
 };
-const FALSE_LINES: Record<string, string> = { "moss-mark": "地衣。不是漆。", "old-arrow": "旧箭头。别的路线。" };
-
 /* Walkthrough holds. `wait` has to cover the worst case the replay can arrive in — fear 1, fatigue 1 multiply the
    hold by 2.5 — so every number below is at least `hold.ms × 2.5 + 300` (root 850 → 2425, rock 1150 → 3175,
    deadfall 700 → 2050). Waiting longer than that is free: the hold completes on its own and hold:end is a no-op. */
@@ -89,40 +91,44 @@ export default defineScene({
   entities: [
     // The root at this pull: fast, all hands. Its place changes with every step; that is why it is a sprite.
     { id: "hold-root", transform: (w) => ROOTS[stepOf(w)], className: "hold-hotspot",
-      sprite: { src: "sprites/root-arch-night.webp", layer: "prop", sizeVh: 9 },
+      sprite: { src: "sprites/root-arch.webp", layer: "prop", sizeVh: 9 },
       interactable: { verbs: ["hold"], label: "树根", reveal: HOLD_REVEAL, requires: handsFree },
       hold: { ms: 850, scaleWith: ["fear", "fatigue", "lamp"] }, visible: onTrail },
     // The stone at this pull: three minutes more, and it costs the hands almost nothing.
     { id: "hold-rock", transform: (w) => ROCKS[stepOf(w)], className: "foot-hotspot",
-      sprite: { src: "sprites/rock-step-night.webp", layer: "prop", sizeVh: 9 },
+      sprite: { src: "sprites/rock-step.webp", layer: "prop", sizeVh: 9 },
       interactable: { verbs: ["hold"], label: "石头", reveal: HOLD_REVEAL, requires: handsFree },
       hold: { ms: 1150, scaleWith: ["fear", "fatigue", "lamp"] }, visible: onTrail },
     // The one log, on the right bank, at the second pull only. The quickest way past — until the arms are gone.
     { id: "deadfall", transform: DEADFALL, className: "climb-hotspot",
       interactable: { verbs: ["hold"], label: "倒木", reveal: HOLD_REVEAL, requires: all(atStep(1), not(flag(ROLLED)), not(flag(BITING))) },
       hold: { ms: 700, scaleWith: ["fear", "fatigue", "lamp"] }, visible: all(atStep(1), not(flag(ROLLED))) },
-    // Three candidate marks, all labelled the same: 656 on the trunk between the boulders, lichen on the leaning
-    // boulder, and another route's old arrow on the near trunk of the left pair — right beside the gap.
-    // The real one stays on the bark after it is confirmed (v4 §3.5), dimmed — a second file, not a CSS class (there is no
-    // stylesheet behind `blaze-dim`) — and the hotspot goes `disabled`: .is-disabled, and `Hotspot.act()` returns
-    // before dispatching, so a second press gets no hand and no tock instead of refusing in silence forever.
+    /* Three candidate marks, all the same size and all labelled the same: 656 on the trunk between the boulders,
+       lichen on the leaning boulder, and another route's old arrow on the near trunk of the left pair — right beside
+       the gap. All three behave alike, and all three stay on the picture after they have been settled (v4 §3.5 wants
+       a trace, not a disappearance). What a settled mark must not become is a live-looking dead button: `enabled`
+       false only adds `.is-disabled`, which no stylesheet in this project defines, and `Hotspot.act()` then returns
+       before dispatching — a full-brightness ring that answers nothing. `requires` instead: InteractionSystem sends
+       the hand out and back with a glance and a tock, and charges nothing (see requests.css for the dim rule and
+       docs/ART_QUEUE.md for the dimmed paint). The decoys carry no `cost`: JournalSystem already bills the one
+       minute for reading a mark wrong, and §3.5 charges it exactly once. */
     blaze("blaze-656", TRUNK_MARK, true, {
-      sprite: { src: "sprites/blaze-656.webp", layer: "prop", sizeVh: MARK_VH,
-        swap: [{ when: entityIs("blaze-656", "read"), src: "sprites/blaze-656-dim.webp" }] },
-      interactable: { verbs: ["inspect"], label: "树干上的记号", reveal: 12, cost: { minutes: 1 } },
-      enabled: not(entityIs("blaze-656", "read")),
+      sprite: { src: "sprites/blaze-red-white.webp", layer: "prop", sizeVh: MARK_VH },
+      interactable: { verbs: ["inspect"], label: "树干上的记号", reveal: 12, cost: { minutes: 1 },
+        requires: not(entityIs("blaze-656", "read")) },
       visible: undefined,   // drops _shared.blaze's "gone once read": this mark is the trace that the segment was checked
     }),
-    // The lichen on the boulder is night art of a patch of lichen — not `blaze-false.webp`, which is a whole daylit
-    // cobble and, being the only mark in the scene with a file that exists, made the decoy the brightest thing on a
-    // black plate. Until the night file is drawn all three marks are the same empty ring, which is what §3.5 wants.
     blaze("moss-mark", BOULDER_MARK, false, {
-      sprite: { src: "sprites/blaze-lichen-night.webp", layer: "prop", sizeVh: MARK_VH },
-      interactable: { verbs: ["inspect"], label: "石头上的记号", reveal: 12, cost: { minutes: 1 } },
+      sprite: { src: "sprites/blaze-false.webp", layer: "prop", sizeVh: MARK_VH },
+      interactable: { verbs: ["inspect"], label: "石头上的记号", reveal: 12,
+        requires: not(entityIs("moss-mark", "read")) },
+      visible: undefined,
     }),
     blaze("old-arrow", LEFT_TRUNK, false, {
-      sprite: { src: "sprites/blaze-arrow-old-night.webp", layer: "prop", sizeVh: MARK_VH },
-      interactable: { verbs: ["inspect"], label: "树干上的记号", reveal: 12, cost: { minutes: 1 } },
+      sprite: { src: "sprites/blaze-false.webp", layer: "prop", sizeVh: MARK_VH },
+      interactable: { verbs: ["inspect"], label: "树干上的记号", reveal: 12,
+        requires: not(entityIs("old-arrow", "read")) },
+      visible: undefined,
     }),
     // The gap between the two trunks on the left. Twenty-five minutes in and back out; in there the road is gone.
     // It leaves the painting once she has been in there: `once` alone would leave a hotspot that refuses silently.
@@ -167,8 +173,7 @@ export default defineScene({
         ctx.spend({ minutes: 4, fear: fearUp(0.12) }, "倒木滚了");
         ctx.sfx("slide", 0.55, 1.1); ctx.sfx("thud", 0.5, 0.8);
         ctx.kick("slip", 1.3, { yaw: 5, pitch: -11 });
-        ctx.say("木头在动。", { tag: "forest1-roll", priority: 1 });
-        return;
+        return;   // the wood moving under her is a sound and a shove, not a sentence (§3.2: past 0.9 she stops talking)
       }
       const base = COST[style];
       ctx.spend({ ...base, minutes: Math.max(1, (base.minutes ?? 0) - (narrow() ? 1 : 0)), fear: fearUp(base.fear ?? 0) }, `forest1:${style}`);
@@ -182,7 +187,6 @@ export default defineScene({
       if (next >= TOTAL) {
         w.emit("body:rest", { seconds: 4 });
         ctx.sfx("exhale", 0, 0.8); ctx.kick("settle", 1.1);
-        ctx.say("还在往下。", { tag: "forest1-bottom" });
       }
     };
     ctx.onHold("hold-root", () => advance("root"));
@@ -191,28 +195,33 @@ export default defineScene({
 
     /* Letting go: five seconds of breath, a little more heart, and the same hold still there. Never a fall. */
     const slip = (progress: number) => {
+      /* Letting go on purpose is not losing the hold: growling takes the hand (v4 §3.3), and so does changing the
+         bite (`lamp:mode` below ends the hold unconditionally, which lands inside the first few per cent of it).
+         CameraBodySystem charges every release past 5 % +0.08 fear from the engine side, so the refund has to be
+         decided before any threshold of ours, or a deliberate release in that window silently costs fear — the
+         opposite sign of §3.3. Engine request: let hold:end say whether the hand was taken or lost. */
+      if (w.rt.growling || ctx.flag(BITING, false)) {
+        if (progress > 0.05) ctx.spend({ fear: -0.08 }, "自己松的手");
+        return;
+      }
       if (progress < 0.15) return;
-      // Letting go on purpose is not losing the hold: growling takes the hand (v4 §3.3), and so does changing the
-      // bite. CameraBodySystem charges every hold:release +0.08 fear from the engine side, so give that one back
-      // here until the engine can tell a chosen release from a lost one (engine request).
-      if (w.rt.growling || ctx.flag(BITING, false)) { ctx.spend({ fear: -0.08 }, "自己松的手"); return; }
       ctx.spend({ fear: fearUp(0.08) }, "手松了");
       w.emit("body:rest", { seconds: 5 });
       ctx.kick("slip", 0.8, { yaw: 0, pitch: -8 });
       ctx.sfx("slide", 0, 0.7); ctx.sfx("breath", 0, 0.9);
-      ctx.say("手松了。再来。", { tag: "forest1-slip", priority: 1 });
+      // §3.3 names this line; priority 2 is the only way past the adrenaline gate she arrives here behind.
+      ctx.say("手松了。再来。", { tag: "forest1-slip", priority: 2 });
     };
     ctx.onRelease("hold-root", slip);
     ctx.onRelease("hold-rock", slip);
     ctx.onRelease("deadfall", slip);
 
-    /* The marks. The journal settles the real one (the hand, the cloth, the heart); a false one gets a word. */
+    /* The marks. The journal settles the real one (the hand, the cloth, the heart); a wrong one is a hand that comes
+       back and a minute gone (JournalSystem's tock). Ten hours in she is past naming what she just looked at, and
+       the adrenaline gate would drop the line anyway — the hand and the clock say it. */
     ctx.on("blaze:confirm", ({ entity, real }) => {
       if (real) { ctx.kick("settle", 0.6); ctx.sfx("step", 0, 0.5); return; }
-      const line = FALSE_LINES[entity];
-      if (!line) return;
       ctx.hand(ctx.transformOf(entity)); ctx.kick("glance", 0.5, { yaw: 0, pitch: -3 });
-      ctx.say(line, { tag: `forest1-${entity}` });
     });
 
     /* The gap between the trunks. She goes in, and the one sound that was telling her where down is stops. */
@@ -287,7 +296,8 @@ export default defineScene({
       if (from !== "forest1" || to !== "forest2" || ctx.flag(CERTAIN, false)) return;
       ctx.spend({ minutes: 20, fear: 0.1 }, "没认记号，找了一段路");
       ctx.kick("turn", 0.5);
-      ctx.say("走错了一小段。", { tag: "forest1-lost", priority: 1 });
+      // §3.5's own line for leaving without a confirmed mark: priority 2, or the adrenaline gate eats it.
+      ctx.say("走错了一小段。", { tag: "forest1-lost", priority: 2 });
     });
   },
   /* The log is the fastest hold here and the only one that can answer back: above fatigue 0.55 it rolls one time in

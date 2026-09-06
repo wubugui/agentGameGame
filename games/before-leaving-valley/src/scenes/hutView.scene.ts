@@ -43,9 +43,16 @@ const TRAIL: Transform = { yaw: 54, pitch: -24 };                     // the dir
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
-/* The house on the far rim, in two states. It is NOT one entity with a sprite swap: hut-far.webp and
-   hut-far-lit.webp are two different paintings of two different houses, and a swap entry cannot carry its own
-   sizeVh — so the one frame where the window comes on would also change the size of the building.
+/* The house on the far rim, in two states, and each state is a PROP with one shared hotspot beside it.
+   PanoStage drives a Hotspot's opacity — the whole element, its sprite included — from how near the gaze is,
+   so while the house lived inside its own hotspot it faded off the far rim whenever she was not looking
+   straight at it, and 17:00's one lit window could only be noticed by someone already staring at the spot it
+   happens in. As props the two houses are on the picture the whole time she stands here and the window comes on
+   in the corner of the eye, which is what §8 (17:00 山屋的窗户亮起来) is for; the hotspot is only the minute
+   she spends looking at it.
+   The two states are NOT one sprite with a swap: hut-far.webp and hut-far-lit.webp are two different paintings
+   of two different houses, and a swap entry cannot carry its own sizeVh — so the one frame where the window
+   comes on would also change the size of the building.
    Row-scanned off the alpha of both files: hut-far is 716×459 with its walls 292 px wide and the house 209 px
    tall; hut-far-lit is 775×675 with its walls 393 px wide and the house 314 px tall. Only the sizeVh (the height
    of the whole file, rocks included) is under the scene's control, so the two are matched on the ONE measurement
@@ -57,8 +64,6 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
 const house = (id: EntityId, transform: Transform, src: string, sizeVh: number, when: EntityDef["visible"]): EntityDef => ({
   id, transform, visible: when,
   sprite: { src, layer: "prop", sizeVh },
-  interactable: { verbs: ["inspect", "photograph"], label: "对面岩壁上的房子", reveal: 12, cost: { minutes: 1 } },
-  gaze: { radius: 12, dwell: 900 },
 });
 
 /* A candidate mark. Three of them, all labelled the same, indistinguishable until she is close (v4 §3.5).
@@ -87,15 +92,26 @@ export default defineScene({
   entities: [
     // The one dark thing on the far rim. At 17:00 the dark one stops being drawn and the lit one starts: the walls
     // stay the same width and stand in the same place, and one window comes on. Nobody announces it.
-    house("hut", HUT, "sprites/hut-far.webp", 2.2, before(HUT_LIT)),
+    house("hut-dark", HUT, "sprites/hut-far.webp", 2.2, before(HUT_LIT)),
     house("hut-lit", HUT, "sprites/hut-far-lit.webp", 2.4, after(HUT_LIT)),
+    // The minute she spends actually looking at it, on the same anchor: a point, not a picture.
+    { id: "hut", transform: HUT,
+      interactable: { verbs: ["inspect", "photograph"], label: "对面岩壁上的房子", reveal: 12, cost: { minutes: 1 } },
+      gaze: { radius: 12, dwell: 900 } },
     // Things to look at across the gap. None of them tells her anything she could not see.
     lookAt("far-wall", FAR_WALL, "对面的岩壁", 1),
     lookAt("mesa", MESA, "对面的台状山", 1),
     { id: "cloud-bank", transform: CLOUDS, gaze: { radius: 14, dwell: 1200 } },
-    // The eighth spreading of the map, on the table rock. A windy node: a stone on each corner (v4 §3.7).
+    /* The eighth spreading of the map, on the table rock, and the most expensive read in the game: v4 §6 prices
+       this row at 6–18 minutes and calls it 那道算术. Four minutes to get the sheet open and oriented on the rock,
+       one more for the stone on each corner because this is a windy node (§3.7, spent in the script), and two for
+       every leg she actually traces — 紧急下撤 pressed straight away pays the minimum, the whole arithmetic pays
+       thirteen. Her own summary of the day is that she underestimated exactly this.
+       reveal 20, not 12: before the decision this node has no exit on screen at all (exitWhen is unmet and the hut
+       way is closed), so the map is the only way on, and a Hotspot fades to nothing past ~reveal°. The folded map
+       has to surface while she is still turning her head across the rock, the way `go` already does. */
     prop("paper-map", MAP_STONE, "sprites/map-folded.webp", 11, {
-      interactable: { verbs: ["use"], label: "在平石上摊开地图", reveal: 12, cost: { minutes: 0 }, requires: has("paperMap") },
+      interactable: { verbs: ["use"], label: "在平石上摊开地图", reveal: 20, cost: { minutes: 4 }, requires: has("paperMap") },
     }),
     // The only meal of the day. Now, or on the scree, or in the forest — she never has it twice.
     prop("chocolate", CHOC_STONE, "sprites/chocolate.webp", 7, {
@@ -122,6 +138,7 @@ export default defineScene({
     w.setFlag(SUMMED, true);
     w.setFlag(WROTE, true);
     w.setFlag("map.legsChecked", 4);
+    w.setFlag("map.legsPaid", "toFork,toScreeFoot,toForest,toRoad");   // the arithmetic is already paid for (§6)
     w.patch("journal", {
       mapLegs: { ...w.state.journal.mapLegs, toFork: 1, toScreeFoot: 1.5, toForest: 0.5, toRoad: 0.5 },
       objective: OBJ_RETREAT,
@@ -146,27 +163,32 @@ export default defineScene({
 
     // --- The house on the far rim. Her eyes rest on it and the pencil goes to the margin of the map: the one
     //     objective in the whole game she writes for herself (v4 §5.2 obj-time). No line comes with it. ---
-    for (const id of ["hut", "hut-lit"]) {
-      ctx.onGaze(id, () => {
-        if (ctx.flag(WROTE, false)) return;
-        ctx.setFlag(WROTE, true);
-        write(OBJ_TIME);                                 // JournalSystem answers with the pencil
-        glanceAt(HUT, 0.4);
-        ctx.flash("地图边上多了一行铅笔字");
-      });
-      ctx.onInteract(id, (verb) => {
-        if (verb === "photograph") return shoot(HUT);
-        glanceAt(HUT, 0.6); ctx.sfx("breath", -0.4, 0.5);
-        ctx.setFlag("hutView.looked", true);
-        ctx.say(ctx.minute() >= HUT_LIT ? "窗亮了。还是隔着一整个山谷。" : "对面。隔着一整个山谷。", { tag: "hut-look" });
-      });
-    }
-    // 17:00. The window comes on across the valley: the sprite swaps, her head turns, one line, one entry.
-    ctx.onMark("hut-window-lit", () => {
-      if (w.state.sceneId !== "hutView" || w.state.ui.travel) return;   // only for someone still standing on the lip
+    ctx.onGaze("hut", () => {
+      if (ctx.flag(WROTE, false)) return;
+      ctx.setFlag(WROTE, true);
+      write(OBJ_TIME);                                   // JournalSystem answers with the pencil
+      glanceAt(HUT, 0.4);
+      ctx.flash("地图边上多了一行铅笔字");
+    });
+    ctx.onInteract("hut", (verb) => {
+      if (verb === "photograph") return shoot(HUT);
+      glanceAt(HUT, 0.6); ctx.sfx("breath", -0.4, 0.5);
+      ctx.setFlag("hutView.looked", true);
+      ctx.say(ctx.minute() >= HUT_LIT ? "窗亮了。还是隔着一整个山谷。" : "对面。隔着一整个山谷。", { tag: "hut-look" });
+    });
+    /* 17:00. The window comes on across the valley: the sprite swaps (hut-far.webp gives way to hut-far-lit.webp),
+       her head turns, one line, one entry. What the swap does not yet carry is a halo wide enough to read at 16 px
+       across a whole valley — that is an ART re-export of hut-far-lit, not a reason for the node to stay silent
+       about the one thing in this picture that changes on its own. */
+    const windowLit = () => {
+      if (w.state.journal.entries.includes("E-hutLit")) return;
       glanceAt(HUT, 0.7); ctx.sfx("breath", -0.4, 0.45);
       ctx.say("对面亮了一盏灯。", { tag: "hut-lit", priority: 1 });
       ctx.learn("E-hutLit");
+    };
+    ctx.onMark("hut-window-lit", () => {
+      if (w.state.sceneId !== "hutView" || w.state.ui.travel) return;   // only for someone still standing on the lip
+      windowLit();
     });
 
     // --- Looking down, and looking across. Half a breath each, a minute off the clock, no words. ---
@@ -194,11 +216,19 @@ export default defineScene({
       w.dispatch({ type: "item:use", item: "paperMap" });
       if (ctx.flag<number>(SPREAD, 0) === 1) ctx.say("我赶紧把地图啪地摊开。", { tag: "hut-map" });
     });
-    // A leg goes down under her finger: the pencil (JournalSystem) and her head dipping to the paper. That is all.
+    /* A leg goes down under her finger: the pencil (JournalSystem), her head dipping to the paper, and two minutes
+       off the day for it. The paid list is a flag rather than a counter because the estimate slider fires a
+       ui:action on every step it passes through — a leg is charged the first time it is traced and never again,
+       here or out on the rim (map.legsPaid is shared with hutTurn: one sheet, one piece of arithmetic). */
     ctx.on("ui:action", ({ id }) => {
-      if (!id.startsWith("map:leg:") || ctx.flag(SUMMED, false)) return;
-      ctx.setFlag(SUMMED, true);
-      ctx.kick("glance", 0.25, { yaw: 0, pitch: -2 });
+      if (!id.startsWith("map:leg:")) return;
+      if (!ctx.flag(SUMMED, false)) { ctx.setFlag(SUMMED, true); ctx.kick("glance", 0.25, { yaw: 0, pitch: -2 }); }
+      const leg = id.slice("map:leg:".length);
+      const paid = ctx.flag<string>("map.legsPaid", "").split(",").filter(Boolean);
+      if (paid.includes(leg)) return;
+      paid.push(leg);
+      ctx.setFlag("map.legsPaid", paid.join(","));
+      ctx.spend({ minutes: 2 }, "在地图上量一段");
     });
 
     // --- The decision. Both are real. Choosing the hut says nothing at all: it only spends light (v4 §7). ---
@@ -246,11 +276,17 @@ export default defineScene({
       ctx.fx("gust", 0.55); ctx.sfx("breath", -0.5, 0.5); ctx.kick("settle", 0.25);
     });
 
-    // --- Back from the way to the hut: the same lip, forty-five minutes gone, and the decision open again.
-    //     The body carries the walk — a heavier settle, the wind a tone lower, one long gust up out of the valley.
-    //     The line about the sun is only said if the sun has actually moved: lightOf() is clamped to 1 from before
-    //     16:00 until 18:45, so between those hours nothing in the frame changes and she must not claim it does
-    //     (the longer light tail is a DESIGN request; when it lands this line starts arriving on its own). ---
+    /* --- Back from the way to the hut: the same lip, forty-five minutes gone, and the decision open again.
+           The body carries the walk — a heavier settle, the wind a tone lower, one long gust up out of the valley.
+           What §7 wants the walk to cost is 光, and the engine cannot spend it yet: lightOf() = (20:15 − now)/90 is
+           exactly 1 for every minute before 18:45, so a round trip that starts at 16:00 comes back to the same
+           tint, the same shadows and the same sky. The sun line is therefore gated on the light having really
+           moved (it fires for anyone who takes the detour late enough), and the longer light tail is filed as a
+           DESIGN request — this scene will not assert a sky that has not changed.
+           The one price the picture CAN carry today is the window across the valley: leave before 17:00, come back
+           after it, and the far rim is a different picture than the one she walked away from. The clock's mark
+           fires wherever she is standing, so the lip has to deliver it to anyone who was out on the rim when it
+           passed and never saw it (the entry is what stops it arriving twice). --- */
     ctx.onEnter((from) => {
       if (from !== "hutTurn") return;
       ctx.setFlag("hutView.turned", true);
@@ -258,7 +294,8 @@ export default defineScene({
       w.emit("ambience", { overrides: { wind: 0.8, windTone: 1180 } });
       ctx.kick("settle", 0.8); ctx.sfx("exhale", -0.3, 0.6);
       ctx.after(420, () => { ctx.fx("gust", 0.7); ctx.sfx("breath", -0.5, 0.5); });
-      if (ctx.light() < 1) ctx.say("太阳低了一格。", { tag: "hut-back" });
+      if (ctx.light() < 1) { ctx.say("太阳低了一格。", { tag: "hut-back" }); return; }
+      if (ctx.minute() >= HUT_LIT) windowLit();
     });
 
     // --- Leaving down the track without a confirmed mark: fifteen minutes of looking for the line (v4 §3.5). ---

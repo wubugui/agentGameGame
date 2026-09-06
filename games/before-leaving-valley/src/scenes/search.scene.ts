@@ -71,8 +71,11 @@ export default defineScene({
     { id: "red-thread", transform: THREAD, sprite: { src: "sprites/red-thread.webp", layer: "prop", sizeVh: 6 },
       interactable: { verbs: ["inspect"], label: "松枝上的红线头", reveal: 12, cost: { minutes: 1 }, once: true },
       visible: searched("dwarf-pines") },
-    // One stone lifted out of the heap and left lying beside it, with the damp print it came off.
-    prop("moved-stone", MOVED_STONE, "sprites/stone-turned.webp", 5, { visible: searched("path-stones") }),
+    /* One stone lifted out of the heap and left lying beside it, with the damp print it came off.
+       The art is `stone-loose` — 浮在沙面上的倾斜圆石, drawn to be reused wherever a stone has been moved
+       (docs/ART_AUDIT.md §11-scree). The `stone-turned` this used to name was never drawn, which left the
+       moment the heap gives up its one loose stone with nothing on the sand at all. */
+    prop("moved-stone", MOVED_STONE, "sprites/stone-loose.webp", 5, { visible: searched("path-stones") }),
     /* The pack comes off her back the first time she kneels down, and stays on the sand. 12vh is what a bag lying
        three metres off actually measures (0.45 m ≈ 143·0.45/1.65/3.4 vh) and it is the height the same pack has in
        the other two outdoor stands (searchWall, searchPath): one bag, one size on the ground. */
