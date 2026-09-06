@@ -27,7 +27,8 @@ function Body({ walking, running }: { walking: boolean; running: boolean }) {
     <>
       <div className="hands-layer" aria-hidden="true">
         {(walking || leaving) && <img className={`hand-walk ${!walking ? "leaving" : ""}`} src={`${import.meta.env.BASE_URL}sprites/hand-walk.webp`} alt="" draggable={false} style={{ "--cadence": `${running ? RUN_CADENCE : WALK_CADENCE}ms` } as React.CSSProperties} />}
-        {sceneId === "car" && <img className="hands-lap" src={`${import.meta.env.BASE_URL}sprites/hands-lap.webp`} alt="" draggable={false} />}
+        {/* In the car her phone is lying in the forest: empty hands on her knees, never the phone. */}
+        {sceneId === "car" && <img className="hands-lap" src={`${import.meta.env.BASE_URL}sprites/hands-lap-car.webp`} alt="" draggable={false} onError={(event) => { event.currentTarget.style.visibility = "hidden"; }} />}
       </div>
       {phoneOpen && <img className="hand-phone" src={`${import.meta.env.BASE_URL}sprites/hand-phone.webp`} alt="" draggable={false} aria-hidden="true" />}
     </>
