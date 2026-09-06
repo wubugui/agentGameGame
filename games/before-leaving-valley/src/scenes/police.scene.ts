@@ -40,12 +40,12 @@ const GERANIUM: Transform = { yaw: 54, pitch: -5.5 };       // the geranium on t
 const DOORWAY_OUT: Transform = { yaw: 37.9, pitch: -30.5 }; // the near edge of the doormat by the way out (963, 622)
 /* Sprites: the man behind the counter, and her phone on the green desk pad in front of him. */
 /* He is cut off by the counter, so the cut has to land ON the counter. Sampled down the plate at x 606: the
-   wooden back panel runs to row 528, the counter's top lip is 531 and the green pad has 533–575 — and that lip
-   projects to screen row 587. At 34vh the sprite is 245 px tall in the running view, so its bottom edge sat at
-   615, thirty pixels down the middle of the desk pad: a hard waist cut floating over the blotter instead of
-   reading as the counter in front of him. −9.7° lifts him until the cut is on the lip (bottom 589) with the
-   phone on the pad still clear below him. */
-const OFFICER: Transform = { yaw: -4, pitch: -9.7 };        // behind the counter, in the open doorway (606, 443; cut off at the counter line, 531)
+   wooden back panel runs to row 528 and the green pad has 533–575; the counter's far lip — the pale line the
+   cut has to land on — is row 541. −9.7° was written against 531, ten rows too high, and left a band of the
+   back room's dark floor showing under his trouser cuffs. At 34vh the sprite is 245 px tall in the running
+   view, so foot = (0.5 − pitch/84)·720 + 34·5.14/2: −11.5° puts the cut at 546, five rows below the lip, so
+   the counter eats it, and the cap top only drops from row 356 to 366, still well under the door head. */
+const OFFICER: Transform = { yaw: -4, pitch: -11.5 };       // behind the counter, in the open doorway (606, 459; cut off at the counter line, 541)
 const PAD: Transform = { yaw: -3, pitch: -23.2 };           // the middle of the green desk pad, where he sets it down (614, 559)
 const OFFSCREEN: Transform = { yaw: 0, pitch: -88 };        // story actions: E-key prompts, never drawn on the painting
 
