@@ -2,6 +2,7 @@
 # gen.sh OUT.jpg ASPECT PROMPT [REF_IMAGE ...]
 # Generates one image with Grok Build (image_gen, or image_edit when refs given) and copies it to OUT.
 set -u
+SELF_DIR=$(cd "$(dirname "$0")" && pwd)
 OUT="$1"; ASPECT="$2"; PROMPT="$3"; shift 3
 SCR="${TMPDIR:-/tmp}/blv-gen"; mkdir -p "$SCR/gen"
 WORK=$(mktemp -d "$SCR/gen/job.XXXXXX")
@@ -29,4 +30,7 @@ Then reply with the single word DONE followed by the saved path. Do not describe
 MSGEOF
 fi
 cd "$WORK" && timeout 420 cmd //c grokvpn --prompt-file "$(cygpath -w "$MSG")" --tools "image_gen,image_edit,run_terminal_cmd,read_file,list_dir" --permission-mode bypassPermissions --max-turns 8 --output-format json > "$WORK/result.json" 2> "$WORK/err.txt"
-if [ -s "$OUT" ]; then echo "OK $OUT ($(stat -c %s "$OUT") bytes) work=$WORK"; else echo "FAIL $OUT work=$WORK"; tail -c 1500 "$WORK/result.json"; tail -c 600 "$WORK/err.txt"; fi
+if [ -s "$OUT" ]; then echo "OK $OUT ($(stat -c %s "$OUT") bytes) work=$WORK via=grok"; exit 0; fi
+# Grok Build balance exhausted (402) or any other failure: fall back to the Codex image tool.
+if grep -q "402" "$WORK/result.json" "$WORK/err.txt" 2>/dev/null; then echo "grok 402, falling back to codex"; else echo "grok failed, falling back to codex"; tail -c 600 "$WORK/result.json"; fi
+exec bash "$SELF_DIR/gen-image-codex.sh" "$OUT" "$ASPECT" "$PROMPT" "$@"

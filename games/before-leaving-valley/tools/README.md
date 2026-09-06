@@ -70,3 +70,5 @@ QA 记录见 `docs/QA_REPORT.md`。
 - `python tools/key-sprite.py in.jpg out.png [--magenta]`：绿幕/品红幕抠图（腐蚀边缘、去黄绿溢色、向外补色、留 3% 边）。
 - `python tools/sprite-fit.py keyed.png out.png public/pano/<目标画>.webp`：把精灵的饱和度与对比拉到目标画板的水平。
 - `tools/gen-image.sh` 现在把参考图路径转成绝对路径（grokvpn 在自己的工作目录里跑）。
+
+- `tools/gen-image-codex.sh OUT ASPECT PROMPT [REF...]`：走 OpenAI Codex CLI 的图片生成工具（提示从 stdin 进，参考图用 `-i`）。`gen-image.sh` 在 grokvpn 返回 402（余额耗尽）或失败时自动退到它。注意 Codex 是重新生成而不是逐像素编辑：适合新画、整体重画与精灵，不适合"只去掉一个东西"的手术式修改。
