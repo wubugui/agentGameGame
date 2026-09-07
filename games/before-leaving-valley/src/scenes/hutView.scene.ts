@@ -69,7 +69,7 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
    file to hut-far's daylight value with only the window warm (both are filed: docs/ART_QUEUE.md and `requests`). */
 const house = (id: EntityId, transform: Transform, sizeVh: number): EntityDef => ({
   id, transform,
-  sprite: { src: "sprites/hut-far.webp", layer: "prop", sizeVh, swap: [{ when: after(HUT_LIT), src: "sprites/hut-far-lit.webp", className: "hut-lit" }] },
+  sprite: { src: "sprites/hut-far.webp", layer: "prop", sizeVh },
 });
 
 /* A candidate mark. Three of them, all labelled the same, indistinguishable until she is close (v4 §3.5).
@@ -101,7 +101,9 @@ export default defineScene({
   entities: [
     // The one built thing on the far rim. At 17:00 the file swaps under the same anchor and the same sizeVh: the
     // walls stand exactly where they stood and one window comes on. Nobody announces it.
-    house("hut-house", HUT, 7),
+    house("hut-house", HUT, 4.5),
+    // The one thing that changes at 17:00: a warm window on the same wall, nothing else moves or darkens.
+    prop("hut-window", offset(HUT, 0.25, -0.35), "sprites/hut-window.webp", 0.9, { visible: after(HUT_LIT) }),
     /* The minute she spends actually looking at it: a point, not a picture — and three degrees BELOW the house,
        on the grass shelf it stands on. On the same anchor the ring (55 x 26 px) and its label printed straight
        across the walls (50 px), so the one built thing in the picture was smaller than the button pointing at it.

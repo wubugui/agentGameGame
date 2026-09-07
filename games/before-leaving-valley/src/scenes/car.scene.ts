@@ -42,7 +42,7 @@ const NAV: Transform = { yaw: 7, pitch: -11, distance: 6 };            // clampe
    i.e. a head seen from about half a metre back, and each pitch is set so the head lands in the upper half of the
    headrest it is drawn against rather than floating over the roof lining. */
 const DRIVER: Transform = { yaw: -45, pitch: 0.5, distance: 9 };       // the inner end of the left headrest (plate x 250)
-const PASSENGER: Transform = { yaw: 44, pitch: -4, distance: 9 };      // the inner end of the right headrest (plate x 1015)
+const PASSENGER: Transform = { yaw: 47.5, pitch: -4, distance: 9 };      // the inner end of the right headrest (plate x 1015)
 /* The gear lever this painting actually has is at the very bottom of the centre stack (642, 693) = pitch −38.9: below
    the viewport and behind `hands-lap`. What the plate does show of the two of them is the wheel, so their hands are
    there — v4 §6/§7 name 他们搭在挡杆上的手, and what tells her they are a couple is two hands touching, not one hand
@@ -57,7 +57,7 @@ const PASSENGER: Transform = { yaw: 44, pitch: -4, distance: 9 };      // the in
    Two things about this file that placement cannot fix and that are queued as ART: its bottom edge is raw matte
    (a speckled fringe and a bar under the hands that the painted rim should be carrying), and it is keyed brighter
    than a night interior. The class below is the hook the interior filter hangs on (see `requests`). */
-const WHEEL: Transform = { yaw: -24.6, pitch: -19, distance: 6 };      // the near arc of the steering-wheel rim (430, 522)
+const WHEEL: Transform = { yaw: -24.6, pitch: -21.5, distance: 6 };      // the near arc of the steering-wheel rim (430, 522)
 /* The bottle. `water-bottle-night.webp` is the night re-cut: a dark-sleeved forearm with the bottle held out at the
    end of it, which is §6's 递过来. The sleeve enters from the upper left, and left is where the driver sits, so the
    arm is his — reaching back over the console between the two front seats, which is the only way an arm gets to the
@@ -151,7 +151,7 @@ export default defineScene({
        and out of its seat with wherever her eyes happened to be. The account gives them no lines, so nothing here is
        clickable — they are simply there, which is the whole difference between this ride and an empty car. */
     prop("couple-driver", DRIVER, "sprites/couple-driver.webp", 56, { className: "car-night-prop" }),
-    prop("couple-passenger", PASSENGER, "sprites/couple-passenger.webp", 44, { className: "car-night-prop" }),
+    prop("couple-passenger", PASSENGER, "sprites/couple-passenger.webp", 36, { className: "car-night-prop" }),
     // The way on is the road itself: it ends at the hotel door, where the numbers and the photograph happen.
     goArrow("go", WET_ROAD, { to: "search", minutes: 0, label: "回酒店的路", kind: "walk" }),
     /* No button for the photograph. v4 §8 puts 交换联系方式合影 at the hotel door and §9 gives that door no painting,

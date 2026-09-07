@@ -6,7 +6,7 @@ import { useWorldContext, useWorldValue } from "./useWorld";
 export function Actions() {
   const world = useWorldContext();
   const sceneId = useWorldValue((s) => s.sceneId);
-  const forest = sceneId === "forest1" || sceneId === "forest2" || sceneId === "forestEdge" || sceneId === "deer";
+  const forest = sceneId === "forest1" || sceneId === "forest2" || sceneId === "forestEdge" || sceneId === "deer" || sceneId === "scree" || sceneId === "signpost";
   const overlay = useWorldValue((s) => s.ui.overlay);
   const phoneOpen = useWorldValue((s) => s.ui.phoneOpen);
   const menuOpen = useWorldValue((s) => s.ui.menuOpen);

@@ -50,7 +50,7 @@ export const UISystem: System = {
       world.emit("ui:action", { id, value });
     }));
     offs.push(world.handle("shout", () => {
-      if (!["deer", "forestEdge", "forest1", "forest2"].includes(world.state.sceneId)) return;
+      if (!["scree", "signpost", "deer", "forestEdge", "forest1", "forest2"].includes(world.state.sceneId)) return;
       if (world.rt.now - Number(world.flag("shout.at", -99999)) < 4000) return;
       world.setFlag("shout.at", world.rt.now);
       world.setFlag(`${world.state.sceneId}.shouted`, true);

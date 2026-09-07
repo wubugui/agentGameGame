@@ -5,6 +5,8 @@
 .utility-controls.asleep { opacity:0; translate:0 -8px; pointer-events:none; }
 .pack-glyph { display:inline-block; width:14px; height:16px; border:1.5px solid currentColor; border-radius:3px 3px 5px 5px; position:relative; }
 .pack-glyph::before { content:""; position:absolute; left:3px; right:3px; top:-5px; height:5px; border:1.5px solid currentColor; border-bottom:0; border-radius:4px 4px 0 0; }
+/* Night interior of the car: every sprite is lit by the dashboard, not by daylight. */
+.node-car .prop-item img, .node-car .hotspot-sprite { filter: brightness(0.55) saturate(0.85); }
 .hotspot.is-disabled { opacity:.35; }
 .hotspot-sprite { display:block; pointer-events:none; filter:drop-shadow(0 6px 10px rgba(0,0,0,.35)); }
 .hotspot > .hotspot-sprite + span { position:absolute; left:50%; top:50%; translate:-50% -50%; }
