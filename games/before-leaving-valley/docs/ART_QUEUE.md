@@ -45,7 +45,7 @@
 
 ## forest1 / forest2 / hairpin / car（第 1 轮）
 
-- blaze-656 | forest1 blaze-656、forest2 blaze-f2 | 树皮上的红-白-红 656 漆记，竖长条，不宽于 14 屏幕像素，画在细云杉树干上 | night（补光灯冷白光圈里） | 3 | f1 −0.6/4/13，f2 11/6/9 | 由 blaze-red-white.webp 衍生：去掉石头本体，只留刷在树皮上的漆。今天两场都先用 blaze-red-white.webp 顶着（是同一道漆，画在石头上）（art-7 裁决：第 48 行与第 89 行的矛盾按"一个文件、带一条窄树皮"统一——blaze-656.webp 是刷在一条窄云杉树皮上的红-白-红 656，forest1/forest2/forestEdge 三处共用，不再拆 bare 版；forest1/forest2 的 sprite src 已从 blaze-red-white.webp 切到它）（art-7 裁决：第 48 行与第 89 行的矛盾按“一个文件、带一条窄树皮”统一：blaze-656.webp 是刷在一条窄云杉树皮上的红-白-红 656，forest1/forest2/forestEdge 三处共用，不再拆 bare 版；forest1/forest2 的 sprite src 已从 blaze-red-white.webp 切到它）
+- blaze-656 | forest1 blaze-656、forest2 blaze-f2 | 树皮上的红-白-红 656 漆记，竖长条，不宽于 14 屏幕像素，画在细云杉树干上 | night（补光灯冷白光圈里） | 3 | f1 −0.6/4/13，f2 11/6/9 | 由 blaze-red-white.webp 衍生：去掉石头本体，只留刷在树皮上的漆。今天两场都先用 blaze-red-white.webp 顶着（是同一道漆，画在石头上）（art-7 裁决：第 48 行与第 89 行的矛盾按"一个文件、带一条窄树皮"统一——blaze-656.webp 是刷在一条窄云杉树皮上的红-白-红 656，forest1/forest2/forestEdge 三处共用，不再拆 bare 版；forest1/forest2 的 sprite src 已从 blaze-red-white.webp 切到它）
 - blaze-656-dim | forest1 blaze-656、forest2 blaze-f2（认过之后） | 同一道漆被确认之后压暗的版本，只剩一道极淡的高光（v4 §3.5「留一道极淡的高光」） | night | 3 | 同 blaze-656 | 由 blaze-656 衍生。没有它时认过的记号仍留在画上，靠 requires 给手+tock，不发生变化
 - blaze-lichen-night | forest1 moss-mark | 大倾斜巨石亮面上的一块橙灰色地衣，轮廓与 656 同大同形，凑近才分得出 | night | 3 | 14/3.5/14 | 由 blaze-false.webp 衍生（去掉整块鹅卵石，只留地衣）。今天用 blaze-false.webp 顶着
 - blaze-arrow-old-night | forest1 old-arrow | 另一条路线留下的旧箭头，褪色的红漆，刷在左边那对树干近处那一根的树皮上 | night | 3 | −39.5/−6.4/12 | 新画，可由 blaze-false.webp 改。今天用 blaze-false.webp 顶着
@@ -86,7 +86,7 @@
 - deer-shadows | deer | §6 的第二张脸：十几只鹿只剩轮廓剪影，与 deer-herd 同构同位 | dusk（light < 0.3） | 18 | yaw 9.5 / pitch −24 / distance 14 | 由 sprites/deer-herd.webp 压暗去细节衍生；场景暂未引用（引用缺失文件会把鹿群整个从画面删掉），落地后 deer.scene.ts 加 swap
 - deer-shadows-alert | deer | 同上，头全部抬起来朝向镜头 | dusk | 18 | 同上 | 由 deer-shadows 衍生；同上，落地后加 swap
 - deer-eyeshine | deer | §6 的第三张脸：几乎全黑，只剩光束边缘的两点反光 | night（light = 0） | 18 | 同上 | 由 deer-shadows 衍生；同上，落地后加 swap
-- blaze-656 | forestEdge | 树干上的红白红漆条，白漆上手写 656，不带树皮、不带石头（forest1 也用同一张） | night（灯光下） | 2.8 | yaw 6.2 / pitch −25.2 / distance 10 | 由 sprites/blaze-red-white.webp 去掉石头衍生；本轮已改用 blaze-red-white 顶上，与 forest1 一致（art-7 裁决：改为与第 48 行一致——同一张 blaze-656.webp，带一条窄树皮载体，与 blaze-arrow-old-night / blaze-false-bark 的剪影语言统一；"不带树皮"作废，"不带石头"仍然有效）（art-7 裁决：改为与第 48 行一致——同一张 blaze-656.webp，带一条窄树皮载体，与 blaze-arrow-old-night / blaze-false-bark 的剪影语言统一；“不带树皮”作废，“不带石头”仍然有效）
+- blaze-656 | forestEdge | 树干上的红白红漆条，白漆上手写 656，不带树皮、不带石头（forest1 也用同一张） | night（灯光下） | 2.8 | yaw 6.2 / pitch −25.2 / distance 10 | 由 sprites/blaze-red-white.webp 去掉石头衍生；本轮已改用 blaze-red-white 顶上，与 forest1 一致（art-7 裁决：改为与第 48 行一致——同一张 blaze-656.webp，带一条窄树皮载体，与 blaze-arrow-old-night / blaze-false-bark 的剪影语言统一；"不带树皮"作废，"不带石头"仍然有效）
 
 
 ## 第 3 轮美术审查打回（art-3 批次；按 fixPrompt 重做，做完安装到原路径）
