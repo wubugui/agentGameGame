@@ -23,7 +23,10 @@ import { backArrow, blaze, goArrow, lookAt } from "./_shared";
    `entityIs(id,"read")`: it comes into being only after she has been over there and settled that one. Nothing written
    from `real` may sit on the entity — a class there would be in the DOM from the first frame and would tell the player
    which of the three lines carries the paint before she has walked to any of them (§3.5 / §12 A1). */
-const MARK_SRC = (real: boolean) => real ? "sprites/blaze-red-white.webp" : "sprites/blaze-false.webp";
+/* 07-exit's rock face is dark here: the median luminance at the three mark anchors is 128 / 131 / 101, and the
+   daylight pair sits at 185 / 181, which read as bright chips pasted on the shadowed wall. The -night pair is the
+   same two stones, same silhouette, same alpha, same crop, relit to a stone median of 106 / 103 so nothing pops. */
+const MARK_SRC = (real: boolean) => real ? "sprites/blaze-red-white-night.webp" : "sprites/blaze-false-night.webp";
 const settled = (id: EntityId, real: boolean): Partial<EntityDef> => ({
   visible: all(),
   sprite: { src: MARK_SRC(real), layer: "prop", sizeVh: 4, swap: [{ when: entityIs(id, "read"), src: MARK_SRC(real), className: real ? "blaze-found" : "blaze-ruled-out" }] },

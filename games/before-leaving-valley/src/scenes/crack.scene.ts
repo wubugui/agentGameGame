@@ -68,7 +68,7 @@ const MINUTES = [4, 5, 5, 8];              // 22 on the holds + 38 to the box = 
 const HOLD_MS = [700, 900, 900, 1100];
 const LIP: Transform = { yaw: 22, pitch: 23 };                      // where the crack opens to the sky (828, 163)
 const DEEP: Transform = { yaw: 32, pitch: -14, distance: 9 };       // the widest, darkest part of the chimney (913, 480)
-const SHELF: Transform = { yaw: 31, pitch: -16, distance: 9 };      // the shelf inside it (905, 497)
+const SHELF: Transform = { yaw: 29.7, pitch: -16, distance: 9 };      // the shelf inside it (905, 497)
 
 const stepOf = (w: World) => w.flag<number>(STEP, 0);
 const atStep = (n: number): Condition => n === 0 ? flag(STEP, { lt: 1 }) : all(flag(STEP, { gte: n }), flag(STEP, { lt: n + 1 }));
@@ -141,7 +141,7 @@ export default defineScene({
        a shape the picture has not got: 「裂缝深处」. What is in there she finds out by putting her weight on it,
        and that is one line of hers, not a promise made by a caption. The label goes back to 「岩台」 with the
        picture. */
-    { id: "ledge", transform: SHELF, sprite: { src: "sprites/crack-ledge.webp", layer: "prop", sizeVh: 12 },
+    { id: "ledge", transform: SHELF, sprite: { src: "sprites/crack-ledge.webp", layer: "prop", sizeVh: 7 },
       interactable: { verbs: ["use"], label: "裂缝深处", reveal: 13, cost: { minutes: 1 } }, visible: all(onWall, flag(LEDGE), not(flag(SAT))) },
     // Wet hands: a free wipe on the trousers (an E-key action; the transform sits below the painting so it never projects).
     { id: "wipe", transform: { yaw: 0, pitch: -88 }, tags: ["action"], interactable: { verbs: ["use"], label: "在裤子上蹭一下", reveal: 0, cost: { minutes: 0 } }, visible: flag(WET) },
