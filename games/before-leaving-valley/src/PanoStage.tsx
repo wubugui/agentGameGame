@@ -423,7 +423,7 @@ export default function PanoStage({ asset, light, look, walking, progress, progr
             const dYaw = THREE.MathUtils.radToDeg(aYaw) - gazeYaw;
             const dPitch = THREE.MathUtils.radToDeg(aPitch) - gazePitch;
             const distanceDeg = Math.hypot(dYaw, dPitch * 1.4);
-            const opacity = Math.max(0, Math.min(1, (reveal - distanceDeg) / (reveal * 0.45)));
+            const opacity = Math.max(0, Math.min(1, (reveal - distanceDeg) / (reveal * 0.45))) * (element.classList.contains("is-disabled") ? 0.35 : 1);
             element.style.opacity = opacity.toFixed(3);
             element.style.pointerEvents = opacity < 0.2 ? "none" : "auto";
           }

@@ -13,7 +13,7 @@ import { useWorldContext, useWorldValue } from "./useWorld";
 
 const sameViews = (a: EntityView[], b: EntityView[]) => a.length === b.length && a.every((view, index) => {
   const other = b[index];
-  return view.id === other.id && view.disabled === other.disabled && view.sprite?.src === other.sprite?.src && view.transform.yaw === other.transform.yaw && view.transform.pitch === other.transform.pitch && view.label === other.label;
+  return view.id === other.id && view.disabled === other.disabled && view.sprite?.src === other.sprite?.src && view.sprite?.className === other.sprite?.className && view.transform.yaw === other.transform.yaw && view.transform.pitch === other.transform.pitch && view.label === other.label;
 });
 
 export function SceneView() {

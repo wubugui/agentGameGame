@@ -28,7 +28,8 @@ export const DialogueSystem: System = {
       if (tag && (current?.text === line || pending?.tag === tag)) return;
       const next: Line = { text: line, priority, tag, at: world.rt.now + delay };
       if (delay > 0) { if (!pending || priority >= pending.priority) pending = next; return; }
-      if (current && world.rt.now < current.until && priority <= 0 && world.rt.now - lastShownAt < 6000) { pending = next; return; }
+      if (world.rt.now - lastShownAt < 6000 && lastShownAt > 0) return;          // C3: ≥6 s between any two lines; never queued
+      if (current && world.rt.now < current.until && priority <= 0) return;
       pending = null;
       show(next);
     }));
