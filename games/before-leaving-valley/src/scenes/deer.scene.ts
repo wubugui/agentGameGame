@@ -9,7 +9,7 @@ import { all, any, entityIs, flag, not } from "../engine/condition";
 import type { EntityDef } from "../engine/entity";
 import { defineScene } from "../engine/scene";
 import type { Transform } from "../engine/types";
-import { blaze, goArrow, lookAt, prop } from "./_shared";
+import { blaze, goArrow, lookAt, offset, prop } from "./_shared";
 
 const SEEN = "deer.seen";        // the invariant every later scene leans on (contract §6)
 const HOW = "deer.how";          // "still" | "skirt" | "through"
@@ -106,7 +106,14 @@ export default defineScene({
           { when: { kind: "light", lt: 0.3 }, src: "sprites/deer-shadows.webp" },
         ] },
       visible: all(HERE, not(flag(FLEEING))) },
-    { id: "herd", transform: HERD,
+    /* Where her eyes and her hand go: the near corner of the herd, not its middle. On the herd's own anchor the
+       ring (47 x 29 px) sat dead in the centre of a sprite 114 x 50 px and hid two or three of the fourteen, with
+       the label printed straight across the animals. Moved to the bottom-left it lands on the legs of the two
+       nearest — still on the deer (§0.5), which is more than can be said for the ground below them: the painted
+       dark scrub runs from plate y 572 to 610 right under their hooves, so an offset that dropped clear of the
+       sprite would have put the label on a bush. It clears the middle of the group and the patch of grass the calf
+       comes out onto (yaw 11), and the gaze radius 16 still covers every one of them. */
+    { id: "herd", transform: offset(HERD, -4, -1.5),
       interactable: { verbs: ["inspect", "photograph"], label: "草坡上的鹿群", reveal: 16, cost: { minutes: 3 }, once: true },
       gaze: { radius: 16, dwell: 700 },
       visible: all(HERE, not(flag(FLEEING))) },
@@ -141,14 +148,25 @@ export default defineScene({
       sprite: { src: "sprites/grass-pressed.webp", layer: "prop", sizeVh: 4.5 },
       interactable: { verbs: ["inspect"], label: "它们站过的那片草", reveal: 13, cost: { minutes: 1 }, once: true },
       visible: AFTERWARDS },
-    // Two candidate marks: the red-white bar on the boulder beside the path, and a rust stain on the red block.
-    // Both keep their stone after she settles them and go grey instead of vanishing (v4 §3.5). The bar is 3 vh so
-    // it sits inside the painted boulder rather than standing a second stone on top of it.
+    /* Two candidate marks: the red-white bar on the boulder beside the path, and a rust stain on the red block.
+       Both keep their stone after she settles them instead of vanishing (v4 §3.5). The bar is 3 vh so it sits
+       inside the painted boulder rather than standing a second stone on top of it.
+       Settled is `requires`, not `enabled`: `enabled: false` makes Hotspot.tsx:21 swallow the click before it is a
+       command, so the second press produced nothing at all — a live-looking dead button (§12 D7). `requires` keeps
+       the point live and lets InteractionSystem (:47-53) answer it with her hand going out and back and one dry
+       tock, at no cost in minutes. The class the real one picks up once it is read is §3.5's faint highlight. */
     blaze("blaze-deer", BOULDER, true, {
-      sprite: { src: "sprites/blaze-red-white.webp", layer: "prop", sizeVh: 3 },
-      visible: undefined, enabled: not(entityIs("blaze-deer", "read")),
+      sprite: { src: "sprites/blaze-red-white.webp", layer: "prop", sizeVh: 3,
+        swap: [{ when: entityIs("blaze-deer", "read"), src: "sprites/blaze-red-white.webp", className: "blaze-found" }] },
+      visible: undefined,
+      interactable: { verbs: ["inspect"], label: "石头上的记号", reveal: 12, cost: { minutes: 0 }, requires: not(entityIs("blaze-deer", "read")) },
     }),
-    blaze("rust-deer", RUST_ROCK, false, { visible: undefined, enabled: not(entityIs("rust-deer", "read")) }),
+    blaze("rust-deer", RUST_ROCK, false, {
+      visible: undefined,
+      sprite: { src: "sprites/blaze-false.webp", layer: "prop", sizeVh: 4,
+        swap: [{ when: entityIs("rust-deer", "read"), src: "sprites/blaze-false.webp", className: "blaze-ruled-out" }] },
+      interactable: { verbs: ["inspect"], label: "石头上的记号", reveal: 12, cost: { minutes: 0 }, requires: not(entityIs("rust-deer", "read")) },
+    }),
     // Looking. The scree behind her, the last of the sun, the wall across the valley. A minute each, once each.
     look1("scree-back", SCREE_BACK, "刚下来的碎石坡"),
     look1("sunset-clouds", SUNSET, "天上最后一道橙色", { visible: { kind: "light", gte: 0.001 } }),
@@ -208,6 +226,15 @@ export default defineScene({
       { type: "interact", entity: "grass-pressed", verb: "inspect" }, { wait: 300 },
       { type: "travel", entity: "go" },
     ],
+    // One noise in the open meadow: they are gone before she has finished making it, and the ground is all
+    // that is left of them (v4 §8's 只剩蹄印). Both traces are still readable; the way on is never locked.
+    shout: [
+      { type: "shout" }, { wait: 1200 },
+      { type: "interact", entity: "hoofprints", verb: "inspect" }, { wait: 400 },
+      { type: "interact", entity: "grass-pressed", verb: "inspect" }, { wait: 400 },
+      { type: "interact", entity: "blaze-deer", verb: "inspect" }, { wait: 300 },
+      { type: "travel", entity: "go" },
+    ],
     // Leave without confirming the mark: twelve minutes looking for where the path goes under the trees.
     blind: [{ type: "travel", entity: "go" }],
   },
@@ -221,17 +248,16 @@ export default defineScene({
     const herdGone = () => ctx.flag(BOLTED, false) || ctx.flag(GONE, false);
 
     /* Arriving. The sound comes first and it comes from one side (v4 §3.8) — no line, no camera grab.
-       If she made a noise somewhere on the way down, the grass is already empty and the prints are all there is
-       (§8: 如果在林缘前喊过，鹿已经走了，只剩蹄印). The branch is correct and it is unreachable from inside src/scenes,
-       and it takes TWO files outside it to open, not one: `UISystem.ts:53` refuses the `shout` command outside
-       forestEdge / forest1 / forest2, and `Actions.tsx:9` only binds Space to shout in those same three scenes, so
-       even a scene-side `world.handle("shout", ...)` would never see a command — nothing can dispatch one at scree
-       or signpost. Both come after this node in MAIN_ORDER, so shout.at stays 0 and nothing writes scree.shouted or
-       signpost.shouted. It is left switched on and wired to all three flags so the fork lands here the day either
-       file moves, without a rewrite.
-       What must NOT stand in for the shout is another wrong turn — the scree gully, the sand sliding. §0.6 prices a
-       mistake in minutes and light; taking the whole herd away for one would price it in content, and the fastest
-       line slides down the sand anyway. (Escalated as an ENGINE request naming both files.) */
+       If she made a noise before she got to the meadow, the grass is already empty and the prints are all there is
+       (§8: 如果在林缘前喊过，鹿已经走了，只剩蹄印). This branch reads the noise she made UPSTREAM, and upstream is
+       still silent: `UISystem.ts:53` now takes `shout` in deer / forestEdge / forest1 / forest2, and `Actions.tsx:9`
+       binds Space in the same four, but scree and signpost — the two nodes she comes through on the way here — are
+       in neither list, so nothing can dispatch a shout before she arrives and shout.at is still 0 on entry. The
+       branch stays switched on and wired to all three flags so it lands the day those two files move (filed in
+       `requests`), and the fork itself is not left unreachable in the meantime: the shout she CAN make is the one
+       she makes standing here, and it is answered below.
+       What must NOT stand in for it is another wrong turn — the scree gully, the sand sliding. §0.6 prices a
+       mistake in minutes and light; taking the whole herd away for one would price it in content. */
     ctx.onEnter(() => {
       if (herdGone()) return;
       if (ctx.flag<number>("shout.at", 0) > 0 || ctx.flag("scree.shouted", false) || ctx.flag("signpost.shouted", false)) {
@@ -273,29 +299,42 @@ export default defineScene({
 
     /* Standing still (v4 §7): the pointer unmoved is the whole action. First they lift their heads;
        then the smallest one risks two steps toward her; after that nothing more is given, only the breath. */
-    /* Both beats say what they do now, and each one is allowed to only because its picture moved.
-       THE FAWN: deer-fawn.webp is drawn the moment FAWN is set, at any hour, so 「最小的那只往前走了两步。」 names a
-       calf that really is standing on the grass in front of the herd where a moment ago there was nothing.
-       THE HEADS: deer-shadows-alert only replaces the herd once light < 0.3, so before 19:48 「它们抬起头。」 would be
-       describing a picture that has not moved. It carries the same light gate the swap does; before that hour the
-       beat is what the world gives without words — hooves shifting in the grass off to one side and the camera
-       settling — which is the whole difference between arriving here early and arriving here late. */
+    /* Every stand-still beat has to move the picture, and which beat can do that depends on the hour — which is
+       why the order of the two changes with the light instead of one of them going silent.
+       AFTER 19:48 (light < 0.3) the swap has a heads-up face: deer-shadows-alert replaces deer-shadows the moment
+       ALERT is set, so the first stand really is fourteen necks coming up and 「它们抬起头。」 names it.
+       BEFORE 19:48 there is no daylight heads-up face on disk, and deer-herd.webp already stands with its heads up
+       and several animals looking straight out — so a first stand that only set ALERT paid a hoof sound and a
+       camera settle for a picture that did not move, and the player who got here earliest, in the best light, was
+       the only one who got no reaction at all. That inverts §6's 到得越晚看见得越少. In daylight the first stand
+       therefore buys the beat the picture CAN carry, and the better one: deer-fawn.webp is drawn the moment FAWN is
+       set, at any hour, so 「最小的那只往前走了两步。」 names a calf that really is standing on the grass in front of
+       the herd where a moment ago there was nothing. The herd goes on watch at the same time, so anyone who lingers
+       past 19:48 still finds the heads-up silhouettes waiting for them.
+       (A daylight heads-up herd on deer-herd's own canvas is queued as ART — deer-herd-alert.webp. The day it
+       lands, add it to herd-image's swap AHEAD of the dusk entries as
+       `{ when: all({ kind: "light", gte: 0.3 }, flag(ALERT)), src: "sprites/deer-herd-alert.webp" }` and the two
+       beats can go back to one order at every hour. It is not referenced now because a missing sprite hides its
+       img, and that would delete the herd out of the meadow at the exact moment she stands still.) */
     let stills = 0;
     ctx.onWait(() => {
       if (herdGone()) return;
       stills += 1;
       ctx.setFlag(SEEN, true);
       if (ctx.flag(HOW, "") === "") ctx.setFlag(HOW, "still");
+      const dusk = ctx.light() < 0.3;
       const alreadyUp = ctx.flag(ALERT, false) || ctx.flag(WATCH, false);
-      if (!alreadyUp && !ctx.flag(FAWN, false)) {
+      if (dusk && !alreadyUp && !ctx.flag(FAWN, false)) {
         ctx.setFlag(ALERT, true);
         ctx.sfx("hooves", pan(HERD), 0.25); ctx.kick("settle", 0.25);
         ctx.after(300, () => ctx.sfx("cloth", pan(HERD), 0.22));
-        if (ctx.light() < 0.3) ctx.say("它们抬起头。", { tag: "deer-alert" });
+        ctx.say("它们抬起头。", { tag: "deer-alert" });
         return;
       }
-      // From the tree line they are already turned toward her, so the smallest one risks it on the first stand.
-      if (!ctx.flag(FAWN, false) && (stills >= 2 || ctx.flag(WATCH, false))) {
+      // From the tree line they are already turned toward her, so the smallest one risks it on the first stand;
+      // in full light it risks it on the first stand anyway, because that is the beat this hour can draw.
+      if (!ctx.flag(FAWN, false) && (!dusk || stills >= 2 || ctx.flag(WATCH, false))) {
+        if (!alreadyUp) { ctx.setFlag(ALERT, true); ctx.sfx("hooves", pan(HERD), 0.25); }
         ctx.setFlag(FAWN, true);
         ctx.sfx("step", pan(FAWN_AT), 0.35); ctx.after(340, () => ctx.sfx("step", pan(FAWN_AT), 0.3));
         ctx.kick("settle", 0.3);
@@ -325,6 +364,17 @@ export default defineScene({
       });
       ctx.say(w.state.journal.entries.includes("E-forest") ? "纪念品上除了鹿，还有熊、狼、野猪。" : "跑回森林里去了。", { tag: "deer-bolt", priority: 1 });
     };
+
+    /* A noise in the open meadow (Space). UISystem takes the command in this scene and answers it with the breath,
+       the camera and the white flash of `fx: shout`; what it means HERE is that fourteen animals are gone before
+       she has finished making it, and what is left is the prints and the flattened grass — §8's 只剩蹄印, at the
+       one place a shout can currently be made. Hung on the fx rather than on a second `world.handle("shout")` so
+       it can never fire on a shout UISystem itself refused. */
+    ctx.on("fx", ({ name }) => {
+      if (name !== "shout" || herdGone() || ctx.flag(FLEEING, false)) return;
+      ctx.setFlag(HOW, "shout");
+      bolt("shout");
+    });
 
     /* Rounding them under the trees (v4 §7: 绕开 = 多站一会儿). Six minutes buys the only state in the scene where
        they neither graze nor run: they turn where they stand and track her along the tree line, close enough that
@@ -376,6 +426,20 @@ export default defineScene({
       if (real) { ctx.kick("settle", 0.45); ctx.sfx("step", pan(BOULDER), 0.5); return; }
       if (entity !== "rust-deer") return;
       ctx.hand(ctx.transformOf(entity)); ctx.kick("glance", 0.4, { yaw: 0, pitch: -3 });
+    });
+
+    /* Pressed a second time — the count she has already made, the walk she has already taken along the trees, a
+       mark she has already settled. The thing is still there and still takes her hand; it just has nothing new in
+       it. No text, no minute, never a dead button (§12 D7, as mailbox). The marks use `requires` and are answered
+       by InteractionSystem itself; this is for the `once` hotspots, which come back as reason "gone". */
+    ctx.on("interact:refused", ({ entity, reason }) => {
+      if (reason !== "gone") return;
+      const def = ctx.scene.entities.find((one) => one.id === entity);
+      if (!def?.interactable?.once) return;
+      const where = ctx.transformOf(entity);
+      ctx.hand(where, "grip");
+      ctx.kick("glance", 0.3, { yaw: 0, pitch: -4 });
+      ctx.sfx("tock", clamp(where.yaw / 60, -1, 1), 0.3);
     });
 
     /* 19:30: the wind changes (ClockSystem's mark). If they are still there it puts their heads up for her. */

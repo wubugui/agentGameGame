@@ -9,7 +9,7 @@ import { after, before, entityIs, flag, has, not } from "../engine/condition";
 import type { EntityDef } from "../engine/entity";
 import { defineScene } from "../engine/scene";
 import type { EntityId, Transform } from "../engine/types";
-import { goArrow, lookAt, prop, windy, wrongWay } from "./_shared";
+import { goArrow, lookAt, offset, prop, windy, wrongWay } from "./_shared";
 
 const CHOICE = "hutView.choice";
 const SPREAD = "hutView.mapSpread";
@@ -26,9 +26,9 @@ const OBJ_RETREAT = "紧急下撤：找 656 · Plan de Roces · Val Lasties";
 // Things painted in 09b-hut, with the pixel they were read from.
 /* distance 16 keeps the sprite out of PanoStage's scale clamp (max(0.6, 10/d)), so sizeVh really is the height on
    screen. The pitch is set from the painting rather than from the middle of the house: the grassy shelf the hut
-   stands on runs through plate (350, 352) = pitch 0.93, and at 4 vh the file is 28.8 px tall = 2.4°, so the anchor
-   sits 1.2° above the shelf and the walls come down onto it. */
-const HUT: Transform = { yaw: -34, pitch: 2.1, distance: 16 };        // standing on the shelf above the far wall (350, 352)
+   stands on runs through plate (350, 352) = pitch 0.93, and at 7 vh the file is 50 px tall = 4.2°, so the anchor
+   sits 2.1° above the shelf and the walls come down onto it. */
+const HUT: Transform = { yaw: -34, pitch: 3.2, distance: 16 };        // standing on the shelf above the far wall (350, 352)
 const FAR_WALL: Transform = { yaw: -29.7, pitch: -8.6, distance: 20 }; // the middle of the layered grey wall on the far side (387, 434)
 const MESA: Transform = { yaw: 12, pitch: 14.5, distance: 35 };       // the flat-topped range in the sun, centre skyline (742, 236)
 const CLOUDS: Transform = { yaw: 36, pitch: 33, distance: 30 };       // the cloud bank over the right-hand massif (947, 78)
@@ -56,29 +56,35 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
    the picture the whole time she stands here and the window comes on in the corner of the eye, which is what §8
    (17:00 山屋的窗户亮起来) is for; the hotspot beside it is only the minute she spends looking at it.
    Two measurements this file has to be honest about. (1) SCALE: the far wall is 200-300 m of rock drawn about 204 px
-   tall, so a 7 m hut on its rim is 5-7 px — 4 vh (28.8 px) is a deliberate ~5x exaggeration, taken because a house
-   that reads as a house is the only way §7's decision has an object. (2) THE WINDOW: the warm pixels that separate
-   the two files sit at fractions x 0.465..0.519, y 0.741..0.825 of the file, so at 4 vh the lit window is about
-   2.4 x 2.4 px. It is the only warm colour anywhere on that side of the valley, and the beat also turns her head and
-   says one line — but a warm halo bleeding onto the wall around it is what would make it read on its own, and that
-   is an ART note (docs/ART_QUEUE.md), together with the one value the re-export still gets wrong: hut-far-lit is
-   27% darker overall than hut-far (mean luminance 90 against 123), which at 16:00 is a house that dims while the
-   whole valley stays bright. */
+   tall, so a 7 m hut on its rim is 5-7 px — 7 vh (50 px) is a deliberate ~9x exaggeration, taken because a house
+   that reads as a house is the only way §7's decision has an object, and stated here rather than hidden. It went up
+   from 4 vh for the window's sake: (2) THE WINDOW — the warm pixels that separate the two files sit at fractions
+   x 0.465..0.519, y 0.741..0.825, so the lit square went from 2.4 px to 4.2 px across, which is the difference
+   between a warm pixel and a lit window at this range. It is the only warm colour anywhere on that side of the
+   valley and the beat also turns her head and says one line.
+   The swap carries a class as well as a src, and that is not decoration. Measured, hut-far-lit is keyed 27% darker
+   overall than hut-far (mean luminance 90 against 123) — an evening key on a file that has to go up at 17:00, when
+   lightOf() is still exactly 1 and the whole valley is bright, so the house dims at the very moment one window is
+   supposed to brighten. `hut-lit` is where the interior of that value gets corrected in CSS until ART re-keys the
+   file to hut-far's daylight value with only the window warm (both are filed: docs/ART_QUEUE.md and `requests`). */
 const house = (id: EntityId, transform: Transform, sizeVh: number): EntityDef => ({
   id, transform,
-  sprite: { src: "sprites/hut-far.webp", layer: "prop", sizeVh, swap: [{ when: after(HUT_LIT), src: "sprites/hut-far-lit.webp" }] },
+  sprite: { src: "sprites/hut-far.webp", layer: "prop", sizeVh, swap: [{ when: after(HUT_LIT), src: "sprites/hut-far-lit.webp", className: "hut-lit" }] },
 });
 
 /* A candidate mark. Three of them, all labelled the same, indistinguishable until she is close (v4 §3.5).
    Two are painted into 09b-hut and carry no sprite of their own; the third is a lichened stone on the pavement.
-   All three behave alike once she has settled them: the point stays where it is and goes grey (`enabled`), which
-   is what §3.5 asks for — a settled real mark keeps a faint highlight until she leaves the node and a settled
-   false one stops answering. None of them is deleted out of the frame while her hand is still on it. */
+   None of them is deleted out of the frame once she has settled it.
+   Settled is `requires`, NOT `enabled` — and that is the whole fix. `enabled: false` makes `Hotspot` drop the
+   click before it becomes a command (Hotspot.tsx:21), so a settled mark took the press and answered with nothing
+   at all: a live-looking dead button, §12 D7. With `requires` the point still takes her hand and
+   `InteractionSystem` (:47-53) sends the hand out and back with a dry tock and charges nothing, which is what a
+   stone she has already read should do. The class the sprite picks up when it is settled is what carries §3.5's
+   「确认过的记号留一点亮，排除掉的变灰」 for the one mark that has a sprite of its own. */
 const mark = (id: EntityId, transform: Transform, real: boolean, sprite?: string): EntityDef => ({
   id, transform, blaze: { real }, className: "blaze-hotspot",
-  interactable: { verbs: ["inspect"], label: "石头上的记号", reveal: 12, cost: { minutes: 0 } },
-  enabled: not(entityIs(id, "read")),
-  ...(sprite ? { sprite: { src: sprite, layer: "prop" as const, sizeVh: 3.5 } } : {}),
+  interactable: { verbs: ["inspect"], label: "石头上的记号", reveal: 12, cost: { minutes: 0 }, requires: not(entityIs(id, "read")) },
+  ...(sprite ? { sprite: { src: sprite, layer: "prop" as const, sizeVh: 3.5, swap: [{ when: entityIs(id, "read"), src: sprite, className: real ? "blaze-found" : "blaze-ruled-out" }] } } : {}),
 });
 
 export default defineScene({
@@ -95,9 +101,12 @@ export default defineScene({
   entities: [
     // The one built thing on the far rim. At 17:00 the file swaps under the same anchor and the same sizeVh: the
     // walls stand exactly where they stood and one window comes on. Nobody announces it.
-    house("hut-house", HUT, 4),
-    // The minute she spends actually looking at it, on the same anchor: a point, not a picture.
-    { id: "hut", transform: HUT,
+    house("hut-house", HUT, 7),
+    /* The minute she spends actually looking at it: a point, not a picture — and three degrees BELOW the house,
+       on the grass shelf it stands on. On the same anchor the ring (55 x 26 px) and its label printed straight
+       across the walls (50 px), so the one built thing in the picture was smaller than the button pointing at it.
+       At −3 the ring sits under the walls and the gaze radius 12 still covers the whole house. */
+    { id: "hut", transform: offset(HUT, 0, -3),
       interactable: { verbs: ["inspect", "photograph"], label: "对面岩壁上的房子", reveal: 12, cost: { minutes: 1 } },
       gaze: { radius: 12, dwell: 900 } },
     // Things to look at across the gap. None of them tells her anything she could not see.
@@ -182,8 +191,8 @@ export default defineScene({
        one entry. This line is NOT gated the way 「太阳低了一格。」 is thirty lines down, and the difference is that
        this one names something the picture really does: the same building, the same silhouette, one warm square
        where a moment ago there was none. What the swap still does not carry is a halo wide enough to be read on its
-       own at 29 px across a whole valley — that is the ART note, not a reason for the node to stay silent about the
-       only thing in this picture that changes by itself. */
+       own at 50 px across a whole valley, nor a daylight key under the lit window — both are ART notes, not reasons
+       for the node to stay silent about the only thing in this picture that changes by itself. */
     const windowLit = () => {
       if (w.state.journal.entries.includes("E-hutLit")) return;
       glanceAt(HUT, 0.7); ctx.sfx("breath", -0.4, 0.45);
@@ -260,6 +269,20 @@ export default defineScene({
       if (real) { ctx.kick("settle", 0.5); ctx.sfx("step", 0.4, 0.6); return; }
       ctx.hand(ctx.transformOf(entity)); ctx.kick("glance", 0.5, { yaw: 0, pitch: -3 });
       ctx.say(entity === "blaze-hut-b" ? "旧漆。红的掉光了。" : "地衣。不是漆。", { tag: "hut-false" });
+    });
+
+    /* Pressed a second time — the block she has already walked out onto, a mark she has already settled. The thing
+       is still there and still takes her hand; it just has nothing new in it. No text, no minute, never a dead
+       button (§12 D7, as mailbox). `requires` on the marks is answered by InteractionSystem itself; this is for
+       the `once` hotspots, which come back as reason "gone". */
+    ctx.on("interact:refused", ({ entity, reason }) => {
+      if (reason !== "gone") return;
+      const def = ctx.scene.entities.find((one) => one.id === entity);
+      if (!def?.interactable?.once) return;
+      const where = ctx.transformOf(entity);
+      ctx.hand(where, "grip");
+      ctx.kick("glance", 0.3, { yaw: 0, pitch: -4 });
+      ctx.sfx("tock", clamp(where.yaw / 60, -1, 1), 0.3);
     });
 
     // --- The block over the drop. She walks out on it, stands above the valley, comes back. Six minutes and dust. ---
